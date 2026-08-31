@@ -1,0 +1,17 @@
+# Entornos virtuales
+venv/
+env/
+
+# Archivos de Python
+__pycache__/
+*.pyc
+
+# Variables de entorno (¡Muy importante para la API de Gemini y la base de datos!)
+.env
+
+# Archivos de VS Code
+.vscode/
+
+# Videos de prueba o temporales
+uploads/
+videos/
