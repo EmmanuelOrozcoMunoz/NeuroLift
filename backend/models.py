@@ -7,15 +7,14 @@ from backend.database import Base
 
 class User(Base):
     __tablename__ = "users"
-
+    
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = Column(String(255), unique=True, nullable=False)
-    full_name = Column(String(100), nullable=False)
-    bodyweight = Column(Float)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
+    full_name = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+    body_weight = Column(Float, nullable=True) # <-- El nuevo campo
+    
     # Relaciones
-    mesocycles = relationship("Mesocycle", back_populates="user", cascade="all, delete-orphan")
+    mesocycles = relationship("Mesocycle", back_populates="user")
     personal_records = relationship("PersonalRecord", back_populates="user", cascade="all, delete-orphan")
 
 class Mesocycle(Base):
@@ -77,16 +76,14 @@ class Set(Base):
     session = relationship("Session", back_populates="sets")
     exercise = relationship("Exercise")
 
+
+
 class PersonalRecord(Base):
     __tablename__ = "personal_records"
-
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
-    exercise_id = Column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"))
-    weight = Column(Float, nullable=False)
-    reps = Column(Integer, nullable=False)
-    achieved_at = Column(Date, nullable=False)
-    video_proof_url = Column(String(255))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    exercise_name = Column(String, index=True) # Ej: "Back Squat", "Snatch"
+    max_weight_kg = Column(Float)              # El 1RM en kilos
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="personal_records")
-    exercise = relationship("Exercise")
