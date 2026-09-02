@@ -7,6 +7,7 @@ from datetime import timedelta
 from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
 import json
+from passlib.context import CryptContext
 
 from backend.database import SessionLocal, engine
 from backend import models, schemas
@@ -205,45 +206,75 @@ def generate_and_save_full_mesocycle(req: schemas.AIGenerateRequest, db: Session
                 sessions_per_week=req.sessions_per_week
             )
 
-            # 4. Parseo y guardado en Base de Datos
-            for sesion_data in rutina_ai.get("sessions", []):
-                # Calculamos el día exacto de la sesión
-                fecha_sesion = meso.start_date + timedelta(days=dias_agregados)
+            # 4. Parseo y guardado en Base de Datos (Ajustado a la estructura de Gemini)
+            semanas = rutina_ai.get("weeks", [])
+            
+            for semana in semanas:
+                sesiones = semana.get("sessions", [])
                 
-                # Aquí puedes hacer una lógica más pro para repartir los días en la semana.
-                # Por ahora, le sumamos 2 días entre cada sesión para separarlas.
-                dias_agregados += 2 
+                for sesion_data in sesiones:
+                    # Calculamos el día de la sesión
+                    fecha_sesion = meso.start_date + timedelta(days=dias_agregados)
+                    dias_agregados += 2 # Espaciamos 2 días (luego puedes mejorar esta lógica)
 
-                nueva_sesion = models.Session(
-                    mesocycle_id=meso.id,
-                    scheduled_date=fecha_sesion,
-                    athlete_notes=sesion_data.get("athlete_notes", ""),
-                    status="pending"
-                )
-                db.add(nueva_sesion)
-                db.flush() # Hace un "pre-guardado" para darnos el ID de la sesión
-
-                for set_data in sesion_data.get("sets", []):
-                    # Buscamos o creamos el ejercicio
-                    nombre_ejercicio = set_data["exercise"]["name"]
-                    ejercicio = db.query(models.Exercise).filter(models.Exercise.name == nombre_ejercicio).first()
-                    
-                    if not ejercicio:
-                        ejercicio = models.Exercise(
-                            name=nombre_ejercicio, 
-                            category=set_data["exercise"].get("category", "General")
-                        )
-                        db.add(ejercicio)
-                        db.flush() # Pre-guardado para obtener el ID del ejercicio
-                    
-                    nuevo_set = models.Set(
-                        session_id=nueva_sesion.id,
-                        exercise_id=ejercicio.id,
-                        set_order=set_data.get("set_order", 1),
-                        prescribed_reps=set_data.get("prescribed_reps", 1),
-                        rpe=set_data.get("rpe")
+                    # 4.1 Crear la Sesión
+                    nueva_sesion = models.Session(
+                        mesocycle_id=meso.id,
+                        scheduled_date=fecha_sesion,
+                        athlete_notes=sesion_data.get("athlete_notes", ""),
+                        status="pending"
                     )
-                    db.add(nuevo_set)
+                    db.add(nueva_sesion)
+                    db.flush() 
+
+                    contador_orden = 1
+                    ejercicios = sesion_data.get("exercises", [])
+                    
+                    # 4.2 Iterar sobre los ejercicios
+                    for ej_data in ejercicios:
+                        nombre_ejercicio = ej_data.get("exercise_name", "Ejercicio Desconocido")
+                        
+                        # Buscar o crear el ejercicio en la BD
+                        ejercicio = db.query(models.Exercise).filter(models.Exercise.name == nombre_ejercicio).first()
+                        if not ejercicio:
+                            ejercicio = models.Exercise(name=nombre_ejercicio, category="General")
+                            db.add(ejercicio)
+                            db.flush() 
+                        
+                        # 4.3 ¡Crear LAS series!
+                        num_series = ej_data.get("prescribed_sets", 1)
+                        reps = ej_data.get("prescribed_reps", 1)
+                        
+                        # --- BLINDAJE RPE ---
+                        rpe_raw = ej_data.get("rpe_target") or ej_data.get("rpe")
+                        rpe_limpio = int(float(rpe_raw)) if rpe_raw is not None else None
+
+                        # --- BLINDAJE Y EXTRACCIÓN DE PESO ---
+                        peso_raw = (
+                            ej_data.get("prescribed_weight")
+                            or ej_data.get("weight_kg")
+                            or ej_data.get("weight")
+                            or ej_data.get("target_weight")
+                        )
+                        peso_limpio = None
+                        if peso_raw is not None:
+                            try:
+                                peso_limpio = float(peso_raw)
+                            except (ValueError, TypeError):
+                                peso_limpio = None
+                        # -------------------------------------
+                        
+                        for _ in range(num_series):
+                            nuevo_set = models.Set(
+                                session_id=nueva_sesion.id,
+                                exercise_id=ejercicio.id,
+                                set_order=contador_orden,
+                                prescribed_reps=reps,
+                                rpe=rpe_limpio,
+                                prescribed_weight=peso_limpio # Usamos el peso limpio
+                            )
+                            db.add(nuevo_set)
+                            contador_orden += 1
 
         # 5. ACTUALIZAR LA FECHA DE FIN DEL MESOCICLO
         meso.end_date = meso.start_date + timedelta(days=dias_agregados)
@@ -269,6 +300,17 @@ def get_full_mesocycle(mesocycle_id: UUID, db: Session = Depends(get_db)):
     
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+        
+    # ==========================================
+    # BLINDAJE DE ORDENAMIENTO (SORTING)
+    # ==========================================
+    # 1. Ordenamos las sesiones por fecha de menor a mayor
+    meso.sessions.sort(key=lambda s: s.scheduled_date)
+    
+    # 2. Entramos a cada sesión y ordenamos las series por su set_order (1, 2, 3...)
+    for sesion in meso.sessions:
+        sesion.sets.sort(key=lambda serie: serie.set_order)
+    # ==========================================
         
     return meso
 
@@ -340,15 +382,119 @@ def obtener_mesociclos_usuario(user_id: UUID, db: Session = Depends(get_db)):
     mesociclos = db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id).all()
     return mesociclos
 
-# Endpoint 2: Actualizar una serie específica (Reps o RPE)
-@app.put("/sets/{set_id}")
-def actualizar_serie(set_id: UUID, req: SetUpdate, db: Session = Depends(get_db)):
+# 1. Modificar serie existente
+@app.put("/sets/{set_id}", response_model=schemas.SetResponse)
+def update_set(set_id: UUID, set_update: schemas.SetUpdate, db: Session = Depends(get_db)):
+    # 1. Buscamos la serie en la base de datos
+    db_set = db.query(models.Set).filter(models.Set.id == set_id).first()
+    if not db_set:
+        raise HTTPException(status_code=404, detail="Serie (Set) no encontrada")
+    
+    # 2. Actualizamos los datos numéricos (¡AQUÍ ESTÁ EL PESO!)
+    db_set.prescribed_reps = set_update.prescribed_reps
+    db_set.rpe = set_update.rpe
+    db_set.prescribed_weight = set_update.prescribed_weight
+    
+    # 3. Lógica para el Pivote (Si el coach cambió el nombre del ejercicio)
+    if set_update.exercise_name:
+        # Buscamos si el nuevo ejercicio ya existe
+        ejercicio = db.query(models.Exercise).filter(models.Exercise.name == set_update.exercise_name).first()
+        if not ejercicio:
+            # Si no existe, lo creamos
+            ejercicio = models.Exercise(name=set_update.exercise_name, category="General")
+            db.add(ejercicio)
+            db.flush() # Guardamos rápido para obtener el ID
+        
+        # Le asignamos el nuevo ejercicio a la serie
+        db_set.exercise_id = ejercicio.id
+
+    # 4. Guardamos todo definitivamente
+    db.commit()
+    db.refresh(db_set)
+    return db_set
+
+# 2. NUEVO: Agregar una serie extra a la sesión
+@app.post("/sessions/{session_id}/sets/")
+def agregar_serie(session_id: UUID, req: schemas.SetCreate, db: Session = Depends(get_db)):
+    sesion = db.query(models.Session).filter(models.Session.id == session_id).first()
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    # Buscamos o creamos el ejercicio nuevo
+    ejercicio = db.query(models.Exercise).filter(models.Exercise.name == req.exercise_name).first()
+    if not ejercicio:
+        ejercicio = models.Exercise(name=req.exercise_name, category="Custom")
+        db.add(ejercicio)
+        db.flush()
+
+    # Calculamos el orden (para que quede al final de la lista)
+    series_actuales = db.query(models.Set).filter(models.Set.session_id == session_id).all()
+    siguiente_orden = len(series_actuales) + 1
+
+    nuevo_set = models.Set(
+        session_id=session_id,
+        exercise_id=ejercicio.id,
+        set_order=siguiente_orden,
+        prescribed_reps=req.prescribed_reps,
+        rpe=req.rpe,
+        prescribed_weight=req.prescribed_weight
+    )
+    db.add(nuevo_set)
+    db.commit()
+    return {"message": "Nueva serie agregada al final de la sesión"}
+
+@app.delete("/sets/{set_id}")
+def delete_set(set_id: UUID, db: Session = Depends(get_db)):
     db_set = db.query(models.Set).filter(models.Set.id == set_id).first()
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie no encontrada")
     
-    # Aplicamos los cambios del Coach
-    db_set.prescribed_reps = req.prescribed_reps
-    db_set.rpe = req.rpe
+    db.delete(db_set)
     db.commit()
-    return {"message": "Serie actualizada correctamente"}
+    return {"message": "Serie eliminada correctamente"}
+
+# Configuramos el encriptador de contraseñas
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+# ==========================================
+# ENDPOINTS DE AUTENTICACIÓN
+# ==========================================
+@app.post("/auth/register", response_model=schemas.UserResponse)
+def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
+    # Verificamos si el email ya existe
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+    
+    nuevo_usuario = models.User(
+        email=user.email,
+        full_name=user.full_name,
+        hashed_password=get_password_hash(user.password),
+        role=user.role
+    )
+    db.add(nuevo_usuario)
+    db.commit()
+    db.refresh(nuevo_usuario)
+    return nuevo_usuario
+
+@app.post("/auth/login")
+def login_user(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
+    usuario = db.query(models.User).filter(models.User.email == credentials.email).first()
+    
+    # Si no existe o la contraseña es incorrecta
+    if not usuario or not verify_password(credentials.password, usuario.hashed_password):
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+    
+    # Si todo está bien, le devolvemos los datos principales
+    return {
+        "id": str(usuario.id),
+        "full_name": usuario.full_name,
+        "email": usuario.email,
+        "role": usuario.role
+    }

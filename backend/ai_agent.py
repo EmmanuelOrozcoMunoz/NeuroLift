@@ -135,7 +135,8 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
                                 "exercise_name": "string",
                                 "prescribed_sets": int,
                                 "prescribed_reps": int,
-                                "rpe_target": int
+                                "rpe_target": int,
+                                "prescribed_weight": float | None
                             }}
                         ]
                     }}

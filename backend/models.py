@@ -11,7 +11,10 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     full_name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
-    body_weight = Column(Float, nullable=True) # <-- El nuevo campo
+    hashed_password = Column(String, nullable=False, server_default="pbkdf2:sha256:default_hash") # Contraseña
+    role = Column(String, default="athlete")
+    body_weight = Column(Float, nullable=True)
+    
     
     # Relaciones
     mesocycles = relationship("Mesocycle", back_populates="user")

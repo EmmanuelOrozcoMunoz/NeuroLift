@@ -21,7 +21,28 @@ class UserResponse(BaseModel):
     # Esto le permite a FastAPI convertir el objeto de la base de datos a JSON
     class Config:
         from_attributes = True
-        orm_mode = True
+# --- ESQUEMAS DE AUTENTICACIÓN ---
+class UserRegister(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+    role: str = "athlete" # Por defecto creamos atletas, a menos que se especifique coach
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+# Actualizamos UserResponse para que también devuelva el rol al frontend
+class UserResponse(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+    body_weight: float | None = None
+    role: str # ¡Agregamos el rol aquí!
+
+    class Config:
+        from_attributes = True
+
 
 # --- ESQUEMAS PARA MESOCICLOS ---
 class MesocycleCreate(BaseModel):
@@ -42,26 +63,16 @@ class MesocycleResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# --- ESQUEMAS PARA SESIONES ---
+# --- ESQUEMAS PARA SESIONES Y SERIES (CORREGIDOS) ---
 class SessionCreate(BaseModel):
     mesocycle_id: UUID
     scheduled_date: date
-
-class SessionResponse(BaseModel):
-    id: UUID
-    mesocycle_id: UUID
-    scheduled_date: date
-    status: str
-
-    class Config:
-        from_attributes = True
 
 class AIGenerateRequest(BaseModel):
     mesocycle_id: UUID
     context: str
     weeks_count: int
     sessions_per_week: int
-
 
 class ExerciseResponse(BaseModel):
     id: UUID
@@ -71,18 +82,32 @@ class ExerciseResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SetUpdate(BaseModel):
+    exercise_name: str | None = None
+    prescribed_reps: int
+    rpe: float | None = None
+    prescribed_weight: float | None = None
+
+class SetCreate(BaseModel):
+    exercise_name: str
+    prescribed_reps: int
+    rpe: float | None = None
+    prescribed_weight: float | None = None
+
 class SetResponse(BaseModel):
     id: UUID
     set_order: int
     prescribed_reps: int
     rpe: Optional[int] = None
-    exercise: ExerciseResponse # ¡Aquí anidamos el ejercicio!
+    prescribed_weight: float | None = None # <-- ¡ESTO FALTABA!
+    exercise: ExerciseResponse
     
     class Config:
         from_attributes = True
 
 class SessionResponse(BaseModel):
     id: UUID
+    mesocycle_id: UUID
     scheduled_date: date
     athlete_notes: Optional[str] = None
     status: str
@@ -94,6 +119,7 @@ class SessionResponse(BaseModel):
 class MesocycleFullResponse(BaseModel):
     id: UUID
     user_id: UUID
+    name: str | None = None # <-- Agregamos el nombre aquí también
     discipline: str
     start_date: date
     end_date: Optional[date] = None
@@ -110,4 +136,3 @@ class PRResponse(BaseModel):
 
     class Config:
         from_attributes = True
-        orm_mode = True
