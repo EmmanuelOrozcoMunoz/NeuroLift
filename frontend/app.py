@@ -1,13 +1,39 @@
 import streamlit as st
 import requests
+import extra_streamlit_components as stx
 
 API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="NeuroLift AI", page_icon="🧠", layout="wide")
 
-# Inicializamos la variable de sesión si no existe
+# ==========================================
+# GESTIÓN DE COOKIES Y SESIÓN (JWT)
+# ==========================================
+# Inicializamos el gestor de cookies directamente
+cookie_manager = stx.CookieManager(key="Gestor_Cookies")
+
+# 1. Leemos SOLO el Token encriptado de las cookies
+jwt_token = cookie_manager.get(cookie="neurolift_jwt")
+
 if "user_session" not in st.session_state:
     st.session_state.user_session = None
+
+# Función auxiliar para enviar el token como un "Pase VIP"
+def get_headers():
+    if jwt_token:
+        return {"Authorization": f"Bearer {jwt_token}"}
+    return {}
+
+# 2. HIDRATACIÓN: Si hay token en la cookie, pero Streamlit olvidó quién eres, le preguntamos al backend
+if jwt_token and st.session_state.user_session is None:
+    # Usamos la nueva ruta /auth/me enviando el token en las cabeceras
+    res_me = requests.get(f"{API_URL}/auth/me", headers=get_headers())
+    if res_me.status_code == 200:
+        st.session_state.user_session = res_me.json()
+    else:
+        # Si el token expiró o es falso, lo destruimos
+        cookie_manager.delete("neurolift_jwt", key="delete_invalid")
+        st.session_state.user_session = None
 
 # ==========================================
 # PANTALLA DE LOGIN / REGISTRO
@@ -24,10 +50,24 @@ if st.session_state.user_session is None:
             log_pass = st.text_input("Contraseña", type="password")
             if st.form_submit_button("Ingresar"):
                 res = requests.post(f"{API_URL}/auth/login", json={"email": log_email, "password": log_pass})
+                
                 if res.status_code == 200:
-                    st.session_state.user_session = res.json()
-                    st.success(f"¡Bienvenido {res.json()['full_name']}!")
-                    st.rerun()
+                    datos_token = res.json()
+                    token = datos_token["access_token"]
+                    
+                    # 1. Guardamos el TOKEN en la cookie para el futuro
+                    cookie_manager.set("neurolift_jwt", token, key="set_jwt_login")
+                    
+                    # 2. Vamos de inmediato al backend a traer tus datos reales ("Hidratación" manual)
+                    res_me = requests.get(f"{API_URL}/auth/me", headers={"Authorization": f"Bearer {token}"})
+                    
+                    if res_me.status_code == 200:
+                        # 3. Te metemos al sistema manualmente
+                        st.session_state.user_session = res_me.json()
+                        st.success("¡Autenticación exitosa! Entrando...")
+                        st.rerun()
+                    else:
+                        st.error("Error al obtener el perfil de usuario.")
                 else:
                     st.error("Credenciales incorrectas")
                     
@@ -49,12 +89,10 @@ if st.session_state.user_session is None:
                 if res.status_code == 200:
                     st.success("¡Cuenta creada exitosamente! Ve a Iniciar Sesión.")
                 else:
-                    # BLINDAJE: Si el backend falla y no manda JSON, atrapamos el error sin colapsar
                     try:
                         st.error(res.json().get("detail", "Error al crear la cuenta"))
                     except:
-                        st.error(f"Error crítico en el servidor: {res.text}")
-                
+                        st.error(f"Error crítico: {res.text}")
 
 # ==========================================
 # APLICACIÓN PRINCIPAL (USUARIO LOGUEADO)
@@ -62,12 +100,14 @@ if st.session_state.user_session is None:
 else:
     usuario_actual = st.session_state.user_session
     
-    # Barra lateral unificada
+   # Barra lateral unificada
     with st.sidebar:
         st.write(f"👤 **{usuario_actual['full_name']}**")
-        st.write(f"🏷️ Rol: {'Coach' if usuario_actual['role'] == 'coach' else 'Atleta'}")
+        st.write(f"🏷️ Rol: {'Coach' if usuario_actual.get('role') == 'coach' else 'Atleta'}")
+        
         if st.button("Cerrar Sesión"):
             st.session_state.user_session = None
+            cookie_manager.delete("neurolift_jwt", key="delete_jwt_logout")
             st.rerun()
             
         st.markdown("---")
@@ -81,8 +121,10 @@ else:
         
         # Aquí pegas el menú lateral que ya tenías para el coach:
         st.sidebar.header("Menú del Entrenador")
-        opciones_menu = ["🔍 Ver Rutinas", "👥 Nuevo Atleta", "💪 Toma de Marcas (PRs)", "⚙️ Crear Mesociclo con IA"]
-        opcion = st.sidebar.radio("Navegación:", opciones_menu)
+        opcion = st.sidebar.radio(
+            "Navegación", 
+            ["👥 Nuevo Atleta", "⚙️ Crear Mesociclo con IA", "✍️ Crear Mesociclo Manual", "🔍 Ver Rutinas", "💪 Toma de Marcas (PRs)"]
+        )
         
        # ==========================================
         # SECCIÓN: NUEVO ATLETA
@@ -446,6 +488,59 @@ else:
                             st.rerun() 
                         else:
                             st.error("Error al guardar la marca.")
+        elif opcion == "✍️ Crear Mesociclo Manual":
+            st.subheader("✍️ Creación Manual de Mesociclo")
+            st.markdown("Genera el esqueleto de tu mesociclo y llénalo de ejercicios en la pestaña **🔍 Ver Rutinas**.")
+            
+            # Traer lista de atletas desde la API
+            res_atletas = requests.get(f"{API_URL}/users/athletes")
+            
+            if res_atletas.status_code == 200:
+                atletas = res_atletas.json()
+                
+                if not atletas:
+                    st.warning("No tienes atletas registrados. Pide a tus clientes que creen su cuenta como 'Atleta'.")
+                else:
+                    # Diccionario para mapear ID -> Nombre Completo
+                    opciones_atletas = {a["id"]: a["full_name"] for a in atletas}
+                    
+                    with st.form("form_manual_meso"):
+                        # El Coach ve el nombre, pero Streamlit guarda el ID por debajo
+                        atleta_seleccionado = st.selectbox(
+                            "Seleccionar Atleta", 
+                            options=list(opciones_atletas.keys()), 
+                            format_func=lambda x: opciones_atletas[x]
+                        )
+                        
+                        nombre_meso = st.text_input("Nombre de la Rutina (ej. Fase de Fuerza)")
+                        disciplina = st.selectbox("Disciplina", ["Powerbuilding", "Powerlifting", "Hipertrofia", "General"])
+                        fecha_inicio = st.date_input("Fecha de Inicio")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            semanas = st.number_input("Semanas de duración", min_value=1, max_value=12, value=4)
+                        with col2:
+                            sesiones_semana = st.number_input("Sesiones por semana", min_value=1, max_value=7, value=3)
+                            
+                        if st.form_submit_button("Construir Esqueleto"):
+                            if not nombre_meso:
+                                st.error("Debes darle un nombre al mesociclo.")
+                            else:
+                                datos_manual = {
+                                    "user_id": atleta_seleccionado,
+                                    "name": nombre_meso,
+                                    "discipline": disciplina,
+                                    "start_date": str(fecha_inicio),
+                                    "weeks_count": semanas,
+                                    "sessions_per_week": sesiones_semana
+                                }
+                                
+                                res_manual = requests.post(f"{API_URL}/mesocycles/manual", json=datos_manual)
+                                
+                                if res_manual.status_code == 200:
+                                    st.success("¡Cascarón creado con éxito! Ve a '🔍 Ver Rutinas' para añadir los ejercicios.")
+                                else:
+                                    st.error("Error al crear el mesociclo.")
         
     elif usuario_actual["role"] == "athlete":
         # ==========================================

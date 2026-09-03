@@ -136,3 +136,17 @@ class PRResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Esquema rápido para recibir la marca
+class PRCreate(BaseModel):
+    exercise_name: str
+    max_weight_kg: float
+
+class MesocycleManualCreate(BaseModel):
+    user_id: UUID
+    name: str
+    discipline: str
+    start_date: date
+    weeks_count: int
+    sessions_per_week: int
+

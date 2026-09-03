@@ -1,13 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List
 from uuid import UUID
-from datetime import timedelta
+from datetime import timedelta, datetime
 from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
-import json
+from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
+import jwt
+
 
 from backend.database import SessionLocal, engine
 from backend import models, schemas
@@ -16,6 +18,9 @@ from backend import models, schemas
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="NeuroLift API")
+
+# Le decimos a FastAPI dónde está la ruta de login
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 def get_db():
     db = SessionLocal()
@@ -334,13 +339,9 @@ def crear_atleta(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def listar_atletas(db: Session = Depends(get_db)):
     return db.query(models.User).all()
 
-# Esquema rápido para recibir la marca
-class PRCreate(BaseModel):
-    exercise_name: str
-    max_weight_kg: float
 
 @app.post("/users/{user_id}/records/")
-def upsert_personal_record(user_id: UUID, record: PRCreate, db: Session = Depends(get_db)):
+def upsert_personal_record(user_id: UUID, record: schemas.PRCreate, db: Session = Depends(get_db)):
     """Añade una nueva marca o la actualiza si el ejercicio ya existe."""
     # Buscamos si el usuario ya tiene un RM registrado para este ejercicio
     pr_existente = db.query(models.PersonalRecord).filter(
@@ -369,7 +370,6 @@ def obtener_marcas_atleta(user_id: UUID, db: Session = Depends(get_db)):
     marcas = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
     return marcas
 
-from pydantic import BaseModel
 
 # Esquema para recibir las correcciones del Coach
 class SetUpdate(BaseModel):
@@ -487,14 +487,103 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
 def login_user(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     usuario = db.query(models.User).filter(models.User.email == credentials.email).first()
     
-    # Si no existe o la contraseña es incorrecta
     if not usuario or not verify_password(credentials.password, usuario.hashed_password):
-        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Correo o contraseña incorrectos"
+        )
     
-    # Si todo está bien, le devolvemos los datos principales
-    return {
-        "id": str(usuario.id),
-        "full_name": usuario.full_name,
-        "email": usuario.email,
-        "role": usuario.role
-    }
+    # Fabricamos el contenido del token (Payload)
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": usuario.email, "role": usuario.role, "id": str(usuario.id)},
+        expires_delta=access_token_expires
+    )
+    
+    # Devolvemos el Token en el formato estándar OAuth2
+    return {"access_token": access_token, "token_type": "bearer"}
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudieron validar las credenciales",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Desencriptamos el token usando nuestra clave secreta
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except jwt.PyJWTError: # Atrapa tokens expirados o falsificados
+        raise credentials_exception
+        
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# El frontend llamará a esta ruta enviando el Token para hidratar la sesión
+@app.get("/auth/me", response_model=schemas.UserResponse)
+def read_users_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
+# 1. Ruta para que el Coach vea a sus atletas en un menú desplegable
+@app.get("/users/athletes", response_model=List[schemas.UserResponse])
+def get_athletes(db: Session = Depends(get_db)):
+    # Traemos solo a los usuarios que tienen el rol de 'athlete'
+    atletas = db.query(models.User).filter(models.User.role == "athlete").all()
+    return atletas
+
+# 2. Ruta para crear el Mesociclo Manual (Solo el cascarón y las sesiones vacías)
+@app.post("/mesocycles/manual")
+def create_manual_mesocycle(req: schemas.MesocycleManualCreate, db: Session = Depends(get_db)):
+    # A. Crear el cascarón principal
+    nuevo_meso = models.Mesocycle(
+        user_id=req.user_id,
+        name=req.name,
+        discipline=req.discipline,
+        start_date=req.start_date
+    )
+    db.add(nuevo_meso)
+    db.flush() # Guardamos para obtener el ID
+
+    dias_agregados = 0
+    total_sesiones = req.weeks_count * req.sessions_per_week
+
+    # B. Crear las sesiones vacías (Espaciadas por 2 días por defecto)
+    for i in range(total_sesiones):
+        fecha_sesion = req.start_date + timedelta(days=dias_agregados)
+        dias_agregados += 2 
+
+        nueva_sesion = models.Session(
+            mesocycle_id=nuevo_meso.id,
+            scheduled_date=fecha_sesion,
+            athlete_notes="Sesión manual. Añade tus ejercicios.",
+            status="pending"
+        )
+        db.add(nueva_sesion)
+
+    # C. Actualizamos la fecha de fin y guardamos definitivamente
+    nuevo_meso.end_date = req.start_date + timedelta(days=dias_agregados)
+    db.commit()
+    
+    return {"message": "Mesociclo manual creado con éxito", "mesocycle_id": str(nuevo_meso.id)}
+# ==========================================
+# CONFIGURACIÓN JWT
+# ==========================================
+# En un proyecto real, esta clave va en un archivo .env
+SECRET_KEY = "neurolift_super_secreto_no_compartir" 
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # El token durará 7 días
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now() + expires_delta
+    else:
+        expire = datetime.now() + timedelta(minutes=15)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
