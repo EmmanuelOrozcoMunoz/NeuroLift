@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import extra_streamlit_components as stx
+import datetime 
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -159,61 +160,76 @@ else:
         # SECCIÓN: CREAR MESOCICLO
         # ==========================================
         elif opcion == "⚙️ Crear Mesociclo con IA":
-            st.subheader("⚙️ Programador Inteligente")
+            st.subheader("🤖 Generar Mesociclo con IA")
+            st.markdown("Diseña la estructura y deja que Gemini calcule los volúmenes, ejercicios y porcentajes.")
             
-            # 1. Traer lista de atletas
-            res_usuarios = requests.get(f"{API_URL}/users/")
-            if res_usuarios.status_code == 200 and len(res_usuarios.json()) > 0:
-                usuarios = res_usuarios.json()
-                opciones_usuarios = {u['full_name']: u['id'] for u in usuarios}
+            # Traer lista de atletas
+            res_atletas = requests.get(f"{API_URL}/users/athletes", headers=get_headers())
+            
+            if res_atletas.status_code == 200 and res_atletas.json():
+                atletas = res_atletas.json()
+                opciones_atletas = {a["id"]: a["full_name"] for a in atletas}
                 
-                # Formulario de 2 pasos integrados
-                atleta_seleccionado = st.selectbox("Selecciona al Atleta:", list(opciones_usuarios.keys()))
-                nombre_meso = st.text_input("Nombre del Mesociclo (Ej: Bloque Fuerza - Squat)")
-                disciplina = st.selectbox("Disciplina:", ["Levantamiento Olímpico", "Powerlifting", "Hipertrofia", "Readaptación"])
-                fecha_inicio = st.date_input("Fecha de Inicio")
-                
-                st.markdown("---")
-                st.markdown("**Parámetros de la Inteligencia Artificial**")
-                semanas = st.number_input("Cantidad de semanas", min_value=1, max_value=12, value=4)
-                dias_por_semana = st.number_input("Días de entrenamiento por semana", min_value=1, max_value=7, value=4)
-                contexto = st.text_area("Contexto del Atleta (Lesiones, objetivos, puntos débiles...)", 
-                                        placeholder="Ej: Atleta principiante, necesita mejorar técnica en el Snatch...")
-                
-                if st.button("🚀 Generar Mesociclo Completo"):
-                    with st.spinner("Construyendo rutina con base científica... Esto puede tomar unos segundos."):
-                        # Paso A: Crear el Cascarón
-                        datos_cascaron = {
-                            "name": nombre_meso,
-                            "user_id": opciones_usuarios[atleta_seleccionado],
-                            "discipline": disciplina,
-                            "start_date": str(fecha_inicio)
+                with st.form("form_ia_meso"):
+                    atleta_seleccionado = st.selectbox(
+                        "Seleccionar Atleta", 
+                        options=list(opciones_atletas.keys()), 
+                        format_func=lambda x: opciones_atletas[x]
+                    )
+                    
+                    nombre_meso = st.text_input("Nombre de la Rutina", value="Bloque de Fuerza 1")
+                    disciplina = st.selectbox("Disciplina", ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting"])
+                    
+                    # El campo libre donde el coach da sus notas
+                    objetivo = st.text_area(
+                        "Objetivo y Contexto (Opcional pero recomendado)", 
+                        placeholder="Ej. Priorizar sentadilla, tiene dolor leve en hombro derecho, enfocar accesorios en espalda..."
+                    )
+                    
+                    fecha_inicio = st.date_input("Fecha de Inicio")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        semanas = st.number_input("Semanas de duración", min_value=1, max_value=12, value=4)
+                    
+                    with col2:
+                        mapa_dias = {
+                            "Lunes": 0, "Martes": 1, "Miércoles": 2, 
+                            "Jueves": 3, "Viernes": 4, "Sábado": 5, "Domingo": 6
                         }
-                        res_cascaron = requests.post(f"{API_URL}/mesocycles/", json=datos_cascaron)
+                        dias_elegidos = st.multiselect(
+                            "Días de entrenamiento", 
+                            options=list(mapa_dias.keys()),
+                            default=["Lunes", "Miércoles", "Viernes"]
+                        )
                         
-                        if res_cascaron.status_code == 200:
-                            meso_id = res_cascaron.json()["id"]
-                            
-                            # Paso B: Inyectar la IA
-                            datos_ia = {
-                                "mesocycle_id": meso_id,
-                                "context": contexto,
-                                "weeks_count": semanas,
-                                "sessions_per_week": dias_por_semana
-                            }
-                            res_ia = requests.post(f"{API_URL}/ai/generate-full-mesocycle/", json=datos_ia)
-                            
-                            if res_ia.status_code == 200:
-                                st.success(f"¡Éxito! {res_ia.json().get('message', 'Rutina generada')}")
-                                
-                                st.balloons() # ¡Un toque visual de celebración!
+                    if st.form_submit_button("✨ Generar con Inteligencia Artificial"):
+                            if not nombre_meso:
+                                st.error("Debes darle un nombre al mesociclo.")
+                            elif not dias_elegidos:
+                                st.error("Selecciona al menos un día de entrenamiento.")
                             else:
-                                st.error(f"Error en IA: {res_ia.text}")
-                        else:
-                            st.error(f"Error 422: {res_cascaron.text}")
-            else:
-                st.warning("Primero debes registrar un atleta en la pestaña 'Nuevo Atleta'.")
-
+                                numeros_dias = [mapa_dias[dia] for dia in dias_elegidos]
+                                
+                                # Datos limpios y estructurados
+                                datos_ia = {
+                                    "user_id": atleta_seleccionado,
+                                    "name": nombre_meso,
+                                    "discipline": disciplina,
+                                    "start_date": str(fecha_inicio),
+                                    "weeks_count": semanas,
+                                    "training_days": numeros_dias,
+                                    "context": objetivo if objetivo else "Progreso lineal y mejora técnica general."
+                                }
+                                
+                                with st.spinner("🧠 Gemini Lite está procesando el contexto y calculando pesos (RAG)..."):
+                                    res_ia = requests.post(f"{API_URL}/ai/generate-smart-mesocycle/", json=datos_ia, headers=get_headers())
+                                    
+                                    if res_ia.status_code == 200:
+                                        st.success("¡Mesociclo estructurado con IA creado con éxito!")
+                                        st.info("Ve a '🔍 Ver Rutinas' para revisar los pesos calculados.")
+                                    else:
+                                        st.error(f"Hubo un error con la IA: {res_ia.text}")
         # ==========================================
         # SECCIÓN: VER RUTINAS (Lo que ya tenías)
         # ==========================================
@@ -250,120 +266,131 @@ else:
                     res_detalle = requests.get(f"{API_URL}/mesocycles/{meso_id}")
                     if res_detalle.status_code == 200:
                         datos = res_detalle.json()
-                        st.write("🔍 MODO DEBUG: ¿Qué me mandó el backend?", datos)
-                        st.write(f"### 📋 Panel de Edición - {atleta_seleccionado}")
+                        
                         
                         # Iteramos sobre las sesiones
                         for sesion in datos.get("sessions", []):
-                            with st.expander(f"📅 Sesión: {sesion['scheduled_date']} | {sesion.get('athlete_notes', '')}"):
+                            
+                                dias_espanol = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                                 
-                                # --- FORMULARIO 1: EDITAR LO EXISTENTE (AGRUPADO E INTELIGENTE) ---
-                                with st.form(f"form_sesion_{sesion['id']}"):
+                                fecha_str = sesion.get("scheduled_date", "")
+                                nombre_dia = ""
+                                if fecha_str:
+                                    try:
+                                        fecha_obj = datetime.datetime.strptime(fecha_str, "%Y-%m-%d")
+                                        nombre_dia = f"{dias_espanol[fecha_obj.weekday()]}, "
+                                    except Exception:
+                                        pass
+                                
+                                notas_atleta = sesion.get('athlete_notes', '')
+                                separador_notas = f" | {notas_atleta}" if notas_atleta else ""
+                                
+                                # Nuestro nuevo y hermoso título
+                                titulo_sesion = f"📅 {nombre_dia}{fecha_str}{separador_notas}"
+
+                                with st.expander(titulo_sesion):
                                     
-                                    # 1. Agrupamos las series por nombre del ejercicio
-                                    ejercicios_agrupados = {}
-                                    for set_data in sesion.get("sets", []):
-                                        ej_nombre = set_data["exercise"]["name"]
-                                        if ej_nombre not in ejercicios_agrupados:
-                                            ejercicios_agrupados[ej_nombre] = {
-                                                "set_ids": [],
-                                                "reps": set_data.get("prescribed_reps") or 0,
-                                                "rpe": set_data.get("rpe") or 0,
-                                                "peso": set_data.get("prescribed_weight") or 0.0,
-                                            }
-                                        ejercicios_agrupados[ej_nombre]["set_ids"].append(set_data["id"])
-                                    
-                                    # Aquí guardaremos el "Plan de Acción" para cada ejercicio
-                                    plan_de_accion = []
-                                    
-                                    st.markdown("##### 🏋️ Ejercicios Prescritos")
-                                    
-                                    for ej_nombre, datos_ej in ejercicios_agrupados.items():
-                                        col1, col2, col3, col4, col5 = st.columns([2.5, 1, 1, 1, 1.5])
+                                    # --- FORMULARIO 1: EDITAR LO EXISTENTE (AGRUPADO E INTELIGENTE) ---
+                                    with st.form(f"form_sesion_{sesion['id']}"):
                                         
-                                        original_ids = datos_ej["set_ids"]
-                                        first_id = original_ids[0]
-                                        num_series_originales = len(original_ids)
+                                        # 1. Agrupamos las series por nombre del ejercicio
+                                        ejercicios_agrupados = {}
+                                        for set_data in sesion.get("sets", []):
+                                            ej_nombre = set_data["exercise"]["name"]
+                                            if ej_nombre not in ejercicios_agrupados:
+                                                ejercicios_agrupados[ej_nombre] = {
+                                                    "set_ids": [],
+                                                    "reps": set_data.get("prescribed_reps") or 0,
+                                                    "rpe": set_data.get("rpe") or 0,
+                                                    "peso": set_data.get("prescribed_weight") or 0.0,
+                                                }
+                                            ejercicios_agrupados[ej_nombre]["set_ids"].append(set_data["id"])
                                         
-                                        with col1:
-                                            nuevo_nombre = st.text_input("Ejercicio", value=ej_nombre, key=f"ex_{first_id}")
-                                        with col2:
-                                            # ¡LA MAGIA! Ahora es un input editable
-                                            nuevas_series = st.number_input("Series", value=num_series_originales, min_value=1, key=f"series_{first_id}")
-                                        with col3:
-                                            nuevas_reps = st.number_input("Reps", value=int(datos_ej["reps"]), key=f"reps_{first_id}")
-                                        with col4:
-                                            nuevo_rpe = st.number_input("RPE", value=int(datos_ej["rpe"]), min_value=0, max_value=10, step=1, key=f"rpe_{first_id}")
-                                        with col5:
-                                            nuevo_peso = st.number_input("Peso (kg)", value=float(datos_ej["peso"]), step=2.5, key=f"peso_{first_id}")
+                                        # Aquí guardaremos el "Plan de Acción" para cada ejercicio
+                                        plan_de_accion = []
                                         
-                                        # Guardamos lo que el usuario decidió hacer con este ejercicio
-                                        plan_de_accion.append({
-                                            "original_ids": original_ids,
-                                            "num_original": num_series_originales,
-                                            "num_nuevo": nuevas_series,
-                                            "session_id": sesion["id"],
-                                            "data": {
-                                                "exercise_name": nuevo_nombre,
-                                                "prescribed_reps": nuevas_reps,
-                                                "rpe": nuevo_rpe,
-                                                "prescribed_weight": nuevo_peso
-                                            }
-                                        })
-                                    
-                                    if st.form_submit_button("💾 Guardar Ajustes de esta Sesión"):
-                                        for plan in plan_de_accion:
-                                            # Paso A: Actualizar las series que se mantienen (usando PUT)
-                                            limite_actualizar = min(plan["num_original"], plan["num_nuevo"])
-                                            for i in range(limite_actualizar):
-                                                requests.put(f"{API_URL}/sets/{plan['original_ids'][i]}", json=plan["data"])
+                                        st.markdown("##### 🏋️ Ejercicios Prescritos")
+                                        
+                                        for ej_nombre, datos_ej in ejercicios_agrupados.items():
+                                            col1, col2, col3, col4, col5 = st.columns([2.5, 1, 1, 1, 1.5])
                                             
-                                            # Paso B: Si bajó el número de series, BORRAR las sobrantes (DELETE)
-                                            if plan["num_nuevo"] < plan["num_original"]:
-                                                for i in range(plan["num_nuevo"], plan["num_original"]):
-                                                    requests.delete(f"{API_URL}/sets/{plan['original_ids'][i]}")
-                                                    
-                                            # Paso C: Si subió el número de series, CREAR las nuevas (POST)
-                                            elif plan["num_nuevo"] > plan["num_original"]:
-                                                series_a_crear = plan["num_nuevo"] - plan["num_original"]
-                                                for _ in range(series_a_crear):
-                                                    requests.post(f"{API_URL}/sessions/{plan['session_id']}/sets/", json=plan["data"])
-                                                    
-                                        st.success("¡Ajustes y series guardados con éxito!")
-                                        st.rerun()
-
-                                st.markdown("---")
-
-                                # --- FORMULARIO 2: AÑADIR UN EJERCICIO NUEVO (ACTUALIZADO) ---
-                                st.write("**➕ Añadir Ejercicio Extra**")
-                                with st.form(f"form_add_{sesion['id']}"):
-                                    colA, colB, colC, colD, colE = st.columns([2.5, 1, 1, 1, 1.5])
-                                    with colA:
-                                        nuevo_ej_nombre = st.text_input("Nombre del Ejercicio")
-                                    with colB:
-                                        nuevo_ej_series = st.number_input("Series", min_value=1, value=3)
-                                    with colC:
-                                        nuevo_ej_reps = st.number_input("Reps", min_value=1, value=10)
-                                    with colD:
-                                        nuevo_ej_rpe = st.number_input("RPE", min_value=1, max_value=10, value=7, step=1)
-                                    with colE:
-                                        nuevo_ej_peso = st.number_input("Peso (kg)", min_value=0.0, value=0.0, step=2.5)
-                                    
-                                    if st.form_submit_button("Añadir a la rutina"):
-                                        if nuevo_ej_nombre:
-                                            datos_nuevo = {
-                                                "exercise_name": nuevo_ej_nombre,
-                                                "prescribed_reps": nuevo_ej_reps,
-                                                "rpe": nuevo_ej_rpe,
-                                                "prescribed_weight": nuevo_ej_peso
-                                            }
-                                            # Disparamos un POST por cada serie solicitada
-                                            for _ in range(nuevo_ej_series):
-                                                requests.post(f"{API_URL}/sessions/{sesion['id']}/sets/", json=datos_nuevo)
-                                            st.success(f"¡Ejercicio añadido con {nuevo_ej_series} series!")
+                                            original_ids = datos_ej["set_ids"]
+                                            first_id = original_ids[0]
+                                            num_series_originales = len(original_ids)
+                                            
+                                            with col1:
+                                                nuevo_nombre = st.text_input("Ejercicio", value=ej_nombre, key=f"ex_{first_id}")
+                                            with col2:
+                                                nuevas_series = st.number_input("Series", value=num_series_originales, min_value=1, key=f"series_{first_id}")
+                                            with col3:
+                                                nuevas_reps = st.number_input("Reps", value=int(datos_ej["reps"]), key=f"reps_{first_id}")
+                                            with col4:
+                                                nuevo_rpe = st.number_input("RPE", value=int(datos_ej["rpe"]), min_value=0, max_value=10, step=1, key=f"rpe_{first_id}")
+                                            with col5:
+                                                nuevo_peso = st.number_input("Peso (kg)", value=float(datos_ej["peso"]), step=2.5, key=f"peso_{first_id}")
+                                            
+                                            plan_de_accion.append({
+                                                "original_ids": original_ids,
+                                                "num_original": num_series_originales,
+                                                "num_nuevo": nuevas_series,
+                                                "session_id": sesion["id"],
+                                                "data": {
+                                                    "exercise_name": nuevo_nombre,
+                                                    "prescribed_reps": nuevas_reps,
+                                                    "rpe": nuevo_rpe,
+                                                    "prescribed_weight": nuevo_peso
+                                                }
+                                            })
+                                        
+                                        if st.form_submit_button("💾 Guardar Ajustes de esta Sesión"):
+                                            for plan in plan_de_accion:
+                                                limite_actualizar = min(plan["num_original"], plan["num_nuevo"])
+                                                for i in range(limite_actualizar):
+                                                    requests.put(f"{API_URL}/sets/{plan['original_ids'][i]}", json=plan["data"])
+                                                
+                                                if plan["num_nuevo"] < plan["num_original"]:
+                                                    for i in range(plan["num_nuevo"], plan["num_original"]):
+                                                        requests.delete(f"{API_URL}/sets/{plan['original_ids'][i]}")
+                                                        
+                                                elif plan["num_nuevo"] > plan["num_original"]:
+                                                    series_a_crear = plan["num_nuevo"] - plan["num_original"]
+                                                    for _ in range(series_a_crear):
+                                                        requests.post(f"{API_URL}/sessions/{plan['session_id']}/sets/", json=plan["data"])
+                                                        
+                                            st.success("¡Ajustes y series guardados con éxito!")
                                             st.rerun()
-                                        else:
-                                            st.warning("Debes escribir el nombre del ejercicio.")
+
+                                    st.markdown("---")
+
+                                    # --- FORMULARIO 2: AÑADIR UN EJERCICIO NUEVO ---
+                                    st.write("**➕ Añadir Ejercicio Extra**")
+                                    with st.form(f"form_add_{sesion['id']}"):
+                                        colA, colB, colC, colD, colE = st.columns([2.5, 1, 1, 1, 1.5])
+                                        with colA:
+                                            nuevo_ej_nombre = st.text_input("Nombre del Ejercicio")
+                                        with colB:
+                                            nuevo_ej_series = st.number_input("Series", min_value=1, value=3)
+                                        with colC:
+                                            nuevo_ej_reps = st.number_input("Reps", min_value=1, value=10)
+                                        with colD:
+                                            nuevo_ej_rpe = st.number_input("RPE", min_value=1, max_value=10, value=7, step=1)
+                                        with colE:
+                                            nuevo_ej_peso = st.number_input("Peso (kg)", min_value=0.0, value=0.0, step=2.5)
+                                        
+                                        if st.form_submit_button("Añadir a la rutina"):
+                                            if nuevo_ej_nombre:
+                                                datos_nuevo = {
+                                                    "exercise_name": nuevo_ej_nombre,
+                                                    "prescribed_reps": nuevo_ej_reps,
+                                                    "rpe": nuevo_ej_rpe,
+                                                    "prescribed_weight": nuevo_ej_peso
+                                                }
+                                                for _ in range(nuevo_ej_series):
+                                                    requests.post(f"{API_URL}/sessions/{sesion['id']}/sets/", json=datos_nuevo)
+                                                st.success(f"¡Ejercicio añadido con {nuevo_ej_series} series!")
+                                                st.rerun()
+                                            else:
+                                                st.warning("Debes escribir el nombre del ejercicio.")
                     else:
                         st.error("Error al cargar los detalles del mesociclo.")
                 else:
@@ -505,7 +532,6 @@ else:
                     opciones_atletas = {a["id"]: a["full_name"] for a in atletas}
                     
                     with st.form("form_manual_meso"):
-                        # El Coach ve el nombre, pero Streamlit guarda el ID por debajo
                         atleta_seleccionado = st.selectbox(
                             "Seleccionar Atleta", 
                             options=list(opciones_atletas.keys()), 
@@ -513,32 +539,49 @@ else:
                         )
                         
                         nombre_meso = st.text_input("Nombre de la Rutina (ej. Fase de Fuerza)")
-                        disciplina = st.selectbox("Disciplina", ["Powerbuilding", "Powerlifting", "Hipertrofia", "General"])
+                        disciplina = st.selectbox("Disciplina", ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting"])
                         fecha_inicio = st.date_input("Fecha de Inicio")
                         
+                        # --- NUEVO: Selector de semanas y días ---
                         col1, col2 = st.columns(2)
                         with col1:
                             semanas = st.number_input("Semanas de duración", min_value=1, max_value=12, value=4)
+                        
                         with col2:
-                            sesiones_semana = st.number_input("Sesiones por semana", min_value=1, max_value=7, value=3)
+                            # Diccionario para mapear texto a los números que usa Python (.weekday())
+                            mapa_dias = {
+                                "Lunes": 0, "Martes": 1, "Miércoles": 2, 
+                                "Jueves": 3, "Viernes": 4, "Sábado": 5, "Domingo": 6
+                            }
+                            dias_elegidos = st.multiselect(
+                                "Días de entrenamiento", 
+                                options=list(mapa_dias.keys()),
+                                default=["Lunes", "Miércoles", "Viernes"] # Por defecto
+                            )
                             
                         if st.form_submit_button("Construir Esqueleto"):
                             if not nombre_meso:
                                 st.error("Debes darle un nombre al mesociclo.")
+                            elif not dias_elegidos:
+                                st.error("Debes seleccionar al menos un día de entrenamiento.")
                             else:
+                                # Convertimos los textos ("Lunes") a sus números (0)
+                                numeros_dias = [mapa_dias[dia] for dia in dias_elegidos]
+                                
                                 datos_manual = {
                                     "user_id": atleta_seleccionado,
                                     "name": nombre_meso,
                                     "discipline": disciplina,
                                     "start_date": str(fecha_inicio),
                                     "weeks_count": semanas,
-                                    "sessions_per_week": sesiones_semana
+                                    "training_days": numeros_dias
                                 }
                                 
                                 res_manual = requests.post(f"{API_URL}/mesocycles/manual", json=datos_manual)
                                 
                                 if res_manual.status_code == 200:
-                                    st.success("¡Cascarón creado con éxito! Ve a '🔍 Ver Rutinas' para añadir los ejercicios.")
+                                    st.success(f"¡Cascarón creado con éxito! Se programaron {res_manual.json().get('total_sessions', 0)} sesiones.")
+                                    st.info("Ve a '🔍 Ver Rutinas' para añadir los ejercicios a estos días.")
                                 else:
                                     st.error("Error al crear el mesociclo.")
         

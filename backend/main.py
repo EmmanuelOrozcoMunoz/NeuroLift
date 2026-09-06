@@ -167,65 +167,80 @@ def generate_and_save_session(req: AIGenerateRequest, db: Session = Depends(get_
     
     return {"status": "success", "session_focus": rutina_ai.get("session_focus"), "session_id": nueva_sesion.id}
 
-@app.post("/ai/generate-full-mesocycle/")
-def generate_and_save_full_mesocycle(req: schemas.AIGenerateRequest, db: Session = Depends(get_db)):
-    # 1. Buscar el "cascarón" del mesociclo
-    meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == req.mesocycle_id).first()
-    if not meso:
-        raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+@app.post("/ai/generate-smart-mesocycle/")
+def generate_and_save_smart_mesocycle(req: schemas.AIGenerateSmart, db: Session = Depends(get_db)):
+    
+    # 1. Crear el cascarón del mesociclo
+    nuevo_meso = models.Mesocycle(
+        user_id=req.user_id,
+        name=req.name,
+        discipline=req.discipline,
+        start_date=req.start_date
+    )
+    db.add(nuevo_meso)
+    db.flush() 
 
-    # ==========================================
     # 2. CONSTRUIR EL SÚPER CONTEXTO (PESO Y RMs)
-    # ==========================================
-    atleta = meso.user
+    atleta = db.query(models.User).filter(models.User.id == req.user_id).first()
     marcas = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == atleta.id).all()
     
     texto_marcas = "Sin marcas registradas."
     if marcas:
-        # Formateamos las marcas así: "Back Squat: 140.0kg, Bench Press: 100.0kg"
         texto_marcas = ", ".join([f"{pr.exercise_name}: {pr.max_weight_kg}kg" for pr in marcas])
     
     peso_corporal = f"{atleta.body_weight}kg" if atleta.body_weight else "No registrado"
-    
-    # Unimos lo que escribió el coach en la app + la base de datos
-    contexto_enriquecido = f"Peso corporal: {peso_corporal}. Marcas actuales (1RM): {texto_marcas}. Peticiones del Coach: {req.context}"
-    # ==========================================
+    contexto_enriquecido = f"Peso corporal: {peso_corporal}. Marcas (1RM): {texto_marcas}. Peticiones: {req.context}"
 
-    dias_agregados = 0
-    semanas_por_chunk = 2 # (O 4, dependiendo de cómo estés dividiendo las llamadas)
+    # 3. CALCULAR TODAS LAS FECHAS DEL MESOCICLO
+    total_dias = req.weeks_count * 7
+    todas_las_fechas = []
+    for i in range(total_dias):
+        fecha_evaluada = req.start_date + timedelta(days=i)
+        if fecha_evaluada.weekday() in req.training_days:
+            todas_las_fechas.append(fecha_evaluada.strftime("%Y-%m-%d"))
+
+    semanas_por_chunk = 2 
+    sesiones_por_semana = len(req.training_days)
+    sesiones_por_chunk = semanas_por_chunk * sesiones_por_semana
 
     try:
-        # 3. Bucle de generación por "chunks" (semanas)
+        # 4. Bucle de generación por "chunks" (semanas)
+        from backend.ai_agent import generate_mesocycle_chunk
+        
         for start in range(1, req.weeks_count + 1, semanas_por_chunk):
             end = min(start + semanas_por_chunk - 1, req.weeks_count)
             
-            # Llamamos a Gemini (Asegúrate de tener importada tu función search_knowledge_base y generate_mesocycle_chunk)
-            from backend.ai_agent import generate_mesocycle_chunk
+            # Rebanamos la lista de fechas para enviarle solo las que tocan en este chunk
+            idx_inicio = (start - 1) * sesiones_por_semana
+            idx_fin = idx_inicio + sesiones_por_chunk
+            fechas_del_chunk = todas_las_fechas[idx_inicio:idx_fin]
             
             rutina_ai = generate_mesocycle_chunk(
                 athlete_name=atleta.full_name,
-                discipline=meso.discipline,
-                experience_notes=contexto_enriquecido, # <- ¡Aquí pasamos los RMs y el peso!
+                discipline=req.discipline,
+                experience_notes=contexto_enriquecido,
                 start_week=start,
                 end_week=end,
-                sessions_per_week=req.sessions_per_week
+                session_dates=fechas_del_chunk # <- ¡Le pasamos las fechas exactas!
             )
 
-            # 4. Parseo y guardado en Base de Datos (Ajustado a la estructura de Gemini)
+            # 5. Parseo y guardado en Base de Datos
             semanas = rutina_ai.get("weeks", [])
-            
             for semana in semanas:
                 sesiones = semana.get("sessions", [])
                 
                 for sesion_data in sesiones:
-                    # Calculamos el día de la sesión
-                    fecha_sesion = meso.start_date + timedelta(days=dias_agregados)
-                    dias_agregados += 2 # Espaciamos 2 días (luego puedes mejorar esta lógica)
+                    # ¡LA MAGIA! Ahora Gemini nos devuelve la fecha exacta en el JSON
+                    fecha_str = sesion_data.get("scheduled_date")
+                    if fecha_str:
+                        fecha_real = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+                    else:
+                        fecha_real = req.start_date # Fallback por seguridad
 
-                    # 4.1 Crear la Sesión
+                    # 5.1 Crear la Sesión
                     nueva_sesion = models.Session(
-                        mesocycle_id=meso.id,
-                        scheduled_date=fecha_sesion,
+                        mesocycle_id=nuevo_meso.id,
+                        scheduled_date=fecha_real,
                         athlete_notes=sesion_data.get("athlete_notes", ""),
                         status="pending"
                     )
@@ -235,39 +250,28 @@ def generate_and_save_full_mesocycle(req: schemas.AIGenerateRequest, db: Session
                     contador_orden = 1
                     ejercicios = sesion_data.get("exercises", [])
                     
-                    # 4.2 Iterar sobre los ejercicios
+                    # 5.2 Iterar sobre los ejercicios (Igual que lo tenías)
                     for ej_data in ejercicios:
                         nombre_ejercicio = ej_data.get("exercise_name", "Ejercicio Desconocido")
-                        
-                        # Buscar o crear el ejercicio en la BD
                         ejercicio = db.query(models.Exercise).filter(models.Exercise.name == nombre_ejercicio).first()
                         if not ejercicio:
                             ejercicio = models.Exercise(name=nombre_ejercicio, category="General")
                             db.add(ejercicio)
                             db.flush() 
                         
-                        # 4.3 ¡Crear LAS series!
                         num_series = ej_data.get("prescribed_sets", 1)
                         reps = ej_data.get("prescribed_reps", 1)
                         
-                        # --- BLINDAJE RPE ---
                         rpe_raw = ej_data.get("rpe_target") or ej_data.get("rpe")
                         rpe_limpio = int(float(rpe_raw)) if rpe_raw is not None else None
 
-                        # --- BLINDAJE Y EXTRACCIÓN DE PESO ---
-                        peso_raw = (
-                            ej_data.get("prescribed_weight")
-                            or ej_data.get("weight_kg")
-                            or ej_data.get("weight")
-                            or ej_data.get("target_weight")
-                        )
+                        peso_raw = (ej_data.get("prescribed_weight") or ej_data.get("weight_kg") or ej_data.get("weight") or ej_data.get("target_weight"))
                         peso_limpio = None
                         if peso_raw is not None:
                             try:
                                 peso_limpio = float(peso_raw)
                             except (ValueError, TypeError):
                                 peso_limpio = None
-                        # -------------------------------------
                         
                         for _ in range(num_series):
                             nuevo_set = models.Set(
@@ -276,17 +280,15 @@ def generate_and_save_full_mesocycle(req: schemas.AIGenerateRequest, db: Session
                                 set_order=contador_orden,
                                 prescribed_reps=reps,
                                 rpe=rpe_limpio,
-                                prescribed_weight=peso_limpio # Usamos el peso limpio
+                                prescribed_weight=peso_limpio 
                             )
                             db.add(nuevo_set)
                             contador_orden += 1
 
-        # 5. ACTUALIZAR LA FECHA DE FIN DEL MESOCICLO
-        meso.end_date = meso.start_date + timedelta(days=dias_agregados)
-        
-        # 6. Ejecutar todo de golpe
+        # 6. ACTUALIZAR LA FECHA DE FIN
+        nuevo_meso.end_date = datetime.strptime(todas_las_fechas[-1], "%Y-%m-%d").date()
         db.commit()
-        return {"message": "Mesociclo generado y guardado exitosamente con cálculo de RMs."}
+        return {"message": "Mesociclo Inteligente generado y guardado exitosamente."}
 
     except Exception as e:
         db.rollback()
@@ -537,7 +539,7 @@ def get_athletes(db: Session = Depends(get_db)):
 # 2. Ruta para crear el Mesociclo Manual (Solo el cascarón y las sesiones vacías)
 @app.post("/mesocycles/manual")
 def create_manual_mesocycle(req: schemas.MesocycleManualCreate, db: Session = Depends(get_db)):
-    # A. Crear el cascarón principal
+    # 1. Crear el cascarón principal
     nuevo_meso = models.Mesocycle(
         user_id=req.user_id,
         name=req.name,
@@ -547,27 +549,34 @@ def create_manual_mesocycle(req: schemas.MesocycleManualCreate, db: Session = De
     db.add(nuevo_meso)
     db.flush() # Guardamos para obtener el ID
 
-    dias_agregados = 0
-    total_sesiones = req.weeks_count * req.sessions_per_week
+    # 2. Lógica de Calendario Inteligente
+    total_dias_mesociclo = req.weeks_count * 7
+    sesiones_creadas = 0
 
-    # B. Crear las sesiones vacías (Espaciadas por 2 días por defecto)
-    for i in range(total_sesiones):
-        fecha_sesion = req.start_date + timedelta(days=dias_agregados)
-        dias_agregados += 2 
+    for i in range(total_dias_mesociclo):
+        # Calculamos la fecha actual en el bucle
+        fecha_evaluada = req.start_date + timedelta(days=i)
+        
+        # .weekday() devuelve 0 para Lunes, 1 para Martes, etc.
+        if fecha_evaluada.weekday() in req.training_days:
+            nueva_sesion = models.Session(
+                mesocycle_id=nuevo_meso.id,
+                scheduled_date=fecha_evaluada,
+                athlete_notes="Sesión manual. Añade tus ejercicios.",
+                status="pending"
+            )
+            db.add(nueva_sesion)
+            sesiones_creadas += 1
 
-        nueva_sesion = models.Session(
-            mesocycle_id=nuevo_meso.id,
-            scheduled_date=fecha_sesion,
-            athlete_notes="Sesión manual. Añade tus ejercicios.",
-            status="pending"
-        )
-        db.add(nueva_sesion)
-
-    # C. Actualizamos la fecha de fin y guardamos definitivamente
-    nuevo_meso.end_date = req.start_date + timedelta(days=dias_agregados)
+    # 3. Actualizamos la fecha de fin real y guardamos definitivamente
+    nuevo_meso.end_date = req.start_date + timedelta(days=total_dias_mesociclo - 1)
     db.commit()
     
-    return {"message": "Mesociclo manual creado con éxito", "mesocycle_id": str(nuevo_meso.id)}
+    return {
+        "message": "Mesociclo manual creado con éxito", 
+        "mesocycle_id": str(nuevo_meso.id),
+        "total_sessions": sesiones_creadas
+    }
 # ==========================================
 # CONFIGURACIÓN JWT
 # ==========================================

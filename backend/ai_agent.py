@@ -94,21 +94,26 @@ def search_knowledge_base(user_context: str) -> str:
         print(f"Error en búsqueda vectorial: {e}")
         return "" # Si falla, simplemente devolvemos texto vacío y la IA sigue normal
 
-def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_notes: str, start_week: int, end_week: int, sessions_per_week: int) -> dict:
+
+def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_notes: str, start_week: int, end_week: int, session_dates: list[str]) -> dict:
     api_key = os.getenv("GEMINI_API_KEY").strip() 
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={api_key}"
 
-    # ¡AQUÍ ESTÁ LA MAGIA! Buscamos en el libro basándonos en lo que necesita el atleta
+    # Tu sistema RAG intacto
     literatura_cientifica = search_knowledge_base(f"{discipline} - {experience_notes}")
+    
+    # Convertimos la lista de fechas en un texto legible para Gemini
+    fechas_str = ", ".join(session_dates)
     
     prompt = f"""
     Eres el Head Coach de IA de NeuroLift. Estamos construyendo un mesociclo grande por partes.
     Genera SOLO desde la SEMANA {start_week} hasta la SEMANA {end_week} para este atleta.
 
-    REGLA ESTRICTA: El atleta entrena EXACTAMENTE {sessions_per_week} días a la semana. 
-    DEBES generar exactamente {sessions_per_week} objetos de sesión dentro del array 'sessions' por cada semana.
-
+    REGLA CRÍTICA DE CALENDARIO: 
+    El atleta entrenará EXACTAMENTE en estas fechas cronológicas: {fechas_str}
+    DEBES generar exactamente {len(session_dates)} objetos de sesión en total.
+    
     Aplica sobrecarga progresiva en estas semanas específicas.
 
     Basate estrictamente en los siguientes principios extraídos de nuestra base de datos si son relevantes:
@@ -128,7 +133,7 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
                 "week_number": int (debe estar entre {start_week} y {end_week}),
                 "sessions": [
                     {{
-                        "day_name": "string",
+                        "scheduled_date": "YYYY-MM-DD",  <-- ¡LA IA INYECTARÁ LA FECHA AQUÍ!
                         "athlete_notes": "string",
                         "exercises": [
                             {{
@@ -136,7 +141,7 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
                                 "prescribed_sets": int,
                                 "prescribed_reps": int,
                                 "rpe_target": int,
-                                "prescribed_weight": float | None
+                                "prescribed_weight": float | null
                             }}
                         ]
                     }}
@@ -154,10 +159,9 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
         response.raise_for_status() 
         raw_json_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
         
-        # Limpieza de seguridad por si Gemini añade formato markdown ```json
+        # Limpieza de seguridad
         raw_json_text = raw_json_text.replace("```json", "").replace("```", "").strip()
         
-        import json
         return json.loads(raw_json_text)
     except Exception as e:
         return {"error": str(e)}

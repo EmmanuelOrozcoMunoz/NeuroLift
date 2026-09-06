@@ -142,11 +142,29 @@ class PRCreate(BaseModel):
     exercise_name: str
     max_weight_kg: float
 
+
 class MesocycleManualCreate(BaseModel):
     user_id: UUID
     name: str
     discipline: str
     start_date: date
     weeks_count: int
-    sessions_per_week: int
+    training_days: List[int] # 0 = Lunes, 1 = Martes ... 6 = Domingo
+
+class MesocycleManualCreate(BaseModel):
+    user_id: UUID
+    name: str
+    discipline: str
+    start_date: date
+    weeks_count: int
+    training_days: List[int]
+
+class AIGenerateSmart(BaseModel):
+    user_id: UUID
+    name: str
+    discipline: str
+    start_date: date
+    weeks_count: int
+    training_days: List[int]
+    context: str
 
