@@ -5,28 +5,13 @@ from datetime import datetime
 from datetime import date
 
 
-# Lo que esperamos recibir del front-end
-class UserCreate(BaseModel):
-    email: EmailStr
-    full_name: str
-    body_weight: float | None = None
-
-# Lo que la API le responde al front-end
-class UserResponse(BaseModel):
-    id: UUID
-    full_name: str
-    email: str
-    body_weight: float | None = None  # ¡Agregamos el peso aquí también!
-
-    # Esto le permite a FastAPI convertir el objeto de la base de datos a JSON
-    class Config:
-        from_attributes = True
 # --- ESQUEMAS DE AUTENTICACIÓN ---
 class UserRegister(BaseModel):
     email: EmailStr
     full_name: str
     password: str
     role: str = "athlete" # Por defecto creamos atletas, a menos que se especifique coach
+    body_weight: float | None = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -151,14 +136,6 @@ class MesocycleManualCreate(BaseModel):
     weeks_count: int
     training_days: List[int] # 0 = Lunes, 1 = Martes ... 6 = Domingo
 
-class MesocycleManualCreate(BaseModel):
-    user_id: UUID
-    name: str
-    discipline: str
-    start_date: date
-    weeks_count: int
-    training_days: List[int]
-
 class AIGenerateSmart(BaseModel):
     user_id: UUID
     name: str
@@ -167,4 +144,108 @@ class AIGenerateSmart(BaseModel):
     weeks_count: int
     training_days: List[int]
     context: str
+
+
+# --- ESQUEMAS PARA GRUPOS DE ATLETAS ---
+class GroupCreate(BaseModel):
+    name: str
+    athlete_ids: List[UUID] = []
+
+class GroupMemberAdd(BaseModel):
+    athlete_ids: List[UUID]
+
+class GroupMemberResponse(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+class GroupResponse(BaseModel):
+    id: UUID
+    name: str
+    created_at: datetime
+    members: List[GroupMemberResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class GroupSummaryResponse(BaseModel):
+    id: UUID
+    name: str
+    created_at: datetime
+    member_count: int
+
+
+# --- ESQUEMAS PARA PROGRAMAR MESOCICLOS A UN GRUPO COMPLETO ---
+class MesocycleManualGroupCreate(BaseModel):
+    group_id: UUID
+    name: str
+    discipline: str
+    start_date: date
+    weeks_count: int
+    training_days: List[int]
+
+class AIGenerateSmartGroup(BaseModel):
+    group_id: UUID
+    name: str
+    discipline: str
+    start_date: date
+    weeks_count: int
+    training_days: List[int]
+    context: str
+
+
+class GroupMesocycleAthlete(BaseModel):
+    user_id: UUID
+    full_name: str
+    mesocycle_id: UUID
+    is_active: bool
+
+class GroupMesocycleProgram(BaseModel):
+    """Un mesociclo programado para el grupo: mismo nombre/fechas, una instancia por atleta."""
+    name: str
+    discipline: str
+    start_date: date
+    end_date: Optional[date] = None
+    created_at: datetime
+    athletes: List[GroupMesocycleAthlete] = []
+    session_dates: List[date] = []  # calendario compartido (todos los atletas entrenan los mismos días)
+
+
+class GroupSessionExerciseAdd(BaseModel):
+    """Añade el mismo ejercicio a la sesión de una fecha dada, para TODOS los atletas del programa."""
+    program_name: str
+    program_start_date: date
+    scheduled_date: date
+    exercise_name: str
+    prescribed_sets: int = 3
+    prescribed_reps: int
+    rpe: float | None = None
+    prescribed_weight: float | None = None
+
+
+class GroupSessionExerciseUpdate(BaseModel):
+    """Actualiza (nombre/series/reps/RPE/peso) un ejercicio ya existente en la sesión de una fecha
+    dada, para TODOS los atletas del programa. Se identifica el ejercicio por su nombre ACTUAL;
+    si se reduce el número de series se borran las sobrantes, si se aumenta se crean nuevas."""
+    program_name: str
+    program_start_date: date
+    scheduled_date: date
+    exercise_name: str
+    new_exercise_name: str
+    prescribed_sets: int
+    prescribed_reps: int
+    rpe: float | None = None
+    prescribed_weight: float | None = None
+
+
+class GroupSessionExerciseDelete(BaseModel):
+    """Elimina por completo un ejercicio (todas sus series) de la sesión de una fecha dada,
+    para TODOS los atletas del programa."""
+    program_name: str
+    program_start_date: date
+    scheduled_date: date
+    exercise_name: str
 
