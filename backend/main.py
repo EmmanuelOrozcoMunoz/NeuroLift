@@ -101,15 +101,23 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 def require_coach(current_user: models.User = Depends(get_current_user)) -> models.User:
-    """Dependencia para endpoints reservados exclusivamente al rol 'coach'."""
-    if current_user.role != "coach":
+    """Dependencia para endpoints de gestión de coach (el rol 'admin' también pasa: tiene
+    visibilidad y control total sobre la app)."""
+    if current_user.role not in ("coach", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada para coaches")
     return current_user
 
 
+def require_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
+    """Dependencia para endpoints reservados exclusivamente al rol 'admin'."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada para administradores")
+    return current_user
+
+
 def ensure_owner_or_coach(owner_id: UUID, current_user: models.User):
-    """Verifica que el usuario autenticado sea coach o el dueño del recurso."""
-    if current_user.role != "coach" and current_user.id != owner_id:
+    """Verifica que el usuario autenticado sea coach/admin o el dueño del recurso."""
+    if current_user.role not in ("coach", "admin") and current_user.id != owner_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
 
 
@@ -228,13 +236,13 @@ def obtener_marcas_atleta(
     return db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
 
 
-# --- ENDPOINTS PARA GRUPOS DE ATLETAS (solo coach, y solo sobre sus propios grupos) ---
+# --- ENDPOINTS PARA GRUPOS DE ATLETAS (coach: solo sus propios grupos; admin: cualquiera) ---
 
 def _get_owned_group(db: Session, group_id: UUID, current_user: models.User) -> models.Group:
     grupo = db.query(models.Group).filter(models.Group.id == group_id).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    if grupo.coach_id != current_user.id:
+    if current_user.role != "admin" and grupo.coach_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este grupo no te pertenece")
     return grupo
 
@@ -255,10 +263,17 @@ def create_group(
 
 @app.get("/groups/", response_model=List[schemas.GroupSummaryResponse])
 def list_my_groups(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    """Panel del coach: todos sus grupos con el número de atletas en cada uno."""
-    grupos = db.query(models.Group).filter(models.Group.coach_id == current_user.id).all()
+    """Panel del coach: todos sus grupos con el número de atletas en cada uno.
+    Si quien pregunta es admin, devuelve TODOS los grupos de TODOS los coaches."""
+    query = db.query(models.Group).options(joinedload(models.Group.coach))
+    if current_user.role != "admin":
+        query = query.filter(models.Group.coach_id == current_user.id)
+    grupos = query.all()
     return [
-        schemas.GroupSummaryResponse(id=g.id, name=g.name, created_at=g.created_at, member_count=len(g.members))
+        schemas.GroupSummaryResponse(
+            id=g.id, name=g.name, created_at=g.created_at, member_count=len(g.members),
+            coach_name=g.coach.full_name,
+        )
         for g in grupos
     ]
 
@@ -832,6 +847,59 @@ def delete_set(set_id: UUID, db: Session = Depends(get_db), current_user: models
     return {"message": "Serie eliminada correctamente"}
 
 
+@app.put("/sets/{set_id}/log", response_model=schemas.SetResponse)
+def log_set_performance(
+    set_id: UUID,
+    log: schemas.SetLogUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """El ATLETA (dueño) o su coach registran lo que realmente se hizo en una serie
+    (reps/peso reales, feedback de técnica) — a diferencia de PUT /sets/{id}, que edita
+    lo PRESCRITO y es solo para coaches."""
+    db_set = (
+        db.query(models.Set)
+        .options(joinedload(models.Set.session).joinedload(models.Session.mesocycle))
+        .filter(models.Set.id == set_id)
+        .first()
+    )
+    if not db_set:
+        raise HTTPException(status_code=404, detail="Serie no encontrada")
+
+    ensure_owner_or_coach(db_set.session.mesocycle.user_id, current_user)
+
+    db_set.actual_reps = log.actual_reps
+    db_set.actual_weight = log.actual_weight
+    if log.technique_feedback is not None:
+        db_set.technique_feedback = log.technique_feedback
+
+    db.commit()
+    db.refresh(db_set)
+    return db_set
+
+
+@app.post("/sessions/{session_id}/complete")
+def complete_session(
+    session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """El ATLETA (dueño) o su coach marcan una sesión como completada."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    ensure_owner_or_coach(sesion.mesocycle.user_id, current_user)
+
+    sesion.status = "completed"
+    sesion.completed_date = datetime.utcnow()
+    db.commit()
+    return {"message": "Sesión marcada como completada"}
+
+
 # --- ENDPOINTS DE GENERACIÓN CON IA (solo coach) ---
 
 @app.post("/ai/generate-session/")
@@ -1068,3 +1136,53 @@ def generate_and_save_smart_mesocycle_for_group(
         "message": f"Mesociclo generado para {exitosos}/{len(resultados)} atleta(s) del grupo '{grupo.name}'",
         "results": resultados,
     }
+
+
+# ==========================================
+# PANEL DE ADMINISTRACIÓN (solo rol 'admin')
+# ==========================================
+
+@app.get("/admin/overview", response_model=schemas.AdminOverview)
+def get_admin_overview(db: Session = Depends(get_db), current_user: models.User = Depends(require_admin)):
+    """Vista completa de la app: conteos globales sin importar de qué coach o atleta sean."""
+    total_users = db.query(models.User).count()
+    total_coaches = db.query(models.User).filter(models.User.role == "coach").count()
+    total_athletes = db.query(models.User).filter(models.User.role == "athlete").count()
+    total_admins = db.query(models.User).filter(models.User.role == "admin").count()
+    total_groups = db.query(models.Group).count()
+    total_mesocycles = db.query(models.Mesocycle).count()
+    total_sessions = db.query(models.Session).count()
+    sessions_completed = db.query(models.Session).filter(models.Session.status == "completed").count()
+
+    return schemas.AdminOverview(
+        total_users=total_users,
+        total_coaches=total_coaches,
+        total_athletes=total_athletes,
+        total_admins=total_admins,
+        total_groups=total_groups,
+        total_mesocycles=total_mesocycles,
+        total_sessions=total_sessions,
+        sessions_completed=sessions_completed,
+        sessions_pending=total_sessions - sessions_completed,
+    )
+
+
+@app.put("/admin/users/{user_id}/role", response_model=schemas.UserResponse)
+def update_user_role(
+    user_id: UUID,
+    req: schemas.UserRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Cambia el rol de cualquier usuario (promover a coach/admin, o degradar a atleta)."""
+    if user_id == current_user.id and req.role != "admin":
+        raise HTTPException(status_code=400, detail="No puedes quitarte a ti mismo el rol de admin")
+
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.role = req.role
+    db.commit()
+    db.refresh(usuario)
+    return usuario

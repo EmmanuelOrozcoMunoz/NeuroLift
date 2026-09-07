@@ -1,21 +1,41 @@
-from pydantic import BaseModel, EmailStr
+from typing import Annotated, List, Literal, Optional
 from uuid import UUID
-from typing import Optional, List
-from datetime import datetime
-from datetime import date
+
+from pydantic import BaseModel, EmailStr, Field, model_validator
+from datetime import datetime, date
+
+from backend.sanitize import clean_text
+
+Dia = Annotated[int, Field(ge=0, le=6)]  # 0 = Lunes ... 6 = Domingo
+
+
+class SanitizedModel(BaseModel):
+    """Base para esquemas de ENTRADA: sanea todo campo string (quita HTML/scripts, colapsa
+    espacios, recorta) antes de que Pydantic valide los demás constraints. La contraseña se
+    deja intacta (recortarla o limpiarla cambiaría lo que el usuario realmente escribió)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sanitize_strings(cls, data):
+        if isinstance(data, dict):
+            return {
+                key: (clean_text(value) if isinstance(value, str) and key != "password" else value)
+                for key, value in data.items()
+            }
+        return data
 
 
 # --- ESQUEMAS DE AUTENTICACIÓN ---
-class UserRegister(BaseModel):
+class UserRegister(SanitizedModel):
     email: EmailStr
-    full_name: str
-    password: str
-    role: str = "athlete" # Por defecto creamos atletas, a menos que se especifique coach
-    body_weight: float | None = None
+    full_name: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=8, max_length=128)
+    role: Literal["athlete", "coach"] = "athlete"
+    body_weight: float | None = Field(None, ge=0, le=500)
 
-class UserLogin(BaseModel):
+class UserLogin(SanitizedModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=1, max_length=128)
 
 # Actualizamos UserResponse para que también devuelva el rol al frontend
 class UserResponse(BaseModel):
@@ -30,10 +50,10 @@ class UserResponse(BaseModel):
 
 
 # --- ESQUEMAS PARA MESOCICLOS ---
-class MesocycleCreate(BaseModel):
+class MesocycleCreate(SanitizedModel):
     user_id: UUID
-    name: str
-    discipline: str
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
 
 class MesocycleResponse(BaseModel):
@@ -49,35 +69,41 @@ class MesocycleResponse(BaseModel):
         from_attributes = True
 
 # --- ESQUEMAS PARA SESIONES Y SERIES (CORREGIDOS) ---
-class SessionCreate(BaseModel):
+class SessionCreate(SanitizedModel):
     mesocycle_id: UUID
     scheduled_date: date
 
-class AIGenerateRequest(BaseModel):
+class AIGenerateRequest(SanitizedModel):
     mesocycle_id: UUID
-    context: str
-    weeks_count: int
-    sessions_per_week: int
+    context: str = Field(..., min_length=1, max_length=2000)
+    weeks_count: int = Field(..., ge=1, le=52)
+    sessions_per_week: int = Field(..., ge=1, le=7)
 
 class ExerciseResponse(BaseModel):
     id: UUID
     name: str
     category: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
-class SetUpdate(BaseModel):
-    exercise_name: str | None = None
-    prescribed_reps: int
-    rpe: float | None = None
-    prescribed_weight: float | None = None
+class SetUpdate(SanitizedModel):
+    exercise_name: str | None = Field(None, min_length=1, max_length=100)
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    rpe: float | None = Field(None, ge=0, le=10)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
 
-class SetCreate(BaseModel):
-    exercise_name: str
-    prescribed_reps: int
-    rpe: float | None = None
-    prescribed_weight: float | None = None
+class SetCreate(SanitizedModel):
+    exercise_name: str = Field(..., min_length=1, max_length=100)
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    rpe: float | None = Field(None, ge=0, le=10)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
+
+class SetLogUpdate(SanitizedModel):
+    """Lo que el ATLETA reporta tras entrenar: lo que hizo de verdad, no lo prescrito."""
+    actual_reps: int | None = Field(None, ge=0, le=200)
+    actual_weight: float | None = Field(None, ge=0, le=1000)
+    technique_feedback: str | None = Field(None, max_length=500)
 
 class SetResponse(BaseModel):
     id: UUID
@@ -85,8 +111,11 @@ class SetResponse(BaseModel):
     prescribed_reps: int
     rpe: Optional[int] = None
     prescribed_weight: float | None = None # <-- ¡ESTO FALTABA!
+    actual_reps: Optional[int] = None
+    actual_weight: Optional[float] = None
+    technique_feedback: Optional[str] = None
     exercise: ExerciseResponse
-    
+
     class Config:
         from_attributes = True
 
@@ -94,10 +123,11 @@ class SessionResponse(BaseModel):
     id: UUID
     mesocycle_id: UUID
     scheduled_date: date
+    completed_date: Optional[datetime] = None
     athlete_notes: Optional[str] = None
     status: str
     sets: List[SetResponse] = [] # ¡Aquí anidamos los sets!
-    
+
     class Config:
         from_attributes = True
 
@@ -109,7 +139,7 @@ class MesocycleFullResponse(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     sessions: List[SessionResponse] = [] # ¡Aquí anidamos las sesiones!
-    
+
     class Config:
         from_attributes = True
 
@@ -123,35 +153,35 @@ class PRResponse(BaseModel):
         from_attributes = True
 
 # Esquema rápido para recibir la marca
-class PRCreate(BaseModel):
-    exercise_name: str
-    max_weight_kg: float
+class PRCreate(SanitizedModel):
+    exercise_name: str = Field(..., min_length=1, max_length=100)
+    max_weight_kg: float = Field(..., ge=0, le=1000)
 
 
-class MesocycleManualCreate(BaseModel):
+class MesocycleManualCreate(SanitizedModel):
     user_id: UUID
-    name: str
-    discipline: str
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int
-    training_days: List[int] # 0 = Lunes, 1 = Martes ... 6 = Domingo
+    weeks_count: int = Field(..., ge=1, le=52)
+    training_days: List[Dia]  # 0 = Lunes, 1 = Martes ... 6 = Domingo
 
-class AIGenerateSmart(BaseModel):
+class AIGenerateSmart(SanitizedModel):
     user_id: UUID
-    name: str
-    discipline: str
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int
-    training_days: List[int]
-    context: str
+    weeks_count: int = Field(..., ge=1, le=52)
+    training_days: List[Dia]
+    context: str = Field("", max_length=2000)
 
 
 # --- ESQUEMAS PARA GRUPOS DE ATLETAS ---
-class GroupCreate(BaseModel):
-    name: str
+class GroupCreate(SanitizedModel):
+    name: str = Field(..., min_length=1, max_length=100)
     athlete_ids: List[UUID] = []
 
-class GroupMemberAdd(BaseModel):
+class GroupMemberAdd(SanitizedModel):
     athlete_ids: List[UUID]
 
 class GroupMemberResponse(BaseModel):
@@ -176,25 +206,26 @@ class GroupSummaryResponse(BaseModel):
     name: str
     created_at: datetime
     member_count: int
+    coach_name: str | None = None  # solo relevante cuando lo consulta un admin
 
 
 # --- ESQUEMAS PARA PROGRAMAR MESOCICLOS A UN GRUPO COMPLETO ---
-class MesocycleManualGroupCreate(BaseModel):
+class MesocycleManualGroupCreate(SanitizedModel):
     group_id: UUID
-    name: str
-    discipline: str
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int
-    training_days: List[int]
+    weeks_count: int = Field(..., ge=1, le=52)
+    training_days: List[Dia]
 
-class AIGenerateSmartGroup(BaseModel):
+class AIGenerateSmartGroup(SanitizedModel):
     group_id: UUID
-    name: str
-    discipline: str
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int
-    training_days: List[int]
-    context: str
+    weeks_count: int = Field(..., ge=1, le=52)
+    training_days: List[Dia]
+    context: str = Field("", max_length=2000)
 
 
 class GroupMesocycleAthlete(BaseModel):
@@ -214,38 +245,55 @@ class GroupMesocycleProgram(BaseModel):
     session_dates: List[date] = []  # calendario compartido (todos los atletas entrenan los mismos días)
 
 
-class GroupSessionExerciseAdd(BaseModel):
+class GroupSessionExerciseAdd(SanitizedModel):
     """Añade el mismo ejercicio a la sesión de una fecha dada, para TODOS los atletas del programa."""
-    program_name: str
+    program_name: str = Field(..., min_length=1, max_length=100)
     program_start_date: date
     scheduled_date: date
-    exercise_name: str
-    prescribed_sets: int = 3
-    prescribed_reps: int
-    rpe: float | None = None
-    prescribed_weight: float | None = None
+    exercise_name: str = Field(..., min_length=1, max_length=100)
+    prescribed_sets: int = Field(3, ge=1, le=20)
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    rpe: float | None = Field(None, ge=0, le=10)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
 
 
-class GroupSessionExerciseUpdate(BaseModel):
+class GroupSessionExerciseUpdate(SanitizedModel):
     """Actualiza (nombre/series/reps/RPE/peso) un ejercicio ya existente en la sesión de una fecha
     dada, para TODOS los atletas del programa. Se identifica el ejercicio por su nombre ACTUAL;
     si se reduce el número de series se borran las sobrantes, si se aumenta se crean nuevas."""
-    program_name: str
+    program_name: str = Field(..., min_length=1, max_length=100)
     program_start_date: date
     scheduled_date: date
-    exercise_name: str
-    new_exercise_name: str
-    prescribed_sets: int
-    prescribed_reps: int
-    rpe: float | None = None
-    prescribed_weight: float | None = None
+    exercise_name: str = Field(..., min_length=1, max_length=100)
+    new_exercise_name: str = Field(..., min_length=1, max_length=100)
+    prescribed_sets: int = Field(..., ge=1, le=20)
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    rpe: float | None = Field(None, ge=0, le=10)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
 
 
-class GroupSessionExerciseDelete(BaseModel):
+class GroupSessionExerciseDelete(SanitizedModel):
     """Elimina por completo un ejercicio (todas sus series) de la sesión de una fecha dada,
     para TODOS los atletas del programa."""
-    program_name: str
+    program_name: str = Field(..., min_length=1, max_length=100)
     program_start_date: date
     scheduled_date: date
-    exercise_name: str
+    exercise_name: str = Field(..., min_length=1, max_length=100)
 
+
+# --- ESQUEMAS PARA EL PANEL DE ADMINISTRACIÓN ---
+class UserRoleUpdate(SanitizedModel):
+    """Solo un admin puede cambiar el rol de un usuario (incluyendo promover a otro admin)."""
+    role: Literal["athlete", "coach", "admin"]
+
+
+class AdminOverview(BaseModel):
+    total_users: int
+    total_coaches: int
+    total_athletes: int
+    total_admins: int
+    total_groups: int
+    total_mesocycles: int
+    total_sessions: int
+    sessions_completed: int
+    sessions_pending: int

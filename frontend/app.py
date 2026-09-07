@@ -1,7 +1,8 @@
 import streamlit as st
 import requests
 import extra_streamlit_components as stx
-import datetime 
+import datetime
+import uuid
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -19,8 +20,19 @@ jwt_token = cookie_manager.get(cookie="neurolift_jwt")
 if "user_session" not in st.session_state:
     st.session_state.user_session = None
 
-if "skip_hydration_once" not in st.session_state:
-    st.session_state.skip_hydration_once = False
+# True desde que el usuario cierra sesión explícitamente hasta que vuelve a loguearse.
+# Bloquea la rehidratación automática mientras tanto: el borrado de la cookie es asíncrono
+# (pasa por el componente JS de CookieManager) y podría no haberse completado todavía en el
+# navegador aunque hayan pasado varios reruns (p. ej. mientras se llena el formulario de
+# registro), así que no basta con saltar un solo rerun.
+if "logged_out" not in st.session_state:
+    st.session_state.logged_out = False
+
+if "auth_view" not in st.session_state:
+    st.session_state.auth_view = "login"
+
+if "auth_message" not in st.session_state:
+    st.session_state.auth_message = None
 
 # Función auxiliar para enviar el token como un "Pase VIP"
 def get_headers():
@@ -346,19 +358,80 @@ def render_group_programs(grupo_id):
         st.info("Todavía no hay ningún mesociclo programado para este grupo.")
 
 
+def render_athlete_session(sesion):
+    """Muestra las series prescritas de una sesión y deja que el ATLETA registre lo que
+    realmente hizo (reps/peso reales por serie), y marque la sesión como completada."""
+    sets = sesion.get("sets", [])
+    if not sets:
+        st.info("Esta sesión todavía no tiene ejercicios asignados por tu coach.")
+        return
+
+    if sesion.get("athlete_notes"):
+        st.caption(f"📝 {sesion['athlete_notes']}")
+
+    if sesion.get("status") == "completed":
+        st.caption("✅ Ya marcaste esta sesión como completada. Puedes actualizar tus registros si quieres.")
+
+    with st.form(f"form_log_{sesion['id']}"):
+        plan_log = []
+        ejercicio_actual = None
+        contador_serie = 0
+
+        for set_data in sets:
+            nombre_ej = set_data["exercise"]["name"]
+            if nombre_ej != ejercicio_actual:
+                st.markdown(f"**🏋️ {nombre_ej}**")
+                ejercicio_actual = nombre_ej
+                contador_serie = 0
+            contador_serie += 1
+
+            prescrito = f"Prescrito: {set_data['prescribed_reps']} reps"
+            if set_data.get("prescribed_weight"):
+                prescrito += f" @ {set_data['prescribed_weight']}kg"
+            if set_data.get("rpe") is not None:
+                prescrito += f" (RPE {set_data['rpe']})"
+
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                st.write(f"Serie {contador_serie} — {prescrito}")
+            with col2:
+                reps_reales = st.number_input(
+                    "Reps reales", min_value=0, max_value=200,
+                    value=int(set_data.get("actual_reps") or set_data.get("prescribed_reps") or 0),
+                    key=f"actual_reps_{set_data['id']}"
+                )
+            with col3:
+                peso_real = st.number_input(
+                    "Peso real (kg)", min_value=0.0, step=2.5,
+                    value=float(set_data.get("actual_weight") or set_data.get("prescribed_weight") or 0.0),
+                    key=f"actual_weight_{set_data['id']}"
+                )
+
+            plan_log.append({"set_id": set_data["id"], "actual_reps": reps_reales, "actual_weight": peso_real})
+
+        if st.form_submit_button("✅ Guardar entrenamiento"):
+            for item in plan_log:
+                requests.put(
+                    f"{API_URL}/sets/{item['set_id']}/log",
+                    json={"actual_reps": item["actual_reps"], "actual_weight": item["actual_weight"]},
+                    headers=get_headers()
+                )
+            requests.post(f"{API_URL}/sessions/{sesion['id']}/complete", headers=get_headers())
+            st.success("¡Entrenamiento guardado! Buen trabajo 💪")
+            st.rerun()
+
+
 # 2. HIDRATACIÓN: Si hay token en la cookie, pero Streamlit olvidó quién eres, le preguntamos al backend
-# (se salta una vez justo después de cerrar sesión: el borrado de la cookie es asíncrono
-# y en el rerun inmediato posterior cookie_manager.get() todavía devolvería el valor viejo)
-if st.session_state.skip_hydration_once:
-    st.session_state.skip_hydration_once = False
-elif jwt_token and st.session_state.user_session is None:
+# (no se intenta mientras "logged_out" esté activo: el usuario cerró sesión explícitamente y no
+# queremos revivirla solo porque la cookie tarde en borrarse del navegador)
+if not st.session_state.logged_out and jwt_token and st.session_state.user_session is None:
     # Usamos la nueva ruta /auth/me enviando el token en las cabeceras
     res_me = requests.get(f"{API_URL}/auth/me", headers=get_headers())
     if res_me.status_code == 200:
         st.session_state.user_session = res_me.json()
     else:
         # Si el token expiró o es falso, lo destruimos
-        cookie_manager.delete("neurolift_jwt", key="delete_invalid")
+        cookie_manager.delete("neurolift_jwt", key=f"delete_invalid_{uuid.uuid4()}")
         st.session_state.user_session = None
 
 # ==========================================
@@ -367,43 +440,64 @@ elif jwt_token and st.session_state.user_session is None:
 if st.session_state.user_session is None:
     st.title("Bienvenido a NeuroLift 🧠")
     st.subheader("La plataforma inteligente de entrenamiento")
-    
-    tab_login, tab_register = st.tabs(["🔑 Iniciar Sesión", "📝 Crear Cuenta"])
-    
-    with tab_login:
+
+    # Botones en vez de st.tabs: así podemos forzar el cambio a "login" por código
+    # (p. ej. justo después de un registro exitoso), algo que st.tabs no permite.
+    col_tab1, col_tab2 = st.columns(2)
+    with col_tab1:
+        if st.button(
+            "🔑 Iniciar Sesión", use_container_width=True,
+            type="primary" if st.session_state.auth_view == "login" else "secondary"
+        ):
+            st.session_state.auth_view = "login"
+            st.rerun()
+    with col_tab2:
+        if st.button(
+            "📝 Crear Cuenta", use_container_width=True,
+            type="primary" if st.session_state.auth_view == "register" else "secondary"
+        ):
+            st.session_state.auth_view = "register"
+            st.rerun()
+
+    if st.session_state.auth_message:
+        st.success(st.session_state.auth_message)
+        st.session_state.auth_message = None
+
+    if st.session_state.auth_view == "login":
         with st.form("form_login"):
             log_email = st.text_input("Correo electrónico")
             log_pass = st.text_input("Contraseña", type="password")
             if st.form_submit_button("Ingresar"):
                 res = requests.post(f"{API_URL}/auth/login", json={"email": log_email, "password": log_pass})
-                
+
                 if res.status_code == 200:
                     datos_token = res.json()
                     token = datos_token["access_token"]
-                    
+
                     # 1. Guardamos el TOKEN en la cookie para el futuro
-                    cookie_manager.set("neurolift_jwt", token, key="set_jwt_login")
-                    
+                    cookie_manager.set("neurolift_jwt", token, key=f"set_jwt_login_{uuid.uuid4()}")
+
                     # 2. Vamos de inmediato al backend a traer tus datos reales ("Hidratación" manual)
                     res_me = requests.get(f"{API_URL}/auth/me", headers={"Authorization": f"Bearer {token}"})
-                    
+
                     if res_me.status_code == 200:
                         # 3. Te metemos al sistema manualmente
                         st.session_state.user_session = res_me.json()
+                        st.session_state.logged_out = False
                         st.success("¡Autenticación exitosa! Entrando...")
                         st.rerun()
                     else:
                         st.error("Error al obtener el perfil de usuario.")
                 else:
                     st.error("Credenciales incorrectas")
-                    
-    with tab_register:
+
+    else:
         with st.form("form_registro"):
             reg_name = st.text_input("Nombre completo")
             reg_email = st.text_input("Correo electrónico")
             reg_pass = st.text_input("Contraseña", type="password")
             reg_rol = st.selectbox("¿Cuál es tu rol?", ["athlete", "coach"], format_func=lambda x: "Atleta" if x == "athlete" else "Entrenador (Coach)")
-            
+
             if st.form_submit_button("Crear Cuenta"):
                 datos = {
                     "full_name": reg_name,
@@ -413,7 +507,9 @@ if st.session_state.user_session is None:
                 }
                 res = requests.post(f"{API_URL}/auth/register", json=datos)
                 if res.status_code == 200:
-                    st.success("¡Cuenta creada exitosamente! Ve a Iniciar Sesión.")
+                    st.session_state.auth_view = "login"
+                    st.session_state.auth_message = "¡Cuenta creada exitosamente! Inicia sesión con tu correo y contraseña."
+                    st.rerun()
                 else:
                     try:
                         st.error(res.json().get("detail", "Error al crear la cuenta"))
@@ -429,12 +525,14 @@ else:
    # Barra lateral unificada
     with st.sidebar:
         st.write(f"👤 **{usuario_actual['full_name']}**")
-        st.write(f"🏷️ Rol: {'Coach' if usuario_actual.get('role') == 'coach' else 'Atleta'}")
+        etiquetas_rol = {"coach": "Coach", "athlete": "Atleta", "admin": "Administrador"}
+        st.write(f"🏷️ Rol: {etiquetas_rol.get(usuario_actual.get('role'), usuario_actual.get('role'))}")
         
         if st.button("Cerrar Sesión"):
             st.session_state.user_session = None
-            st.session_state.skip_hydration_once = True
-            cookie_manager.delete("neurolift_jwt", key="delete_jwt_logout")
+            st.session_state.logged_out = True
+            st.session_state.auth_view = "login"
+            cookie_manager.delete("neurolift_jwt", key=f"delete_jwt_logout_{uuid.uuid4()}")
             st.rerun()
             
         st.markdown("---")
@@ -694,59 +792,48 @@ else:
         # ==========================================
         elif opcion == "🔍 Ver Rutinas":
             st.subheader("🔍 Gestión y Edición de Mesociclos")
+            st.caption(
+                "Solo para atletas sueltos (sin grupo). Si un atleta pertenece a un grupo, "
+                "consulta y edita su rutina desde '👨‍👩‍👧‍👦 Mis Grupos'."
+            )
 
+            # Atletas que ya pertenecen a algún grupo: su rutina se ve desde "Mis Grupos", no aquí
             res_grupos_vr = requests.get(f"{API_URL}/groups/", headers=get_headers())
             grupos_vr = res_grupos_vr.json() if res_grupos_vr.status_code == 200 else []
 
-            # Atletas que ya pertenecen a algún grupo: su rutina se ve desde "Grupo", no aquí suelto
             ids_agrupados = set()
             for g in grupos_vr:
                 res_det_g = requests.get(f"{API_URL}/groups/{g['id']}", headers=get_headers())
                 if res_det_g.status_code == 200:
                     ids_agrupados.update(m["id"] for m in res_det_g.json().get("members", []))
 
-            modo_ver = st.radio("Ver por:", ["Grupo", "Atleta individual"], horizontal=True, key="modo_ver_rutinas")
+            res_usuarios = requests.get(f"{API_URL}/users/", headers=get_headers())
+            if res_usuarios.status_code == 200 and len(res_usuarios.json()) > 0:
+                usuarios = res_usuarios.json()
+                opciones_usuarios = {u['full_name']: u['id'] for u in usuarios if u['id'] not in ids_agrupados}
 
-            if modo_ver == "Grupo":
-                if grupos_vr:
-                    opciones_grupos_vr = {g["id"]: f"{g['name']} ({g['member_count']} atleta(s))" for g in grupos_vr}
-                    grupo_sel_vr = st.selectbox(
-                        "Selecciona el grupo:",
-                        options=list(opciones_grupos_vr.keys()),
-                        format_func=lambda x: opciones_grupos_vr[x]
-                    )
-                    st.markdown("---")
-                    render_group_programs(grupo_sel_vr)
+                if not opciones_usuarios:
+                    st.info("Todos tus atletas ya están en algún grupo. Consulta sus rutinas desde '👨‍👩‍👧‍👦 Mis Grupos'.")
                 else:
-                    st.info("Todavía no tienes grupos. Créalos en '👨‍👩‍👧‍👦 Mis Grupos'.")
-            else:
-                res_usuarios = requests.get(f"{API_URL}/users/", headers=get_headers())
-                if res_usuarios.status_code == 200 and len(res_usuarios.json()) > 0:
-                    usuarios = res_usuarios.json()
-                    opciones_usuarios = {u['full_name']: u['id'] for u in usuarios if u['id'] not in ids_agrupados}
+                    atleta_seleccionado = st.selectbox("1. Selecciona al Atleta:", list(opciones_usuarios.keys()))
+                    user_id = opciones_usuarios[atleta_seleccionado]
 
-                    if not opciones_usuarios:
-                        st.info("Todos tus atletas ya están en algún grupo. Consulta sus rutinas desde 'Grupo' arriba.")
+                    # 2. Buscamos los mesociclos SOLO de ese atleta
+                    res_meso = requests.get(f"{API_URL}/users/{user_id}/mesocycles/", headers=get_headers())
+                    if res_meso.status_code == 200 and len(res_meso.json()) > 0:
+                        mesociclos = res_meso.json()
+                        opciones_meso = {f"🏋️ {m.get('name', 'Rutina')} - {m['discipline']} ({m['start_date']})": m['id'] for m in mesociclos}
+
+                        meso_seleccionado = st.selectbox("2. Selecciona el Mesociclo:", list(opciones_meso.keys()))
+                        meso_id = opciones_meso[meso_seleccionado]
+
+                        st.markdown("---")
+
+                        render_mesocycle_sessions(meso_id)
                     else:
-                        atleta_seleccionado = st.selectbox("1. Selecciona al Atleta:", list(opciones_usuarios.keys()))
-                        user_id = opciones_usuarios[atleta_seleccionado]
-
-                        # 2. Buscamos los mesociclos SOLO de ese atleta
-                        res_meso = requests.get(f"{API_URL}/users/{user_id}/mesocycles/", headers=get_headers())
-                        if res_meso.status_code == 200 and len(res_meso.json()) > 0:
-                            mesociclos = res_meso.json()
-                            opciones_meso = {f"🏋️ {m.get('name', 'Rutina')} - {m['discipline']} ({m['start_date']})": m['id'] for m in mesociclos}
-
-                            meso_seleccionado = st.selectbox("2. Selecciona el Mesociclo:", list(opciones_meso.keys()))
-                            meso_id = opciones_meso[meso_seleccionado]
-
-                            st.markdown("---")
-
-                            render_mesocycle_sessions(meso_id)
-                        else:
-                            st.info("Este atleta aún no tiene mesociclos generados.")
-                else:
-                    st.warning("Primero debes registrar un atleta en la pestaña 'Nuevo Atleta'.")
+                        st.info("Este atleta aún no tiene mesociclos generados.")
+            else:
+                st.warning("Primero debes registrar un atleta en la pestaña 'Nuevo Atleta'.")
 
         # ==========================================
         # SECCIÓN: TOMA DE MARCAS (RMs)
@@ -915,12 +1002,185 @@ else:
         # INTERFAZ DEL ATLETA
         # ==========================================
         st.title(f"Tus Entrenamientos, {usuario_actual['full_name']} 🏋️")
-        
-        opcion = st.sidebar.radio("Navegación", ["📅 Mi Rutina de Hoy", "📈 Mis Récords (PRs)"])
-        
-        if opcion == "📅 Mi Rutina de Hoy":
-            st.info("Aquí cargaremos tu entrenamiento del día. Próximamente.")
-            # Aquí filtraremos los mesociclos usando usuario_actual["id"]
-            
+        my_id = usuario_actual["id"]
+
+        opcion = st.sidebar.radio("Navegación", ["📅 Mi Entrenamiento", "📈 Mis Récords (PRs)"])
+
+        # ==========================================
+        # SECCIÓN: MI ENTRENAMIENTO
+        # ==========================================
+        if opcion == "📅 Mi Entrenamiento":
+            st.subheader("📅 Mi Entrenamiento")
+
+            res_mesos = requests.get(f"{API_URL}/users/{my_id}/mesocycles/", headers=get_headers())
+            if res_mesos.status_code == 200 and res_mesos.json():
+                mesociclos = sorted(
+                    res_mesos.json(),
+                    key=lambda m: (not m.get("is_active", True), m["start_date"]),
+                )
+                opciones_meso = {
+                    f"{'🟢' if m.get('is_active') else '⚪'} {m.get('name', 'Rutina')} - {m['discipline']} ({m['start_date']})": m["id"]
+                    for m in mesociclos
+                }
+                meso_sel = st.selectbox("Selecciona tu mesociclo:", list(opciones_meso.keys()))
+                meso_id = opciones_meso[meso_sel]
+
+                res_detalle = requests.get(f"{API_URL}/mesocycles/{meso_id}", headers=get_headers())
+                if res_detalle.status_code == 200:
+                    datos = res_detalle.json()
+                    sesiones = datos.get("sessions", [])
+
+                    hoy = datetime.date.today().isoformat()
+                    sesion_hoy = next((s for s in sesiones if s["scheduled_date"] == hoy), None)
+
+                    if sesion_hoy:
+                        st.success(f"🔥 ¡Hoy tienes entrenamiento programado! ({hoy})")
+                        render_athlete_session(sesion_hoy)
+                        st.markdown("---")
+
+                    st.markdown("##### 📖 Todas las sesiones de este mesociclo")
+                    if not sesiones:
+                        st.info("Este mesociclo todavía no tiene sesiones.")
+                    for sesion in sesiones:
+                        if sesion_hoy and sesion["id"] == sesion_hoy["id"]:
+                            continue  # ya se mostró destacada arriba
+                        estado_icono = "✅" if sesion["status"] == "completed" else "⏳"
+                        with st.expander(f"{estado_icono} {sesion['scheduled_date']}"):
+                            render_athlete_session(sesion)
+                else:
+                    st.error("Error al cargar el mesociclo.")
+            else:
+                st.info("Todavía no tienes ningún mesociclo asignado. Pide a tu coach que te programe uno.")
+
+        # ==========================================
+        # SECCIÓN: MIS RÉCORDS (PRs)
+        # ==========================================
         elif opcion == "📈 Mis Récords (PRs)":
-            st.info("Aquí podrás ver y actualizar tu Back Squat, Bench Press, etc.")
+            st.subheader("📈 Mis Récords (PRs)")
+
+            res_prs = requests.get(f"{API_URL}/users/{my_id}/records/", headers=get_headers())
+            if res_prs.status_code == 200:
+                marcas = res_prs.json()
+                if marcas:
+                    cols = st.columns(4)
+                    for i, marca in enumerate(marcas):
+                        with cols[i % 4]:
+                            fecha = marca['last_updated'].split("T")[0]
+                            st.metric(
+                                label=marca['exercise_name'],
+                                value=f"{marca['max_weight_kg']} kg",
+                                delta=f"Último test: {fecha}",
+                                delta_color="off"
+                            )
+                else:
+                    st.info("Todavía no tienes marcas registradas. ¡Registra la primera abajo!")
+            else:
+                st.error("Error al cargar tus marcas.")
+
+            st.markdown("---")
+            st.write("**Registrar nueva marca**")
+            with st.form("form_nuevo_pr_atleta"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    ejercicio = st.text_input("Ejercicio (Ej: Back Squat, Snatch)")
+                with col2:
+                    peso = st.number_input("1RM en kg", min_value=0.0, step=2.5)
+
+                if st.form_submit_button("Guardar Marca"):
+                    if ejercicio:
+                        res_pr = requests.post(
+                            f"{API_URL}/users/{my_id}/records/",
+                            json={"exercise_name": ejercicio, "max_weight_kg": peso},
+                            headers=get_headers()
+                        )
+                        if res_pr.status_code == 200:
+                            st.success(f"¡Marca de {ejercicio} actualizada a {peso}kg!")
+                            st.rerun()
+                        else:
+                            st.error("Error al guardar la marca.")
+                    else:
+                        st.warning("Escribe el nombre del ejercicio.")
+
+    elif usuario_actual["role"] == "admin":
+        # ==========================================
+        # INTERFAZ DEL ADMINISTRADOR
+        # ==========================================
+        st.title("Panel de Administración 🛡️")
+        st.caption("Visibilidad y control total sobre toda la app: todos los coaches, atletas, grupos y mesociclos.")
+
+        opcion = st.sidebar.radio("Navegación", ["📊 Resumen General", "👥 Todos los Usuarios", "👨‍👩‍👧‍👦 Todos los Grupos"])
+
+        # ==========================================
+        # SECCIÓN: RESUMEN GENERAL
+        # ==========================================
+        if opcion == "📊 Resumen General":
+            st.subheader("📊 Resumen General")
+            res_overview = requests.get(f"{API_URL}/admin/overview", headers=get_headers())
+            if res_overview.status_code == 200:
+                d = res_overview.json()
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Usuarios totales", d["total_users"])
+                col2.metric("Coaches", d["total_coaches"])
+                col3.metric("Atletas", d["total_athletes"])
+                col4.metric("Admins", d["total_admins"])
+
+                st.markdown("---")
+                col5, col6, col7 = st.columns(3)
+                col5.metric("Grupos", d["total_groups"])
+                col6.metric("Mesociclos", d["total_mesocycles"])
+                col7.metric("Sesiones totales", d["total_sessions"])
+
+                col8, col9 = st.columns(2)
+                col8.metric("✅ Sesiones completadas", d["sessions_completed"])
+                col9.metric("⏳ Sesiones pendientes", d["sessions_pending"])
+            else:
+                st.error("Error al cargar el resumen.")
+
+        # ==========================================
+        # SECCIÓN: TODOS LOS USUARIOS
+        # ==========================================
+        elif opcion == "👥 Todos los Usuarios":
+            st.subheader("👥 Todos los Usuarios")
+            res_users = requests.get(f"{API_URL}/users/", headers=get_headers())
+            if res_users.status_code == 200 and res_users.json():
+                roles_disponibles = ["athlete", "coach", "admin"]
+                for u in res_users.json():
+                    col1, col2, col3 = st.columns([3, 1.2, 1])
+                    with col1:
+                        st.write(f"**{u['full_name']}** — {u['email']}")
+                    with col2:
+                        nuevo_rol = st.selectbox(
+                            "Rol", roles_disponibles, index=roles_disponibles.index(u['role']),
+                            key=f"rol_{u['id']}", label_visibility="collapsed"
+                        )
+                    with col3:
+                        if nuevo_rol != u['role'] and st.button("Guardar", key=f"guardar_rol_{u['id']}"):
+                            res = requests.put(
+                                f"{API_URL}/admin/users/{u['id']}/role",
+                                json={"role": nuevo_rol}, headers=get_headers()
+                            )
+                            if res.status_code == 200:
+                                st.success(f"Rol de {u['full_name']} actualizado a '{nuevo_rol}'")
+                                st.rerun()
+                            else:
+                                try:
+                                    st.error(res.json().get("detail", "Error al actualizar el rol"))
+                                except Exception:
+                                    st.error("Error al actualizar el rol.")
+                    st.markdown("---")
+            else:
+                st.info("No hay usuarios registrados todavía.")
+
+        # ==========================================
+        # SECCIÓN: TODOS LOS GRUPOS
+        # ==========================================
+        elif opcion == "👨‍👩‍👧‍👦 Todos los Grupos":
+            st.subheader("👨‍👩‍👧‍👦 Todos los Grupos")
+            res_grupos = requests.get(f"{API_URL}/groups/", headers=get_headers())
+            if res_grupos.status_code == 200 and res_grupos.json():
+                for grupo in res_grupos.json():
+                    titulo = f"👥 {grupo['name']} — coach: {grupo.get('coach_name') or '?'} ({grupo['member_count']} atleta(s))"
+                    with st.expander(titulo):
+                        render_group_programs(grupo["id"])
+            else:
+                st.info("No hay grupos en el sistema todavía.")
