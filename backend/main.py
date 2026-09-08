@@ -1,6 +1,8 @@
+import logging
 import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from typing import List
@@ -16,9 +18,20 @@ from slowapi.errors import RateLimitExceeded
 import jwt
 
 from backend.database import SessionLocal, engine
-from backend import models, schemas
+from backend import models, schemas, fitness_scoring, ai_agent
 
 load_dotenv()
+
+# ==========================================
+# LOGGING DE SEGURIDAD (logins fallidos, 401/403, cambios de rol)
+# ==========================================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+security_logger = logging.getLogger("neurolift.security")
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "?"
+
 
 # Esto crea las tablas si por alguna razón no existieran en la BD
 models.Base.metadata.create_all(bind=engine)
@@ -36,11 +49,46 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 día (antes eran 7 días sin revocación posible)
 
+# En producción (.env: ENVIRONMENT=production) se ocultan /docs, /redoc y el schema OpenAPI:
+# expuestos sin autenticación, revelan toda la superficie de la API a cualquiera.
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+_docs_enabled = ENVIRONMENT != "production"
+
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="NeuroLift API")
+app = FastAPI(
+    title="NeuroLift API",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(HTTPException)
+async def logging_http_exception_handler(request: Request, exc: HTTPException):
+    """Registra intentos de acceso no autorizados (401/403) para poder auditarlos después."""
+    if exc.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
+        security_logger.warning(
+            "%s en %s %s desde %s: %s",
+            exc.status_code, request.method, request.url.path, _client_ip(request), exc.detail,
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Cabeceras de seguridad HTTP estándar (defensa en profundidad; esta API solo sirve
+    JSON, nunca HTML propio, así que un CSP estricto no rompe nada)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    return response
+
 
 # CORS: orígenes permitidos configurables desde .env (por defecto, solo el frontend local)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501")
@@ -86,17 +134,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="No se pudieron validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    revoked_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Esta sesión fue cerrada. Inicia sesión de nuevo.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
+        token_version = payload.get("tv", 0)
     except jwt.PyJWTError:  # Atrapa tokens expirados o falsificados
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
+
+    # Revocación real: si el usuario cerró sesión (o un admin forzó la revocación) después de
+    # que se emitió este token, su token_version ya avanzó y este token deja de ser válido
+    # aunque no haya expirado.
+    if token_version != user.token_version:
+        raise revoked_exception
+
     return user
 
 
@@ -133,24 +194,33 @@ def test_connection(db: Session = Depends(get_db)):
 # ==========================================
 # ENDPOINTS DE AUTENTICACIÓN
 # ==========================================
-@app.post("/auth/register", response_model=schemas.UserResponse)
+REGISTER_GENERIC_MESSAGE = "Si el correo no estaba registrado, tu cuenta fue creada. Ya puedes iniciar sesión."
+
+
+@app.post("/auth/register", response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 def register_user(request: Request, user: schemas.UserRegister, db: Session = Depends(get_db)):
+    """Misma respuesta (mismo status, mismo cuerpo, mismo tiempo aproximado) exista o no ya
+    una cuenta con ese correo — evita que alguien use este endpoint para enumerar qué correos
+    están registrados en el sistema (ni por el contenido de la respuesta ni por temporización,
+    ya que el hasheo bcrypt, intencionalmente lento, se ejecuta siempre)."""
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-    nuevo_usuario = models.User(
-        email=user.email,
-        full_name=user.full_name,
-        hashed_password=get_password_hash(user.password),
-        role=user.role,
-        body_weight=user.body_weight,
-    )
-    db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)
-    return nuevo_usuario
+    # Siempre se hashea la contraseña, se use o no, para que ambas rutas tarden lo mismo.
+    hashed_password = get_password_hash(user.password)
+
+    if not db_user:
+        nuevo_usuario = models.User(
+            email=user.email,
+            full_name=user.full_name,
+            hashed_password=hashed_password,
+            role=user.role,
+            body_weight=user.body_weight,
+        )
+        db.add(nuevo_usuario)
+        db.commit()
+
+    return {"message": REGISTER_GENERIC_MESSAGE}
 
 
 @app.post("/auth/login")
@@ -159,14 +229,17 @@ def login_user(request: Request, credentials: schemas.UserLogin, db: Session = D
     usuario = db.query(models.User).filter(models.User.email == credentials.email).first()
 
     if not usuario or not verify_password(credentials.password, usuario.hashed_password):
+        security_logger.warning("Login fallido para email=%s desde %s", credentials.email, _client_ip(request))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
         )
 
+    security_logger.info("Login exitoso: %s (rol=%s) desde %s", usuario.email, usuario.role, _client_ip(request))
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": usuario.email, "role": usuario.role, "id": str(usuario.id)},
+        data={"sub": usuario.email, "role": usuario.role, "id": str(usuario.id), "tv": usuario.token_version},
         expires_delta=access_token_expires,
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -175,6 +248,19 @@ def login_user(request: Request, credentials: schemas.UserLogin, db: Session = D
 @app.get("/auth/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+
+@app.post("/auth/logout", response_model=schemas.MessageResponse)
+def logout_user(
+    request: Request, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Revoca de verdad el token actual (y cualquier otro que este usuario tuviera emitido en
+    otros dispositivos): avanza su token_version, así que ningún token anterior vuelve a
+    validar aunque no haya expirado todavía."""
+    current_user.token_version += 1
+    db.commit()
+    security_logger.info("Logout (revocación de tokens): %s desde %s", current_user.email, _client_ip(request))
+    return {"message": "Sesión cerrada. Todos los tokens emitidos antes de ahora quedaron revocados."}
 
 
 # --- ENDPOINTS PARA USUARIOS ---
@@ -234,6 +320,70 @@ def obtener_marcas_atleta(
 ):
     ensure_owner_or_coach(user_id, current_user)
     return db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
+
+
+# --- ENDPOINTS PARA EL CALCULADOR DE "FIT LEVEL" ---
+
+@app.put("/users/{user_id}/fitness-benchmarks", response_model=schemas.FitnessLevelResponse)
+def update_fitness_benchmarks(
+    user_id: UUID,
+    req: schemas.FitnessBenchmarkUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Guarda las marcas que el atleta (dueño) o su coach hayan llenado, y devuelve el
+    Fit Level ya recalculado. Solo se tocan los campos enviados (no None)."""
+    ensure_owner_or_coach(user_id, current_user)
+
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    datos = req.model_dump(exclude_unset=True, exclude_none=True)
+
+    if "body_weight" in datos:
+        usuario.body_weight = datos.pop("body_weight")
+
+    for metric_key, value in datos.items():
+        if metric_key not in fitness_scoring.METRICS:
+            continue
+        fila = db.query(models.FitnessBenchmark).filter(
+            models.FitnessBenchmark.user_id == user_id,
+            models.FitnessBenchmark.metric_key == metric_key,
+        ).first()
+        if fila:
+            fila.value = float(value)
+        else:
+            db.add(models.FitnessBenchmark(user_id=user_id, metric_key=metric_key, value=float(value)))
+
+    db.commit()
+    return _build_fitness_level_response(db, usuario)
+
+
+@app.get("/users/{user_id}/fitness-level", response_model=schemas.FitnessLevelResponse)
+def get_fitness_level(
+    user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Devuelve las marcas guardadas y el Fit Level calculado a partir de ellas."""
+    ensure_owner_or_coach(user_id, current_user)
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return _build_fitness_level_response(db, usuario)
+
+
+def _build_fitness_level_response(db: Session, usuario: models.User) -> schemas.FitnessLevelResponse:
+    filas = db.query(models.FitnessBenchmark).filter(models.FitnessBenchmark.user_id == usuario.id).all()
+    valores = {f.metric_key: f.value for f in filas}
+    resultado = fitness_scoring.compute_fitness_level(valores, usuario.body_weight)
+    return schemas.FitnessLevelResponse(
+        body_weight=usuario.body_weight,
+        values=valores,
+        category_scores=resultado["category_scores"],
+        category_levels=resultado["category_levels"],
+        overall_score=resultado["overall_score"],
+        overall_level=resultado["overall_level"],
+    )
 
 
 # --- ENDPOINTS PARA GRUPOS DE ATLETAS (coach: solo sus propios grupos; admin: cualquiera) ---
@@ -900,10 +1050,112 @@ def complete_session(
     return {"message": "Sesión marcada como completada"}
 
 
+@app.post("/sessions/{session_id}/adapt", response_model=schemas.SessionResponse)
+@limiter.limit("10/hour")
+def adapt_session_to_available_time(
+    request: Request,
+    session_id: UUID,
+    req: schemas.SessionAdaptRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """El ATLETA (dueño) o su coach piden una versión adaptada de una sesión ya prescrita para
+    caber en `available_minutes` (p. ej. "hoy solo tengo 60 min"). La sesión ORIGINAL nunca se
+    toca: esto crea (o actualiza, si ya se había pedido antes) una segunda sesión "hija" para
+    el mismo día, que el atleta puede ver junto a la original y elegir cuál seguir."""
+    original = (
+        db.query(models.Session)
+        .options(
+            joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user),
+            joinedload(models.Session.sets).joinedload(models.Set.exercise),
+        )
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not original:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    ensure_owner_or_coach(original.mesocycle.user_id, current_user)
+
+    if original.parent_session_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta ya es una versión adaptada; pide la adaptación desde la sesión original.",
+        )
+
+    if not original.sets:
+        raise HTTPException(status_code=400, detail="Esta sesión todavía no tiene ejercicios para adaptar.")
+
+    atleta = original.mesocycle.user
+    marcas = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == atleta.id).all()
+    texto_marcas = ", ".join(f"{pr.exercise_name}: {pr.max_weight_kg}kg" for pr in marcas) or "Sin marcas registradas."
+    peso_corporal = f"{atleta.body_weight}kg" if atleta.body_weight else "No registrado"
+    contexto = f"Peso corporal: {peso_corporal}. Marcas (1RM): {texto_marcas}."
+
+    ejercicios_originales = [
+        {
+            "exercise_name": s.exercise.name,
+            "prescribed_sets": 1,  # cada fila ya es una serie individual
+            "prescribed_reps": s.prescribed_reps,
+            "rpe": s.rpe,
+            "prescribed_weight": s.prescribed_weight,
+        }
+        for s in original.sets
+    ]
+
+    rutina_ai = ai_agent.adapt_session_to_time(
+        athlete_name=atleta.full_name,
+        discipline=original.mesocycle.discipline,
+        experience_notes=contexto,
+        original_exercises=ejercicios_originales,
+        available_minutes=req.available_minutes,
+    )
+    if "error" in rutina_ai:
+        raise HTTPException(status_code=500, detail=f"Error generando la sesión adaptada: {rutina_ai['error']}")
+
+    # ¿Ya existía una versión adaptada de esta sesión? La reemplazamos en vez de duplicar.
+    adaptada = db.query(models.Session).filter(models.Session.parent_session_id == original.id).first()
+    if adaptada:
+        db.query(models.Set).filter(models.Set.session_id == adaptada.id).delete()
+    else:
+        adaptada = models.Session(
+            mesocycle_id=original.mesocycle_id,
+            scheduled_date=original.scheduled_date,
+            parent_session_id=original.id,
+            status="pending",
+        )
+        db.add(adaptada)
+        db.flush()
+
+    adaptada.duration_minutes = req.available_minutes
+    adaptada.athlete_notes = rutina_ai.get(
+        "athlete_notes", f"Versión adaptada a {req.available_minutes} minutos."
+    )
+
+    orden = 1
+    for ej_data in rutina_ai.get("exercises", []):
+        ejercicio = _get_or_create_exercise(db, ej_data.get("exercise_name", "Ejercicio Desconocido"))
+        db.add(models.Set(
+            session_id=adaptada.id,
+            exercise_id=ejercicio.id,
+            set_order=orden,
+            prescribed_reps=ej_data.get("prescribed_reps", 1),
+            rpe=ej_data.get("rpe_target"),
+            prescribed_weight=ej_data.get("prescribed_weight"),
+        ))
+        orden += 1
+
+    db.commit()
+    db.refresh(adaptada)
+    return adaptada
+
+
 # --- ENDPOINTS DE GENERACIÓN CON IA (solo coach) ---
 
 @app.post("/ai/generate-session/")
+@limiter.limit("20/hour")
 def generate_and_save_session(
+    request: Request,
     req: schemas.AIGenerateRequest, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
     meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == req.mesocycle_id).first()
@@ -963,6 +1215,7 @@ def _build_smart_mesocycle(
     training_days: List[int],
     context: str,
     group_id: UUID | None = None,
+    session_duration_minutes: int | None = None,
 ) -> dict:
     """Genera con IA un mesociclo inteligente completo para UN atleta. Hace commit propio;
     en caso de error hace rollback y relanza la excepción (el llamador decide cómo manejarla)."""
@@ -1017,6 +1270,7 @@ def _build_smart_mesocycle(
                 start_week=start,
                 end_week=end,
                 session_dates=fechas_del_chunk,
+                session_duration_minutes=session_duration_minutes,
             )
 
             # 5. Parseo y guardado en base de datos
@@ -1036,6 +1290,7 @@ def _build_smart_mesocycle(
                         scheduled_date=fecha_real,
                         athlete_notes=sesion_data.get("athlete_notes", ""),
                         status="pending",
+                        duration_minutes=session_duration_minutes,
                     )
                     db.add(nueva_sesion)
                     db.flush()
@@ -1092,8 +1347,13 @@ def _build_smart_mesocycle(
         raise RuntimeError(str(e)) from e
 
 
+MAX_ATLETAS_POR_GENERACION_GRUPAL = 25  # cada atleta dispara su propia tanda de llamadas a Gemini
+
+
 @app.post("/ai/generate-smart-mesocycle/")
+@limiter.limit("10/hour")
 def generate_and_save_smart_mesocycle(
+    request: Request,
     req: schemas.AIGenerateSmart, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
     atleta = db.query(models.User).filter(models.User.id == req.user_id).first()
@@ -1102,7 +1362,8 @@ def generate_and_save_smart_mesocycle(
 
     try:
         _build_smart_mesocycle(
-            db, atleta, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days, req.context
+            db, atleta, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days, req.context,
+            session_duration_minutes=req.session_duration_minutes,
         )
         return {"message": "Mesociclo Inteligente generado y guardado exitosamente."}
     except RuntimeError as e:
@@ -1110,7 +1371,9 @@ def generate_and_save_smart_mesocycle(
 
 
 @app.post("/ai/generate-smart-mesocycle/group")
+@limiter.limit("3/hour")
 def generate_and_save_smart_mesocycle_for_group(
+    request: Request,
     req: schemas.AIGenerateSmartGroup, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
     """Genera con IA el mismo mesociclo (contexto compartido + marcas propias de cada atleta) para todo el grupo.
@@ -1119,13 +1382,22 @@ def generate_and_save_smart_mesocycle_for_group(
     grupo = _get_owned_group(db, req.group_id, current_user)
     if not grupo.members:
         raise HTTPException(status_code=400, detail="El grupo no tiene atletas asignados")
+    if len(grupo.members) > MAX_ATLETAS_POR_GENERACION_GRUPAL:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Este grupo tiene {len(grupo.members)} atletas; el máximo para generar con IA de una vez "
+                f"es {MAX_ATLETAS_POR_GENERACION_GRUPAL} (cada atleta dispara varias llamadas a Gemini). "
+                "Divide el grupo en subgrupos más pequeños."
+            ),
+        )
 
     resultados = []
     for atleta in grupo.members:
         try:
             resultado = _build_smart_mesocycle(
                 db, atleta, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days, req.context,
-                group_id=grupo.id,
+                group_id=grupo.id, session_duration_minutes=req.session_duration_minutes,
             )
             resultados.append({"user_id": str(atleta.id), "full_name": atleta.full_name, "status": "success", **resultado})
         except RuntimeError as e:
@@ -1182,7 +1454,35 @@ def update_user_role(
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    rol_anterior = usuario.role
     usuario.role = req.role
     db.commit()
     db.refresh(usuario)
+
+    security_logger.info(
+        "Cambio de rol: admin=%s cambió a usuario=%s de rol '%s' a '%s'",
+        current_user.email, usuario.email, rol_anterior, req.role,
+    )
     return usuario
+
+
+@app.post("/admin/users/{user_id}/revoke-sessions", response_model=schemas.MessageResponse)
+def revoke_user_sessions(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Fuerza la revocación de TODOS los tokens de un usuario (todos sus dispositivos),
+    útil ante sospecha de cuenta comprometida — sin esperar a que el token expire por sí solo."""
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.token_version += 1
+    db.commit()
+
+    security_logger.warning(
+        "Revocación forzada: admin=%s revocó todas las sesiones de usuario=%s",
+        current_user.email, usuario.email,
+    )
+    return {"message": f"Todas las sesiones de {usuario.full_name} fueron revocadas."}

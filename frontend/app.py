@@ -34,6 +34,49 @@ if "auth_view" not in st.session_state:
 if "auth_message" not in st.session_state:
     st.session_state.auth_message = None
 
+# ==========================================
+# INTERCEPCIÓN GLOBAL DE 401 (sesión revocada/expirada)
+# ==========================================
+# Se parchea una sola vez por proceso (el módulo `requests` es un singleton que persiste
+# entre reruns de Streamlit): cualquier llamada que haya llevado un header Authorization y
+# reciba un 401 significa que el token ya no es válido en el servidor (expiró, cerraste
+# sesión en otra pestaña, o un admin forzó la revocación). En vez de que cada una de las
+# ~50 pantallas que llaman a la API muestre su propio error suelto, se regresa aquí mismo
+# al login con un mensaje claro.
+if not getattr(requests, "_neurolift_patched", False):
+    _orig_get = requests.get
+    _orig_post = requests.post
+    _orig_put = requests.put
+    _orig_delete = requests.delete
+
+    def _check_revoked_session(response):
+        if response.status_code == 401 and "Authorization" in response.request.headers:
+            st.session_state.user_session = None
+            st.session_state.logged_out = True
+            st.session_state.auth_view = "login"
+            st.session_state.auth_message = "Tu sesión expiró o fue cerrada en otro lugar. Inicia sesión de nuevo."
+            cookie_manager.delete("neurolift_jwt", key=f"delete_jwt_401_{uuid.uuid4()}")
+            st.rerun()
+        return response
+
+    def _patched_get(*a, **kw):
+        return _check_revoked_session(_orig_get(*a, **kw))
+
+    def _patched_post(*a, **kw):
+        return _check_revoked_session(_orig_post(*a, **kw))
+
+    def _patched_put(*a, **kw):
+        return _check_revoked_session(_orig_put(*a, **kw))
+
+    def _patched_delete(*a, **kw):
+        return _check_revoked_session(_orig_delete(*a, **kw))
+
+    requests.get = _patched_get
+    requests.post = _patched_post
+    requests.put = _patched_put
+    requests.delete = _patched_delete
+    requests._neurolift_patched = True
+
 # Función auxiliar para enviar el token como un "Pase VIP"
 def get_headers():
     if jwt_token:
@@ -421,6 +464,43 @@ def render_athlete_session(sesion):
             st.rerun()
 
 
+def render_athlete_session_with_adapt(sesion_original, sesion_adaptada):
+    """Envuelve render_athlete_session con la opción de pedir/ver una versión adaptada al
+    tiempo disponible. La sesión original nunca se modifica; la adaptada es una sesión aparte
+    para el mismo día que el atleta puede ver junto a la normal y elegir cuál seguir."""
+    if sesion_adaptada:
+        vista = st.radio(
+            "¿Cuál versión quieres ver?",
+            ["📋 Normal", f"⏱️ Adaptada ({sesion_adaptada.get('duration_minutes', '?')} min)"],
+            horizontal=True, key=f"vista_{sesion_original['id']}"
+        )
+        if vista.startswith("⏱️"):
+            render_athlete_session(sesion_adaptada)
+        else:
+            render_athlete_session(sesion_original)
+    else:
+        render_athlete_session(sesion_original)
+
+    with st.expander("⏱️ ¿Tienes menos tiempo hoy?"):
+        st.caption("Genera una versión más corta de esta sesión sin perder la original — podrás elegir cuál seguir.")
+        with st.form(f"form_adapt_{sesion_original['id']}"):
+            minutos = st.number_input(
+                "Minutos disponibles", min_value=10, max_value=180,
+                value=sesion_adaptada.get("duration_minutes", 60) if sesion_adaptada else 60, step=5
+            )
+            if st.form_submit_button("🧠 Adaptar sesión"):
+                with st.spinner("Adaptando tu sesión..."):
+                    res_adapt = requests.post(
+                        f"{API_URL}/sessions/{sesion_original['id']}/adapt",
+                        json={"available_minutes": minutos}, headers=get_headers()
+                    )
+                if res_adapt.status_code == 200:
+                    st.success(f"¡Lista! Ya tienes una versión de {minutos} min para esta sesión.")
+                    st.rerun()
+                else:
+                    st.error(f"Error al adaptar la sesión: {res_adapt.text}")
+
+
 # 2. HIDRATACIÓN: Si hay token en la cookie, pero Streamlit olvidó quién eres, le preguntamos al backend
 # (no se intenta mientras "logged_out" esté activo: el usuario cerró sesión explícitamente y no
 # queremos revivirla solo porque la cookie tarde en borrarse del navegador)
@@ -508,7 +588,9 @@ if st.session_state.user_session is None:
                 res = requests.post(f"{API_URL}/auth/register", json=datos)
                 if res.status_code == 200:
                     st.session_state.auth_view = "login"
-                    st.session_state.auth_message = "¡Cuenta creada exitosamente! Inicia sesión con tu correo y contraseña."
+                    # Mensaje genérico del backend: no revela si el correo ya estaba
+                    # registrado o no (evita que alguien use este formulario para enumerar cuentas).
+                    st.session_state.auth_message = res.json().get("message", "Listo. Inicia sesión con tu correo y contraseña.")
                     st.rerun()
                 else:
                     try:
@@ -529,6 +611,9 @@ else:
         st.write(f"🏷️ Rol: {etiquetas_rol.get(usuario_actual.get('role'), usuario_actual.get('role'))}")
         
         if st.button("Cerrar Sesión"):
+            # Revocación real del lado del servidor (no solo borrar la cookie local): invalida
+            # este token y cualquier otro que este usuario tuviera en otros dispositivos.
+            requests.post(f"{API_URL}/auth/logout", headers=get_headers())
             st.session_state.user_session = None
             st.session_state.logged_out = True
             st.session_state.auth_view = "login"
@@ -576,9 +661,11 @@ else:
                     res = requests.post(f"{API_URL}/auth/register", json=datos_atleta)
 
                     if res.status_code == 200:
-                        st.success(f"¡Atleta {nombre} registrado con éxito!")
-                    elif res.status_code == 400:
-                        st.error("Error 400: Es posible que este correo ya esté registrado.")
+                        # Respuesta genérica a propósito: si el correo ya tenía cuenta, no se
+                        # sobrescribió nada y este mensaje no lo distingue (evita enumeración).
+                        # Si el atleta no puede iniciar sesión después, probablemente ya existía
+                        # con otra contraseña.
+                        st.success(res.json().get("message", f"Solicitud procesada para {nombre}."))
                     else:
                         st.error(f"Error del servidor: {res.text}")
                 elif submit_btn:
@@ -738,6 +825,12 @@ else:
                             default=["Lunes", "Miércoles", "Viernes"]
                         )
 
+                    duracion_sesion = st.number_input(
+                        "⏱️ Duración objetivo por sesión (min)",
+                        min_value=0, max_value=180, value=60, step=5,
+                        help="La IA ajustará el volumen de cada sesión para que quepa en este tiempo. Déjalo en 0 para no restringir."
+                    )
+
                     if st.form_submit_button("✨ Generar con Inteligencia Artificial"):
                             if not nombre_meso:
                                 st.error("Debes darle un nombre al mesociclo.")
@@ -755,7 +848,8 @@ else:
                                         "start_date": str(fecha_inicio),
                                         "weeks_count": semanas,
                                         "training_days": numeros_dias,
-                                        "context": contexto
+                                        "context": contexto,
+                                        "session_duration_minutes": duracion_sesion if duracion_sesion > 0 else None
                                     }
                                     with st.spinner("🧠 Generando mesociclo para todo el grupo (esto puede tomar un momento por cada atleta)..."):
                                         res_ia = requests.post(f"{API_URL}/ai/generate-smart-mesocycle/group", json=datos_ia, headers=get_headers())
@@ -772,7 +866,8 @@ else:
                                         "start_date": str(fecha_inicio),
                                         "weeks_count": semanas,
                                         "training_days": numeros_dias,
-                                        "context": contexto
+                                        "context": contexto,
+                                        "session_duration_minutes": duracion_sesion if duracion_sesion > 0 else None
                                     }
                                     with st.spinner("🧠 Gemini Lite está procesando el contexto y calculando pesos (RAG)..."):
                                         res_ia = requests.post(f"{API_URL}/ai/generate-smart-mesocycle/", json=datos_ia, headers=get_headers())
@@ -807,7 +902,7 @@ else:
                 if res_det_g.status_code == 200:
                     ids_agrupados.update(m["id"] for m in res_det_g.json().get("members", []))
 
-            res_usuarios = requests.get(f"{API_URL}/users/", headers=get_headers())
+            res_usuarios = requests.get(f"{API_URL}/users/athletes", headers=get_headers())
             if res_usuarios.status_code == 200 and len(res_usuarios.json()) > 0:
                 usuarios = res_usuarios.json()
                 opciones_usuarios = {u['full_name']: u['id'] for u in usuarios if u['id'] not in ids_agrupados}
@@ -840,8 +935,8 @@ else:
         # ==========================================
         elif opcion == "💪 Toma de Marcas (PRs)":
             st.subheader("💪 Toma de Marcas y Perfil de Fuerza")
-            
-            res_usuarios = requests.get(f"{API_URL}/users/", headers=get_headers())
+
+            res_usuarios = requests.get(f"{API_URL}/users/athletes", headers=get_headers())
 
             if res_usuarios.status_code == 200 and len(res_usuarios.json()) > 0:
                 usuarios = res_usuarios.json()
@@ -1030,23 +1125,30 @@ else:
                     datos = res_detalle.json()
                     sesiones = datos.get("sessions", [])
 
+                    # Separamos las sesiones "normales" de sus versiones adaptadas al tiempo
+                    # (mismo día, pero un plan más corto que el atleta pidió sobre la marcha).
+                    originales = [s for s in sesiones if not s.get("parent_session_id")]
+                    adaptadas_por_padre = {
+                        s["parent_session_id"]: s for s in sesiones if s.get("parent_session_id")
+                    }
+
                     hoy = datetime.date.today().isoformat()
-                    sesion_hoy = next((s for s in sesiones if s["scheduled_date"] == hoy), None)
+                    sesion_hoy = next((s for s in originales if s["scheduled_date"] == hoy), None)
 
                     if sesion_hoy:
                         st.success(f"🔥 ¡Hoy tienes entrenamiento programado! ({hoy})")
-                        render_athlete_session(sesion_hoy)
+                        render_athlete_session_with_adapt(sesion_hoy, adaptadas_por_padre.get(sesion_hoy["id"]))
                         st.markdown("---")
 
                     st.markdown("##### 📖 Todas las sesiones de este mesociclo")
-                    if not sesiones:
+                    if not originales:
                         st.info("Este mesociclo todavía no tiene sesiones.")
-                    for sesion in sesiones:
+                    for sesion in originales:
                         if sesion_hoy and sesion["id"] == sesion_hoy["id"]:
                             continue  # ya se mostró destacada arriba
                         estado_icono = "✅" if sesion["status"] == "completed" else "⏳"
                         with st.expander(f"{estado_icono} {sesion['scheduled_date']}"):
-                            render_athlete_session(sesion)
+                            render_athlete_session_with_adapt(sesion, adaptadas_por_padre.get(sesion["id"]))
                 else:
                     st.error("Error al cargar el mesociclo.")
             else:
@@ -1101,6 +1203,122 @@ else:
                     else:
                         st.warning("Escribe el nombre del ejercicio.")
 
+            # ==========================================
+            # MÓDULO: CALCULADORA DE FIT LEVEL
+            # ==========================================
+            st.markdown("---")
+            st.subheader("🎯 Calcula tu Fit Level")
+            st.caption(
+                "Estándares aproximados y genéricos (no diferenciados por sexo/edad) — úsalos "
+                "como referencia, no como medición oficial. Llena solo las marcas que ya tengas; "
+                "entre más completes, más preciso será tu resultado."
+            )
+
+            res_fit = requests.get(f"{API_URL}/users/{my_id}/fitness-level", headers=get_headers())
+            datos_fit = res_fit.json() if res_fit.status_code == 200 else {}
+            valores_actuales = datos_fit.get("values", {})
+            peso_actual = datos_fit.get("body_weight")
+
+            iconos_cat = {"halterofilia": "🏋️", "gimnasia": "🤸", "metcon": "🔥"}
+            nombres_cat = {"halterofilia": "Halterofilia", "gimnasia": "Gimnasia", "metcon": "Metcon"}
+
+            if datos_fit.get("overall_level"):
+                st.markdown(f"### ⭐ Nivel General: {datos_fit['overall_level']} ({datos_fit['overall_score']}/4)")
+                cols_niveles = st.columns(3)
+                for i, cat in enumerate(["halterofilia", "gimnasia", "metcon"]):
+                    with cols_niveles[i]:
+                        nivel = datos_fit.get("category_levels", {}).get(cat)
+                        if nivel:
+                            st.metric(f"{iconos_cat[cat]} {nombres_cat[cat]}", nivel, f"{datos_fit['category_scores'][cat]}/4")
+                        else:
+                            st.metric(f"{iconos_cat[cat]} {nombres_cat[cat]}", "Sin datos")
+            else:
+                st.info("Todavía no has registrado marcas para calcular tu Fit Level. Llena el formulario de abajo.")
+
+            with st.expander("✏️ Llenar / actualizar mis marcas"):
+                with st.form("form_fit_level"):
+                    peso_corporal = st.number_input(
+                        "Peso corporal (kg) — necesario para halterofilia",
+                        min_value=0.0, step=0.5, value=float(peso_actual) if peso_actual else 0.0
+                    )
+
+                    st.markdown("##### 🏋️ Halterofilia (1RM en kg)")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        snatch = st.number_input("Snatch", min_value=0.0, step=1.0, value=float(valores_actuales.get("snatch_kg") or 0))
+                        back_squat = st.number_input("Back Squat", min_value=0.0, step=1.0, value=float(valores_actuales.get("back_squat_kg") or 0))
+                    with c2:
+                        clean_jerk = st.number_input("Clean & Jerk", min_value=0.0, step=1.0, value=float(valores_actuales.get("clean_jerk_kg") or 0))
+                        deadlift = st.number_input("Deadlift", min_value=0.0, step=1.0, value=float(valores_actuales.get("deadlift_kg") or 0))
+
+                    st.markdown("##### 🤸 Gimnasia (repeticiones máximas)")
+                    c3, c4 = st.columns(2)
+                    with c3:
+                        pull_ups = st.number_input("Dominadas estrictas", min_value=0, step=1, value=int(valores_actuales.get("pull_ups_max") or 0))
+                        muscle_ups = st.number_input("Muscle-ups", min_value=0, step=1, value=int(valores_actuales.get("muscle_ups_max") or 0))
+                    with c4:
+                        push_ups = st.number_input("Push-ups", min_value=0, step=1, value=int(valores_actuales.get("push_ups_max") or 0))
+                        hspu = st.number_input("Handstand push-ups", min_value=0, step=1, value=int(valores_actuales.get("hspu_max") or 0))
+
+                    st.markdown("##### 🔥 Metcon")
+                    st.caption(
+                        "Fran: 21-15-9 Thrusters + Pull-ups · Grace: 30 Clean & Jerks · "
+                        "Cindy: AMRAP 20min (5 pull-ups, 10 push-ups, 15 air squats) · Remo 2000m"
+                    )
+
+                    def _tiempo_input(label, key_prefix, valor_actual_seg):
+                        minutos_default = int((valor_actual_seg or 0) // 60)
+                        segundos_default = int((valor_actual_seg or 0) % 60)
+                        cc1, cc2 = st.columns(2)
+                        with cc1:
+                            m = st.number_input(f"{label} - min", min_value=0, step=1, value=minutos_default, key=f"{key_prefix}_min")
+                        with cc2:
+                            s = st.number_input(f"{label} - seg", min_value=0, max_value=59, step=1, value=segundos_default, key=f"{key_prefix}_seg")
+                        return m * 60 + s
+
+                    fran_seg = _tiempo_input("Fran", "fran", valores_actuales.get("fran_seconds"))
+                    grace_seg = _tiempo_input("Grace", "grace", valores_actuales.get("grace_seconds"))
+                    row_seg = _tiempo_input("Remo 2000m", "row2k", valores_actuales.get("row_2k_seconds"))
+                    cindy_reps = st.number_input("Cindy - reps totales completadas", min_value=0, step=1, value=int(valores_actuales.get("cindy_total_reps") or 0))
+
+                    if st.form_submit_button("💾 Guardar y calcular Fit Level"):
+                        payload = {}
+                        if peso_corporal > 0:
+                            payload["body_weight"] = peso_corporal
+                        if snatch > 0:
+                            payload["snatch_kg"] = snatch
+                        if clean_jerk > 0:
+                            payload["clean_jerk_kg"] = clean_jerk
+                        if back_squat > 0:
+                            payload["back_squat_kg"] = back_squat
+                        if deadlift > 0:
+                            payload["deadlift_kg"] = deadlift
+                        if pull_ups > 0:
+                            payload["pull_ups_max"] = pull_ups
+                        if push_ups > 0:
+                            payload["push_ups_max"] = push_ups
+                        if muscle_ups > 0:
+                            payload["muscle_ups_max"] = muscle_ups
+                        if hspu > 0:
+                            payload["hspu_max"] = hspu
+                        if fran_seg > 0:
+                            payload["fran_seconds"] = fran_seg
+                        if grace_seg > 0:
+                            payload["grace_seconds"] = grace_seg
+                        if row_seg > 0:
+                            payload["row_2k_seconds"] = row_seg
+                        if cindy_reps > 0:
+                            payload["cindy_total_reps"] = cindy_reps
+
+                        res_save = requests.put(
+                            f"{API_URL}/users/{my_id}/fitness-benchmarks", json=payload, headers=get_headers()
+                        )
+                        if res_save.status_code == 200:
+                            st.success("¡Marcas guardadas! Tu Fit Level se actualizó.")
+                            st.rerun()
+                        else:
+                            st.error(f"Error al guardar: {res_save.text}")
+
     elif usuario_actual["role"] == "admin":
         # ==========================================
         # INTERFAZ DEL ADMINISTRADOR
@@ -1145,7 +1363,7 @@ else:
             if res_users.status_code == 200 and res_users.json():
                 roles_disponibles = ["athlete", "coach", "admin"]
                 for u in res_users.json():
-                    col1, col2, col3 = st.columns([3, 1.2, 1])
+                    col1, col2, col3, col4 = st.columns([2.7, 1.2, 1, 1.3])
                     with col1:
                         st.write(f"**{u['full_name']}** — {u['email']}")
                     with col2:
@@ -1167,6 +1385,15 @@ else:
                                     st.error(res.json().get("detail", "Error al actualizar el rol"))
                                 except Exception:
                                     st.error("Error al actualizar el rol.")
+                    with col4:
+                        if st.button("🚫 Revocar sesiones", key=f"revocar_{u['id']}"):
+                            res_rev = requests.post(
+                                f"{API_URL}/admin/users/{u['id']}/revoke-sessions", headers=get_headers()
+                            )
+                            if res_rev.status_code == 200:
+                                st.success(res_rev.json().get("message"))
+                            else:
+                                st.error("Error al revocar las sesiones.")
                     st.markdown("---")
             else:
                 st.info("No hay usuarios registrados todavía.")

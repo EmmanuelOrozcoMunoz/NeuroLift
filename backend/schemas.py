@@ -25,6 +25,10 @@ class SanitizedModel(BaseModel):
         return data
 
 
+class MessageResponse(BaseModel):
+    message: str
+
+
 # --- ESQUEMAS DE AUTENTICACIÓN ---
 class UserRegister(SanitizedModel):
     email: EmailStr
@@ -126,6 +130,8 @@ class SessionResponse(BaseModel):
     completed_date: Optional[datetime] = None
     athlete_notes: Optional[str] = None
     status: str
+    parent_session_id: Optional[UUID] = None  # si no es None, es una versión adaptada de otra sesión
+    duration_minutes: Optional[int] = None
     sets: List[SetResponse] = [] # ¡Aquí anidamos los sets!
 
     class Config:
@@ -171,9 +177,12 @@ class AIGenerateSmart(SanitizedModel):
     name: str = Field(..., min_length=1, max_length=100)
     discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int = Field(..., ge=1, le=52)
+    # Tope más bajo que en creación manual: cada 2 semanas dispara una llamada a Gemini,
+    # así que 52 semanas serían ~26 llamadas encadenadas en un solo request.
+    weeks_count: int = Field(..., ge=1, le=16)
     training_days: List[Dia]
     context: str = Field("", max_length=2000)
+    session_duration_minutes: int | None = Field(None, ge=15, le=180)
 
 
 # --- ESQUEMAS PARA GRUPOS DE ATLETAS ---
@@ -223,9 +232,11 @@ class AIGenerateSmartGroup(SanitizedModel):
     name: str = Field(..., min_length=1, max_length=100)
     discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
-    weeks_count: int = Field(..., ge=1, le=52)
+    # Mismo tope que la versión individual, y aquí se multiplica por cada atleta del grupo.
+    weeks_count: int = Field(..., ge=1, le=16)
     training_days: List[Dia]
     context: str = Field("", max_length=2000)
+    session_duration_minutes: int | None = Field(None, ge=15, le=180)
 
 
 class GroupMesocycleAthlete(BaseModel):
@@ -297,3 +308,38 @@ class AdminOverview(BaseModel):
     total_sessions: int
     sessions_completed: int
     sessions_pending: int
+
+
+# --- ESQUEMAS PARA EL CALCULADOR DE "FIT LEVEL" (halterofilia / gimnasia / metcon) ---
+class FitnessBenchmarkUpdate(SanitizedModel):
+    """Todos los campos son opcionales: el atleta llena solo las marcas que ya tiene."""
+    body_weight: float | None = Field(None, ge=20, le=300)
+    # Halterofilia (1RM en kg)
+    snatch_kg: float | None = Field(None, ge=0, le=400)
+    clean_jerk_kg: float | None = Field(None, ge=0, le=400)
+    back_squat_kg: float | None = Field(None, ge=0, le=500)
+    deadlift_kg: float | None = Field(None, ge=0, le=500)
+    # Gimnasia (repeticiones máximas)
+    pull_ups_max: int | None = Field(None, ge=0, le=200)
+    push_ups_max: int | None = Field(None, ge=0, le=500)
+    muscle_ups_max: int | None = Field(None, ge=0, le=100)
+    hspu_max: int | None = Field(None, ge=0, le=200)
+    # Metcon (tiempo en segundos, salvo Cindy que es AMRAP de repeticiones)
+    fran_seconds: int | None = Field(None, ge=30, le=3600)
+    grace_seconds: int | None = Field(None, ge=30, le=3600)
+    cindy_total_reps: int | None = Field(None, ge=0, le=2000)
+    row_2k_seconds: int | None = Field(None, ge=300, le=3600)
+
+
+class FitnessLevelResponse(BaseModel):
+    body_weight: float | None = None
+    values: dict[str, float] = {}
+    category_scores: dict[str, float] = {}
+    category_levels: dict[str, str] = {}
+    overall_score: float | None = None
+    overall_level: str | None = None
+
+
+# --- ESQUEMA PARA ADAPTAR UNA SESIÓN AL TIEMPO DISPONIBLE ---
+class SessionAdaptRequest(SanitizedModel):
+    available_minutes: int = Field(..., ge=10, le=180)

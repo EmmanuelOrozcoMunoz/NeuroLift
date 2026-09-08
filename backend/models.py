@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, ForeignKey, Text, Table
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, ForeignKey, Text, Table, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -14,6 +14,10 @@ class User(Base):
     hashed_password = Column(String, nullable=False) # Contraseña (bcrypt), siempre generada por la app
     role = Column(String, default="athlete")
     body_weight = Column(Float, nullable=True)
+    # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
+    # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
+    # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
 
 
     # Relaciones
@@ -71,6 +75,10 @@ class Session(Base):
     athlete_notes = Column(Text)
     ai_feedback = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Si no es null, esta sesión es una versión "adaptada al tiempo" de la sesión original
+    # (mismo día, mismo mesociclo, pero un plan más corto). La original nunca se toca.
+    parent_session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True, index=True)
+    duration_minutes = Column(Integer, nullable=True)  # duración objetivo de esta sesión, si se definió
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
     sets = relationship("Set", back_populates="session", cascade="all, delete-orphan")
@@ -114,3 +122,21 @@ class PersonalRecord(Base):
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="personal_records")
+
+
+class FitnessBenchmark(Base):
+    """Una marca del calculador de 'Fit Level' (halterofilia/gimnasia/metcon). Diseño
+    clave-valor: una fila por (atleta, métrica) — la unidad e interpretación de `value`
+    la define `metric_key` en backend/fitness_scoring.py, no esta tabla."""
+    __tablename__ = "fitness_benchmarks"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    metric_key = Column(String(50), nullable=False)  # ej. "snatch_kg", "pull_ups_max", "fran_seconds"
+    value = Column(Float, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "metric_key", name="uq_fitness_benchmark_user_metric"),
+    )
