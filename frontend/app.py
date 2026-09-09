@@ -14,8 +14,14 @@ st.set_page_config(page_title="NeuroLift AI", page_icon="🧠", layout="wide")
 # Inicializamos el gestor de cookies directamente
 cookie_manager = stx.CookieManager(key="Gestor_Cookies")
 
-# 1. Leemos SOLO el Token encriptado de las cookies
-jwt_token = cookie_manager.get(cookie="neurolift_jwt")
+# 1. Leemos el token de la cookie SOLO para sembrar session_state la primera vez que esta
+# sesión de Streamlit arranca (p. ej. abriste una pestaña nueva). A partir de ahí,
+# st.session_state.jwt_token es la única fuente de verdad: login/logout lo actualizan de
+# forma síncrona e inmediata, sin depender de que el componente de cookies (que es async)
+# ya haya terminado de sincronizar con el navegador — esa lectura tardía es justo lo que
+# antes causaba 401 "sin token" recién hecho login, aun mostrando la sesión como iniciada.
+if "jwt_token" not in st.session_state:
+    st.session_state.jwt_token = cookie_manager.get(cookie="neurolift_jwt")
 
 if "user_session" not in st.session_state:
     st.session_state.user_session = None
@@ -51,6 +57,7 @@ if not getattr(requests, "_neurolift_patched", False):
 
     def _check_revoked_session(response):
         if response.status_code == 401 and "Authorization" in response.request.headers:
+            st.session_state.jwt_token = None
             st.session_state.user_session = None
             st.session_state.logged_out = True
             st.session_state.auth_view = "login"
@@ -79,8 +86,9 @@ if not getattr(requests, "_neurolift_patched", False):
 
 # Función auxiliar para enviar el token como un "Pase VIP"
 def get_headers():
-    if jwt_token:
-        return {"Authorization": f"Bearer {jwt_token}"}
+    token = st.session_state.get("jwt_token")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
     return {}
 
 
@@ -501,16 +509,173 @@ def render_athlete_session_with_adapt(sesion_original, sesion_adaptada):
                     st.error(f"Error al adaptar la sesión: {res_adapt.text}")
 
 
+def render_plan_editor(plan_id):
+    """Editor del contenido de un plan (plantilla): día por día, el coach agrega ejercicios
+    con carga en kg fijos o en % de 1RM. Los días se muestran como 'Día N' porque una plantilla
+    no tiene fechas reales: esas se calculan cuando un atleta adquiere el plan."""
+    res_detalle = requests.get(f"{API_URL}/plans/{plan_id}", headers=get_headers())
+    if res_detalle.status_code != 200:
+        st.error("Error al cargar el contenido del plan.")
+        return
+
+    datos = res_detalle.json()
+    sesiones = datos.get("sessions", [])
+    if not sesiones:
+        st.info("Este plan no tiene días configurados.")
+        return
+
+    st.caption(
+        "Las cargas en % de 1RM se convierten a kilos automáticamente cuando alguien adquiere "
+        "el plan, usando SUS propias marcas. Usa kg fijos solo para cargas absolutas."
+    )
+
+    for sesion in sesiones:
+        dia = (sesion.get("day_offset") or 0) + 1
+        num_ejercicios = len({s["exercise"]["name"] for s in sesion.get("sets", [])})
+        with st.expander(f"📆 Día {dia} — {num_ejercicios} ejercicio(s), {len(sesion.get('sets', []))} serie(s)"):
+            if sesion.get("sets"):
+                # Agrupamos por ejercicio para que se lea como lo escribió el coach
+                agrupados = {}
+                for s in sesion["sets"]:
+                    nombre = s["exercise"]["name"]
+                    if nombre not in agrupados:
+                        agrupados[nombre] = {"series": 0, "set_ids": [], "reps": s["prescribed_reps"],
+                                             "rpe": s.get("rpe"), "kg": s.get("prescribed_weight"),
+                                             "pct": s.get("prescribed_percentage"),
+                                             "ref": s.get("reference_exercise")}
+                    agrupados[nombre]["series"] += 1
+                    agrupados[nombre]["set_ids"].append(s["id"])
+
+                for nombre, info in agrupados.items():
+                    if info["pct"]:
+                        carga = f"{info['pct']:.0f}% de {info['ref'] or nombre}"
+                    elif info["kg"]:
+                        carga = f"{info['kg']}kg"
+                    else:
+                        carga = "sin carga definida"
+                    rpe_txt = f" · RPE {info['rpe']}" if info["rpe"] is not None else ""
+
+                    col_a, col_b = st.columns([5, 1])
+                    with col_a:
+                        st.write(f"🏋️ **{nombre}** — {info['series']}x{info['reps']} @ {carga}{rpe_txt}")
+                    with col_b:
+                        if st.button("Quitar", key=f"del_plan_ej_{plan_id}_{sesion['id']}_{nombre}"):
+                            for sid in info["set_ids"]:
+                                requests.delete(f"{API_URL}/plans/{plan_id}/sets/{sid}", headers=get_headers())
+                            st.rerun()
+            else:
+                st.caption("Todavía sin ejercicios.")
+
+            st.markdown("**➕ Agregar ejercicio a este día**")
+            with st.form(f"form_plan_set_{plan_id}_{sesion['id']}"):
+                f1, f2, f3, f4 = st.columns([2.5, 1, 1, 1])
+                with f1:
+                    ej_nombre = st.text_input("Ejercicio", key=f"pl_ej_{sesion['id']}")
+                with f2:
+                    ej_series = st.number_input("Series", min_value=1, max_value=20, value=3, key=f"pl_ser_{sesion['id']}")
+                with f3:
+                    ej_reps = st.number_input("Reps", min_value=1, max_value=100, value=5, key=f"pl_rep_{sesion['id']}")
+                with f4:
+                    ej_rpe = st.number_input("RPE", min_value=0, max_value=10, value=7, key=f"pl_rpe_{sesion['id']}")
+
+                tipo_carga = st.radio(
+                    "Tipo de carga", ["% de 1RM", "Kg fijos", "Sin carga"],
+                    horizontal=True, key=f"pl_tipo_{sesion['id']}"
+                )
+                g1, g2 = st.columns(2)
+                with g1:
+                    valor_carga = st.number_input(
+                        "Valor (% o kg)", min_value=0.0, max_value=1000.0, value=75.0, step=2.5,
+                        key=f"pl_val_{sesion['id']}"
+                    )
+                with g2:
+                    ref_ejercicio = st.text_input(
+                        "1RM de referencia (opcional)", placeholder="Ej. Back Squat",
+                        help="Si lo dejas vacío se usa el 1RM del mismo ejercicio.",
+                        key=f"pl_ref_{sesion['id']}"
+                    )
+
+                if st.form_submit_button("Agregar al plan"):
+                    if not ej_nombre:
+                        st.warning("Escribe el nombre del ejercicio.")
+                    else:
+                        payload = {
+                            "exercise_name": ej_nombre,
+                            "prescribed_sets": ej_series,
+                            "prescribed_reps": ej_reps,
+                            "rpe": ej_rpe,
+                        }
+                        if tipo_carga == "% de 1RM":
+                            payload["prescribed_percentage"] = valor_carga
+                            if ref_ejercicio:
+                                payload["reference_exercise"] = ref_ejercicio
+                        elif tipo_carga == "Kg fijos":
+                            payload["prescribed_weight"] = valor_carga
+
+                        res_add = requests.post(
+                            f"{API_URL}/plans/{plan_id}/sessions/{sesion['id']}/sets",
+                            json=payload, headers=get_headers()
+                        )
+                        if res_add.status_code == 200:
+                            st.success(res_add.json().get("message", "Agregado."))
+                            st.rerun()
+                        else:
+                            st.error(f"Error: {res_add.text}")
+
+
+def render_plan_preview(plan_id):
+    """Vista de solo lectura del contenido de un plan, para el catálogo del atleta.
+    Sin expanders (este bloque ya vive dentro de uno) y sin opciones de edición."""
+    res_detalle = requests.get(f"{API_URL}/plans/{plan_id}", headers=get_headers())
+    if res_detalle.status_code != 200:
+        st.error("No se pudo cargar el contenido de este plan.")
+        return
+
+    sesiones = res_detalle.json().get("sessions", [])
+    if not sesiones:
+        st.caption("Este plan todavía no tiene ejercicios cargados.")
+        return
+
+    for sesion in sesiones:
+        dia = (sesion.get("day_offset") or 0) + 1
+        st.markdown(f"**📆 Día {dia}**")
+        if not sesion.get("sets"):
+            st.caption("　(sin ejercicios)")
+            continue
+
+        agrupados = {}
+        for s in sesion["sets"]:
+            nombre = s["exercise"]["name"]
+            if nombre not in agrupados:
+                agrupados[nombre] = {
+                    "series": 0, "reps": s["prescribed_reps"], "rpe": s.get("rpe"),
+                    "kg": s.get("prescribed_weight"), "pct": s.get("prescribed_percentage"),
+                    "ref": s.get("reference_exercise"),
+                }
+            agrupados[nombre]["series"] += 1
+
+        for nombre, info in agrupados.items():
+            if info["pct"]:
+                carga = f"{info['pct']:.0f}% de tu 1RM de {info['ref'] or nombre}"
+            elif info["kg"]:
+                carga = f"{info['kg']}kg"
+            else:
+                carga = "peso libre"
+            rpe_txt = f" · RPE {info['rpe']}" if info["rpe"] is not None else ""
+            st.caption(f"　🏋️ {nombre} — {info['series']}x{info['reps']} @ {carga}{rpe_txt}")
+
+
 # 2. HIDRATACIÓN: Si hay token en la cookie, pero Streamlit olvidó quién eres, le preguntamos al backend
 # (no se intenta mientras "logged_out" esté activo: el usuario cerró sesión explícitamente y no
 # queremos revivirla solo porque la cookie tarde en borrarse del navegador)
-if not st.session_state.logged_out and jwt_token and st.session_state.user_session is None:
+if not st.session_state.logged_out and st.session_state.jwt_token and st.session_state.user_session is None:
     # Usamos la nueva ruta /auth/me enviando el token en las cabeceras
     res_me = requests.get(f"{API_URL}/auth/me", headers=get_headers())
     if res_me.status_code == 200:
         st.session_state.user_session = res_me.json()
     else:
         # Si el token expiró o es falso, lo destruimos
+        st.session_state.jwt_token = None
         cookie_manager.delete("neurolift_jwt", key=f"delete_invalid_{uuid.uuid4()}")
         st.session_state.user_session = None
 
@@ -554,7 +719,11 @@ if st.session_state.user_session is None:
                     datos_token = res.json()
                     token = datos_token["access_token"]
 
-                    # 1. Guardamos el TOKEN en la cookie para el futuro
+                    # 1. Guardamos el token en session_state DE INMEDIATO (síncrono, disponible
+                    # ya mismo para get_headers()) — la cookie es solo para persistir entre
+                    # visitas futuras, y escribirla/leerla de vuelta es asíncrono, así que no
+                    # podemos depender de ella para las llamadas que vienen justo después del login.
+                    st.session_state.jwt_token = token
                     cookie_manager.set("neurolift_jwt", token, key=f"set_jwt_login_{uuid.uuid4()}")
 
                     # 2. Vamos de inmediato al backend a traer tus datos reales ("Hidratación" manual)
@@ -614,6 +783,7 @@ else:
             # Revocación real del lado del servidor (no solo borrar la cookie local): invalida
             # este token y cualquier otro que este usuario tuviera en otros dispositivos.
             requests.post(f"{API_URL}/auth/logout", headers=get_headers())
+            st.session_state.jwt_token = None
             st.session_state.user_session = None
             st.session_state.logged_out = True
             st.session_state.auth_view = "login"
@@ -633,7 +803,7 @@ else:
         st.sidebar.header("Menú del Entrenador")
         opcion = st.sidebar.radio(
             "Navegación",
-            ["👥 Nuevo Atleta", "👨‍👩‍👧‍👦 Mis Grupos", "⚙️ Crear Mesociclo con IA", "✍️ Crear Mesociclo Manual", "🔍 Ver Rutinas", "💪 Toma de Marcas (PRs)"]
+            ["👥 Nuevo Atleta", "👨‍👩‍👧‍👦 Mis Grupos", "📦 Mis Planes", "⚙️ Crear Mesociclo con IA", "✍️ Crear Mesociclo Manual", "🔍 Ver Rutinas", "💪 Toma de Marcas (PRs)"]
         )
         
        # ==========================================
@@ -761,6 +931,114 @@ else:
                                 st.rerun()
             else:
                 st.info("Aún no tienes grupos creados. Crea el primero arriba.")
+
+        # ==========================================
+        # SECCIÓN: MIS PLANES (plantillas vendibles)
+        # ==========================================
+        elif opcion == "📦 Mis Planes":
+            st.subheader("📦 Mis Planes")
+            st.caption(
+                "Los planes son plantillas que cualquier atleta puede adquirir por su cuenta, sin "
+                "estar en tus grupos personalizados. No pertenecen a nadie: las cargas se definen en "
+                "% de 1RM y se convierten a kilos con las marcas de quien lo compre."
+            )
+
+            with st.expander("➕ Crear nuevo plan"):
+                with st.form("form_nuevo_plan"):
+                    nombre_plan = st.text_input("Nombre del plan", placeholder="Ej. Fuerza Base — 8 semanas")
+                    desc_plan = st.text_area(
+                        "Descripción (lo que verá el atleta en el catálogo)",
+                        placeholder="Para quién es, qué resultados busca, qué equipo necesita..."
+                    )
+                    cp1, cp2, cp3 = st.columns(3)
+                    with cp1:
+                        disc_plan = st.selectbox("Disciplina", ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting", "CrossFit"])
+                    with cp2:
+                        nivel_plan = st.selectbox("Nivel", ["Principiante", "Intermedio", "Avanzado"], index=1)
+                    with cp3:
+                        precio_plan = st.number_input("Precio (0 = gratis)", min_value=0.0, step=10000.0, value=0.0)
+
+                    cp4, cp5 = st.columns(2)
+                    with cp4:
+                        semanas_plan = st.number_input("Semanas de duración", min_value=1, max_value=52, value=8)
+                    with cp5:
+                        mapa_dias_plan = {
+                            "Lunes": 0, "Martes": 1, "Miércoles": 2,
+                            "Jueves": 3, "Viernes": 4, "Sábado": 5, "Domingo": 6
+                        }
+                        dias_plan = st.multiselect(
+                            "Días de entrenamiento por semana",
+                            options=list(mapa_dias_plan.keys()),
+                            default=["Lunes", "Miércoles", "Viernes"]
+                        )
+
+                    if st.form_submit_button("Crear plan"):
+                        if not nombre_plan:
+                            st.error("Debes darle un nombre al plan.")
+                        elif not dias_plan:
+                            st.error("Selecciona al menos un día de entrenamiento.")
+                        else:
+                            payload_plan = {
+                                "name": nombre_plan,
+                                "description": desc_plan,
+                                "discipline": disc_plan,
+                                "level": nivel_plan,
+                                "price": precio_plan if precio_plan > 0 else None,
+                                "weeks_count": semanas_plan,
+                                "training_days": [mapa_dias_plan[d] for d in dias_plan],
+                            }
+                            res_plan = requests.post(f"{API_URL}/plans/", json=payload_plan, headers=get_headers())
+                            if res_plan.status_code == 200:
+                                st.success(f"¡Plan '{nombre_plan}' creado! Ahora agrégale los ejercicios abajo.")
+                                st.rerun()
+                            else:
+                                st.error(f"Error al crear el plan: {res_plan.text}")
+
+            st.markdown("---")
+            res_planes = requests.get(f"{API_URL}/plans/mine", headers=get_headers())
+            if res_planes.status_code == 200 and res_planes.json():
+                for plan in res_planes.json():
+                    estado = "🟢 Publicado" if plan["is_published"] else "📝 Borrador"
+                    precio_txt = f"${plan['price']:,.0f}" if plan.get("price") else "Gratis"
+                    titulo = (
+                        f"{estado} · {plan['name']} — {plan['discipline']} · {plan['level']} · "
+                        f"{plan['weeks_count']} sem ({plan['sessions_per_week']}/sem) · {precio_txt}"
+                    )
+                    with st.expander(titulo):
+                        if plan.get("description"):
+                            st.write(plan["description"])
+
+                        ca1, ca2 = st.columns([1, 1])
+                        with ca1:
+                            if plan["is_published"]:
+                                if st.button("📥 Despublicar", key=f"unpub_{plan['id']}"):
+                                    requests.put(
+                                        f"{API_URL}/plans/{plan['id']}/publish",
+                                        json={"is_published": False}, headers=get_headers()
+                                    )
+                                    st.rerun()
+                            else:
+                                if st.button("🚀 Publicar al catálogo", key=f"pub_{plan['id']}"):
+                                    res_pub = requests.put(
+                                        f"{API_URL}/plans/{plan['id']}/publish",
+                                        json={"is_published": True}, headers=get_headers()
+                                    )
+                                    if res_pub.status_code == 200:
+                                        st.rerun()
+                                    else:
+                                        try:
+                                            st.error(res_pub.json().get("detail", "Error al publicar"))
+                                        except Exception:
+                                            st.error("Error al publicar el plan.")
+                        with ca2:
+                            if st.button("🗑️ Eliminar plan", key=f"delplan_{plan['id']}"):
+                                requests.delete(f"{API_URL}/plans/{plan['id']}", headers=get_headers())
+                                st.rerun()
+
+                        st.markdown("---")
+                        render_plan_editor(plan["id"])
+            else:
+                st.info("Todavía no has creado ningún plan. Crea el primero arriba.")
 
         # ==========================================
         # SECCIÓN: CREAR MESOCICLO
@@ -1099,7 +1377,7 @@ else:
         st.title(f"Tus Entrenamientos, {usuario_actual['full_name']} 🏋️")
         my_id = usuario_actual["id"]
 
-        opcion = st.sidebar.radio("Navegación", ["📅 Mi Entrenamiento", "📈 Mis Récords (PRs)"])
+        opcion = st.sidebar.radio("Navegación", ["📅 Mi Entrenamiento", "🛒 Planes Disponibles", "📈 Mis Récords (PRs)"])
 
         # ==========================================
         # SECCIÓN: MI ENTRENAMIENTO
@@ -1152,7 +1430,60 @@ else:
                 else:
                     st.error("Error al cargar el mesociclo.")
             else:
-                st.info("Todavía no tienes ningún mesociclo asignado. Pide a tu coach que te programe uno.")
+                st.info(
+                    "Todavía no tienes ningún mesociclo asignado. Pide a tu coach que te programe uno, "
+                    "o mira los planes disponibles en '🛒 Planes Disponibles'."
+                )
+
+        # ==========================================
+        # SECCIÓN: PLANES DISPONIBLES (catálogo)
+        # ==========================================
+        elif opcion == "🛒 Planes Disponibles":
+            st.subheader("🛒 Planes Disponibles")
+            st.caption(
+                "Planes hechos por entrenadores profesionales, listos para seguir por tu cuenta. "
+                "Al adquirir uno se agrega a tus entrenamientos con las fechas que elijas y las "
+                "cargas calculadas a partir de tus propias marcas."
+            )
+
+            res_catalogo = requests.get(f"{API_URL}/plans/catalog", headers=get_headers())
+            if res_catalogo.status_code == 200 and res_catalogo.json():
+                for plan in res_catalogo.json():
+                    precio_txt = f"${plan['price']:,.0f}" if plan.get("price") else "Gratis"
+                    with st.expander(f"📦 {plan['name']} — {plan['level']} · {plan['weeks_count']} semanas · {precio_txt}"):
+                        if plan.get("description"):
+                            st.write(plan["description"])
+
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Disciplina", plan["discipline"])
+                        m2.metric("Duración", f"{plan['weeks_count']} sem")
+                        m3.metric("Sesiones", f"{plan['sessions_per_week']}/sem")
+                        m4.metric("Precio", precio_txt)
+                        st.caption(f"Creado por: {plan.get('coach_name') or 'Entrenador NeuroLift'}")
+
+                        # Checkbox en vez de expander: este bloque ya vive dentro del expander
+                        # del plan, y Streamlit no maneja bien los expanders anidados.
+                        if st.checkbox("👀 Ver contenido del plan", key=f"preview_{plan['id']}"):
+                            render_plan_preview(plan["id"])
+
+                        st.markdown("---")
+                        with st.form(f"form_adquirir_{plan['id']}"):
+                            fecha_inicio_plan = st.date_input(
+                                "¿Qué día quieres empezar?", value=datetime.date.today(),
+                                help="La primera sesión caerá exactamente en esta fecha."
+                            )
+                            if st.form_submit_button("✅ Adquirir este plan"):
+                                res_adq = requests.post(
+                                    f"{API_URL}/plans/{plan['id']}/acquire",
+                                    json={"start_date": str(fecha_inicio_plan)}, headers=get_headers()
+                                )
+                                if res_adq.status_code == 200:
+                                    st.success(res_adq.json().get("message", "¡Plan adquirido!"))
+                                    st.info("Ya puedes verlo en '📅 Mi Entrenamiento'.")
+                                else:
+                                    st.error(f"Error al adquirir el plan: {res_adq.text}")
+            else:
+                st.info("Todavía no hay planes publicados en el catálogo.")
 
         # ==========================================
         # SECCIÓN: MIS RÉCORDS (PRs)
@@ -1209,20 +1540,37 @@ else:
             st.markdown("---")
             st.subheader("🎯 Calcula tu Fit Level")
             st.caption(
-                "Estándares aproximados y genéricos (no diferenciados por sexo/edad) — úsalos "
-                "como referencia, no como medición oficial. Llena solo las marcas que ya tengas; "
-                "entre más completes, más preciso será tu resultado."
+                "Estándares aproximados (propios, no un estándar oficial único) que sí diferencian "
+                "por sexo y edad — úsalos como referencia, no como medición competitiva. Llena solo "
+                "las marcas que ya tengas; entre más completes, más preciso será tu resultado."
             )
 
             res_fit = requests.get(f"{API_URL}/users/{my_id}/fitness-level", headers=get_headers())
             datos_fit = res_fit.json() if res_fit.status_code == 200 else {}
             valores_actuales = datos_fit.get("values", {})
             peso_actual = datos_fit.get("body_weight")
+            sexo_actual = datos_fit.get("sex")
+            edad_actual = datos_fit.get("age")
 
             iconos_cat = {"halterofilia": "🏋️", "gimnasia": "🤸", "metcon": "🔥"}
             nombres_cat = {"halterofilia": "Halterofilia", "gimnasia": "Gimnasia", "metcon": "Metcon"}
 
+            if not sexo_actual or not edad_actual:
+                st.warning(
+                    "Todavía no registraste tu sexo y/o edad — el cálculo usa un promedio neutro "
+                    "mientras tanto. Complétalos abajo para un resultado más preciso."
+                )
+
             if datos_fit.get("overall_level"):
+                nombres_sexo = {"male": "Hombre", "female": "Mujer"}
+                detalle_perfil = " · ".join(
+                    filter(None, [
+                        nombres_sexo.get(sexo_actual) if sexo_actual else None,
+                        f"{edad_actual} años" if edad_actual else None,
+                    ])
+                )
+                if detalle_perfil:
+                    st.caption(f"Calculado para: {detalle_perfil}")
                 st.markdown(f"### ⭐ Nivel General: {datos_fit['overall_level']} ({datos_fit['overall_score']}/4)")
                 cols_niveles = st.columns(3)
                 for i, cat in enumerate(["halterofilia", "gimnasia", "metcon"]):
@@ -1237,10 +1585,25 @@ else:
 
             with st.expander("✏️ Llenar / actualizar mis marcas"):
                 with st.form("form_fit_level"):
-                    peso_corporal = st.number_input(
-                        "Peso corporal (kg) — necesario para halterofilia",
-                        min_value=0.0, step=0.5, value=float(peso_actual) if peso_actual else 0.0
-                    )
+                    cp1, cp2, cp3 = st.columns(3)
+                    with cp1:
+                        peso_corporal = st.number_input(
+                            "Peso corporal (kg)",
+                            min_value=0.0, step=0.5, value=float(peso_actual) if peso_actual else 0.0
+                        )
+                    with cp2:
+                        opciones_sexo = {"Sin especificar": None, "Hombre": "male", "Mujer": "female"}
+                        etiquetas_sexo = list(opciones_sexo.keys())
+                        idx_sexo = (
+                            etiquetas_sexo.index("Hombre") if sexo_actual == "male"
+                            else etiquetas_sexo.index("Mujer") if sexo_actual == "female"
+                            else 0
+                        )
+                        sexo_sel = st.selectbox("Sexo", etiquetas_sexo, index=idx_sexo)
+                    with cp3:
+                        edad = st.number_input("Edad", min_value=0, max_value=100, step=1, value=int(edad_actual) if edad_actual else 0)
+
+                    st.caption("Peso corporal necesario para halterofilia; sexo y edad ajustan los estándares de todas las categorías.")
 
                     st.markdown("##### 🏋️ Halterofilia (1RM en kg)")
                     c1, c2 = st.columns(2)
@@ -1285,6 +1648,10 @@ else:
                         payload = {}
                         if peso_corporal > 0:
                             payload["body_weight"] = peso_corporal
+                        if opciones_sexo[sexo_sel] is not None:
+                            payload["sex"] = opciones_sexo[sexo_sel]
+                        if edad > 0:
+                            payload["age"] = edad
                         if snatch > 0:
                             payload["snatch_kg"] = snatch
                         if clean_jerk > 0:

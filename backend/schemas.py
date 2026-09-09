@@ -115,6 +115,8 @@ class SetResponse(BaseModel):
     prescribed_reps: int
     rpe: Optional[int] = None
     prescribed_weight: float | None = None # <-- ¡ESTO FALTABA!
+    prescribed_percentage: Optional[float] = None  # carga en % de 1RM (planes)
+    reference_exercise: Optional[str] = None       # de qué 1RM se calcula ese %
     actual_reps: Optional[int] = None
     actual_weight: Optional[float] = None
     technique_feedback: Optional[str] = None
@@ -132,6 +134,7 @@ class SessionResponse(BaseModel):
     status: str
     parent_session_id: Optional[UUID] = None  # si no es None, es una versión adaptada de otra sesión
     duration_minutes: Optional[int] = None
+    day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
     sets: List[SetResponse] = [] # ¡Aquí anidamos los sets!
 
     class Config:
@@ -139,11 +142,14 @@ class SessionResponse(BaseModel):
 
 class MesocycleFullResponse(BaseModel):
     id: UUID
-    user_id: UUID
+    user_id: Optional[UUID] = None  # None en las plantillas de planes (no tienen dueño)
     name: str | None = None # <-- Agregamos el nombre aquí también
     discipline: str
     start_date: date
     end_date: Optional[date] = None
+    description: Optional[str] = None
+    level: Optional[str] = None
+    is_template: bool = False
     sessions: List[SessionResponse] = [] # ¡Aquí anidamos las sesiones!
 
     class Config:
@@ -314,6 +320,8 @@ class AdminOverview(BaseModel):
 class FitnessBenchmarkUpdate(SanitizedModel):
     """Todos los campos son opcionales: el atleta llena solo las marcas que ya tiene."""
     body_weight: float | None = Field(None, ge=20, le=300)
+    sex: Literal["male", "female"] | None = None
+    age: int | None = Field(None, ge=10, le=100)
     # Halterofilia (1RM en kg)
     snatch_kg: float | None = Field(None, ge=0, le=400)
     clean_jerk_kg: float | None = Field(None, ge=0, le=400)
@@ -333,6 +341,8 @@ class FitnessBenchmarkUpdate(SanitizedModel):
 
 class FitnessLevelResponse(BaseModel):
     body_weight: float | None = None
+    sex: str | None = None
+    age: int | None = None
     values: dict[str, float] = {}
     category_scores: dict[str, float] = {}
     category_levels: dict[str, str] = {}
@@ -343,3 +353,51 @@ class FitnessLevelResponse(BaseModel):
 # --- ESQUEMA PARA ADAPTAR UNA SESIÓN AL TIEMPO DISPONIBLE ---
 class SessionAdaptRequest(SanitizedModel):
     available_minutes: int = Field(..., ge=10, le=180)
+
+
+# --- ESQUEMAS PARA PLANES (plantillas vendibles, sin dueño) ---
+NivelPlan = Literal["Principiante", "Intermedio", "Avanzado"]
+
+
+class PlanCreate(SanitizedModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=2000)
+    discipline: str = Field(..., min_length=1, max_length=50)
+    level: NivelPlan = "Intermedio"
+    price: float | None = Field(None, ge=0, le=100_000_000)  # amplio a propósito: sirve para COP, USD, etc.
+    weeks_count: int = Field(..., ge=1, le=52)
+    training_days: List[Dia]
+
+
+class PlanPublishUpdate(SanitizedModel):
+    is_published: bool
+
+
+class PlanSetCreate(SanitizedModel):
+    """Al armar un plan, la carga se define en kg fijos O en % de 1RM (no ambos)."""
+    exercise_name: str = Field(..., min_length=1, max_length=100)
+    prescribed_sets: int = Field(3, ge=1, le=20)
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    rpe: float | None = Field(None, ge=0, le=10)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    prescribed_percentage: float | None = Field(None, ge=1, le=150)
+    reference_exercise: str | None = Field(None, min_length=1, max_length=100)
+
+
+class PlanAcquireRequest(SanitizedModel):
+    start_date: date
+
+
+class PlanSummaryResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    discipline: str
+    level: str | None = None
+    price: float | None = None
+    weeks_count: int
+    sessions_count: int
+    sessions_per_week: int
+    coach_name: str | None = None
+    is_published: bool
+    created_at: datetime

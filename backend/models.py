@@ -14,6 +14,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False) # Contraseña (bcrypt), siempre generada por la app
     role = Column(String, default="athlete")
     body_weight = Column(Float, nullable=True)
+    sex = Column(String(10), nullable=True)   # "male" | "female" — usado para el Fit Level
+    age = Column(Integer, nullable=True)      # autorreportada, igual que body_weight
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.
@@ -21,7 +23,9 @@ class User(Base):
 
 
     # Relaciones
-    mesocycles = relationship("Mesocycle", back_populates="user")
+    # foreign_keys explícito: Mesocycle tiene DOS FKs a users (user_id = dueño del mesociclo,
+    # created_by_coach_id = autor de la plantilla/plan), así que SQLAlchemy no puede adivinar.
+    mesocycles = relationship("Mesocycle", back_populates="user", foreign_keys="Mesocycle.user_id")
     personal_records = relationship("PersonalRecord", back_populates="user", cascade="all, delete-orphan")
     coached_groups = relationship("Group", back_populates="coach", foreign_keys="Group.coach_id", cascade="all, delete-orphan")
 
@@ -60,7 +64,20 @@ class Mesocycle(Base):
     ai_prompt_context = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="mesocycles")
+    # --- PLANES (plantillas vendibles, sin dueño) ---
+    # Un "plan" es un Mesocycle con is_template=True y user_id=None: no pertenece a ningún
+    # atleta, sirve de plantilla que cualquiera puede adquirir. Al adquirirlo se clona en un
+    # mesociclo normal (is_template=False, user_id=comprador) con fechas y pesos reales.
+    is_template = Column(Boolean, default=False, nullable=False, server_default="false")
+    is_published = Column(Boolean, default=False, nullable=False, server_default="false")
+    created_by_coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    description = Column(Text)
+    level = Column(String(20))          # "Principiante" | "Intermedio" | "Avanzado"
+    price = Column(Float, nullable=True)
+    source_plan_id = Column(UUID(as_uuid=True), ForeignKey("mesocycles.id", ondelete="SET NULL"), nullable=True)
+
+    user = relationship("User", back_populates="mesocycles", foreign_keys=[user_id])
+    created_by_coach = relationship("User", foreign_keys=[created_by_coach_id])
     group = relationship("Group")
     sessions = relationship("Session", back_populates="mesocycle", cascade="all, delete-orphan")
 
@@ -79,6 +96,10 @@ class Session(Base):
     # (mismo día, mismo mesociclo, pero un plan más corto). La original nunca se toca.
     parent_session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True, index=True)
     duration_minutes = Column(Integer, nullable=True)  # duración objetivo de esta sesión, si se definió
+    # Solo en sesiones de PLANES (plantillas): "día N" relativo al inicio del plan. La plantilla
+    # también guarda un scheduled_date sintético (PLAN_EPOCH + day_offset) para no romper el
+    # ordenamiento ni las vistas existentes; al adquirir el plan se recalcula la fecha real.
+    day_offset = Column(Integer, nullable=True)
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
     sets = relationship("Set", back_populates="session", cascade="all, delete-orphan")
@@ -107,6 +128,11 @@ class Set(Base):
     technique_score = Column(Float)
     technique_feedback = Column(Text)
     is_pr_attempt = Column(Boolean, default=False)
+    # En los planes las cargas se prescriben en % de 1RM (el autor no conoce las marcas del
+    # comprador). Al adquirir el plan se resuelve a kg usando el PR del atleta para
+    # `reference_exercise` (o para el propio ejercicio si no se especifica otro).
+    prescribed_percentage = Column(Float, nullable=True)
+    reference_exercise = Column(String(100), nullable=True)
 
     session = relationship("Session", back_populates="sets")
     exercise = relationship("Exercise")

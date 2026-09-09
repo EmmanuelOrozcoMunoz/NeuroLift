@@ -343,6 +343,10 @@ def update_fitness_benchmarks(
 
     if "body_weight" in datos:
         usuario.body_weight = datos.pop("body_weight")
+    if "sex" in datos:
+        usuario.sex = datos.pop("sex")
+    if "age" in datos:
+        usuario.age = datos.pop("age")
 
     for metric_key, value in datos.items():
         if metric_key not in fitness_scoring.METRICS:
@@ -375,9 +379,11 @@ def get_fitness_level(
 def _build_fitness_level_response(db: Session, usuario: models.User) -> schemas.FitnessLevelResponse:
     filas = db.query(models.FitnessBenchmark).filter(models.FitnessBenchmark.user_id == usuario.id).all()
     valores = {f.metric_key: f.value for f in filas}
-    resultado = fitness_scoring.compute_fitness_level(valores, usuario.body_weight)
+    resultado = fitness_scoring.compute_fitness_level(valores, usuario.body_weight, usuario.sex, usuario.age)
     return schemas.FitnessLevelResponse(
         body_weight=usuario.body_weight,
+        sex=usuario.sex,
+        age=usuario.age,
         values=valores,
         category_scores=resultado["category_scores"],
         category_levels=resultado["category_levels"],
@@ -474,6 +480,8 @@ def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user
                 set_order=set_ref.set_order,
                 prescribed_reps=set_ref.prescribed_reps,
                 prescribed_weight=set_ref.prescribed_weight,
+                prescribed_percentage=set_ref.prescribed_percentage,
+                reference_exercise=set_ref.reference_exercise,
                 rpe=set_ref.rpe,
             ))
 
@@ -797,8 +805,8 @@ def create_mesocycle(
 
 @app.get("/mesocycles/", response_model=List[schemas.MesocycleResponse])
 def listar_mesociclos(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    """Devuelve la lista de todos los mesociclos básicos."""
-    return db.query(models.Mesocycle).all()
+    """Devuelve la lista de todos los mesociclos básicos (sin incluir plantillas de planes)."""
+    return db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False).all()
 
 
 @app.get("/mesocycles/{mesocycle_id}", response_model=schemas.MesocycleFullResponse)
@@ -1422,7 +1430,7 @@ def get_admin_overview(db: Session = Depends(get_db), current_user: models.User 
     total_athletes = db.query(models.User).filter(models.User.role == "athlete").count()
     total_admins = db.query(models.User).filter(models.User.role == "admin").count()
     total_groups = db.query(models.Group).count()
-    total_mesocycles = db.query(models.Mesocycle).count()
+    total_mesocycles = db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False).count()
     total_sessions = db.query(models.Session).count()
     sessions_completed = db.query(models.Session).filter(models.Session.status == "completed").count()
 
@@ -1486,3 +1494,324 @@ def revoke_user_sessions(
         current_user.email, usuario.email,
     )
     return {"message": f"Todas las sesiones de {usuario.full_name} fueron revocadas."}
+
+
+# ==========================================
+# PLANES (plantillas vendibles, sin dueño)
+# ==========================================
+# Un plan es un Mesocycle con is_template=True y user_id=None. Sus sesiones guardan el "día N"
+# relativo (day_offset) más una fecha sintética (PLAN_EPOCH + day_offset) para no romper el
+# ordenamiento ni las vistas que asumen que scheduled_date existe. Al adquirirlo, se clona a un
+# mesociclo normal con las fechas reales del atleta y las cargas resueltas desde sus propias marcas.
+PLAN_EPOCH = date(2000, 1, 1)
+
+
+def _get_owned_plan(db: Session, plan_id: UUID, current_user: models.User) -> models.Mesocycle:
+    plan = db.query(models.Mesocycle).filter(
+        models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True
+    ).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    if current_user.role != "admin" and plan.created_by_coach_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan no te pertenece")
+    return plan
+
+
+def _plan_summary(db: Session, plan: models.Mesocycle) -> schemas.PlanSummaryResponse:
+    sesiones = db.query(models.Session).filter(models.Session.mesocycle_id == plan.id).all()
+    dias_distintos = {s.day_offset for s in sesiones if s.day_offset is not None}
+    semanas = max(1, ((max(dias_distintos) // 7) + 1) if dias_distintos else 1)
+    return schemas.PlanSummaryResponse(
+        id=plan.id,
+        name=plan.name,
+        description=plan.description,
+        discipline=plan.discipline,
+        level=plan.level,
+        price=plan.price,
+        weeks_count=semanas,
+        sessions_count=len(sesiones),
+        sessions_per_week=round(len(sesiones) / semanas) if semanas else len(sesiones),
+        coach_name=plan.created_by_coach.full_name if plan.created_by_coach else None,
+        is_published=plan.is_published,
+        created_at=plan.created_at,
+    )
+
+
+@app.post("/plans/", response_model=schemas.PlanSummaryResponse)
+def create_plan(
+    req: schemas.PlanCreate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Crea el esqueleto de un plan: la plantilla y sus días vacíos, listos para que el coach
+    les agregue ejercicios. No pertenece a ningún atleta y nace despublicado (borrador)."""
+    plan = models.Mesocycle(
+        user_id=None,
+        is_template=True,
+        is_published=False,
+        created_by_coach_id=current_user.id,
+        name=req.name,
+        description=req.description,
+        discipline=req.discipline,
+        level=req.level,
+        price=req.price,
+        start_date=PLAN_EPOCH,
+    )
+    db.add(plan)
+    db.flush()
+
+    # Los offsets se normalizan para que el PRIMER día de entrenamiento sea el día 0. Así, al
+    # adquirir el plan, la primera sesión cae exactamente en la fecha que eligió el atleta y el
+    # patrón semanal del coach (ej. lun/mié/vie -> +0/+2/+4) se conserva tal cual, sin importar
+    # en qué día de la semana empiece cada comprador.
+    offsets_crudos = [
+        i for i in range(req.weeks_count * 7)
+        if (PLAN_EPOCH + timedelta(days=i)).weekday() in req.training_days
+    ]
+    base = offsets_crudos[0] if offsets_crudos else 0
+    offsets = [i - base for i in offsets_crudos]
+
+    for offset in offsets:
+        db.add(models.Session(
+            mesocycle_id=plan.id,
+            day_offset=offset,
+            scheduled_date=PLAN_EPOCH + timedelta(days=offset),
+            athlete_notes="",
+            status="pending",
+        ))
+
+    plan.end_date = PLAN_EPOCH + timedelta(days=max(offsets) if offsets else 0)
+    db.commit()
+    db.refresh(plan)
+    return _plan_summary(db, plan)
+
+
+@app.get("/plans/mine", response_model=List[schemas.PlanSummaryResponse])
+def list_my_plans(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
+    """Planes creados por este coach (publicados y borradores). El admin ve todos."""
+    query = db.query(models.Mesocycle).options(
+        joinedload(models.Mesocycle.created_by_coach)
+    ).filter(models.Mesocycle.is_template == True)
+    if current_user.role != "admin":
+        query = query.filter(models.Mesocycle.created_by_coach_id == current_user.id)
+    return [_plan_summary(db, p) for p in query.order_by(models.Mesocycle.created_at.desc()).all()]
+
+
+@app.get("/plans/catalog", response_model=List[schemas.PlanSummaryResponse])
+def list_plan_catalog(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Catálogo público (para cualquier usuario autenticado): solo planes publicados."""
+    planes = (
+        db.query(models.Mesocycle)
+        .options(joinedload(models.Mesocycle.created_by_coach))
+        .filter(models.Mesocycle.is_template == True, models.Mesocycle.is_published == True)
+        .order_by(models.Mesocycle.created_at.desc())
+        .all()
+    )
+    return [_plan_summary(db, p) for p in planes]
+
+
+@app.get("/plans/{plan_id}", response_model=schemas.MesocycleFullResponse)
+def get_plan_detail(
+    plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Detalle completo (días + ejercicios). El autor/admin ve sus borradores; el resto solo
+    puede ver planes ya publicados."""
+    plan = db.query(models.Mesocycle).options(
+        joinedload(models.Mesocycle.sessions).joinedload(models.Session.sets).joinedload(models.Set.exercise)
+    ).filter(models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+
+    es_autor = plan.created_by_coach_id == current_user.id or current_user.role == "admin"
+    if not plan.is_published and not es_autor:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
+
+    plan.sessions.sort(key=lambda s: (s.day_offset if s.day_offset is not None else 0))
+    for sesion in plan.sessions:
+        sesion.sets.sort(key=lambda x: x.set_order)
+    return plan
+
+
+@app.put("/plans/{plan_id}/publish", response_model=schemas.PlanSummaryResponse)
+def publish_plan(
+    plan_id: UUID,
+    req: schemas.PlanPublishUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    plan = _get_owned_plan(db, plan_id, current_user)
+    if req.is_published:
+        tiene_ejercicios = (
+            db.query(models.Set)
+            .join(models.Session, models.Set.session_id == models.Session.id)
+            .filter(models.Session.mesocycle_id == plan.id)
+            .count()
+        )
+        if not tiene_ejercicios:
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes publicar un plan sin ejercicios. Agrégalos primero.",
+            )
+    plan.is_published = req.is_published
+    db.commit()
+    db.refresh(plan)
+    return _plan_summary(db, plan)
+
+
+@app.delete("/plans/{plan_id}")
+def delete_plan(plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
+    plan = _get_owned_plan(db, plan_id, current_user)
+    db.delete(plan)
+    db.commit()
+    return {"message": "Plan eliminado correctamente"}
+
+
+@app.post("/plans/{plan_id}/sessions/{session_id}/sets")
+def add_set_to_plan_session(
+    plan_id: UUID,
+    session_id: UUID,
+    req: schemas.PlanSetCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Agrega un ejercicio a un día del plan. La carga puede ir en kg fijos o en % de 1RM
+    (el % se resuelve a kg cuando un atleta adquiere el plan, usando SUS marcas)."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+
+    sesion = db.query(models.Session).filter(
+        models.Session.id == session_id, models.Session.mesocycle_id == plan.id
+    ).first()
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Ese día no pertenece a este plan")
+
+    ejercicio = _get_or_create_exercise(db, req.exercise_name)
+    series_actuales = db.query(models.Set).filter(models.Set.session_id == sesion.id).count()
+
+    for i in range(req.prescribed_sets):
+        db.add(models.Set(
+            session_id=sesion.id,
+            exercise_id=ejercicio.id,
+            set_order=series_actuales + i + 1,
+            prescribed_reps=req.prescribed_reps,
+            rpe=req.rpe,
+            prescribed_weight=req.prescribed_weight,
+            prescribed_percentage=req.prescribed_percentage,
+            reference_exercise=req.reference_exercise,
+        ))
+
+    db.commit()
+    return {"message": f"'{req.exercise_name}' agregado al plan ({req.prescribed_sets} series)"}
+
+
+@app.delete("/plans/{plan_id}/sets/{set_id}")
+def delete_set_from_plan(
+    plan_id: UUID,
+    set_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    plan = _get_owned_plan(db, plan_id, current_user)
+    db_set = (
+        db.query(models.Set)
+        .join(models.Session, models.Set.session_id == models.Session.id)
+        .filter(models.Set.id == set_id, models.Session.mesocycle_id == plan.id)
+        .first()
+    )
+    if not db_set:
+        raise HTTPException(status_code=404, detail="Serie no encontrada en este plan")
+    db.delete(db_set)
+    db.commit()
+    return {"message": "Serie eliminada del plan"}
+
+
+def _resolver_peso(porcentaje: float | None, peso_fijo: float | None, referencia: str, prs: dict) -> float | None:
+    """Convierte un % de 1RM a kg usando las marcas del atleta, redondeando a múltiplos de 2.5kg.
+    Si el plan traía un peso fijo se respeta; si no hay marca de referencia, queda sin peso
+    (el atleta o su coach lo ajusta a mano)."""
+    if porcentaje is None:
+        return peso_fijo
+    pr = prs.get(referencia.strip().lower())
+    if not pr:
+        return None
+    return round((pr * porcentaje / 100) / 2.5) * 2.5
+
+
+@app.post("/plans/{plan_id}/acquire")
+def acquire_plan(
+    plan_id: UUID,
+    req: schemas.PlanAcquireRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """El atleta adquiere un plan publicado: se clona a un mesociclo propio con las fechas
+    reales a partir de `start_date` y las cargas en % resueltas con SUS marcas de 1RM."""
+    plan = db.query(models.Mesocycle).options(
+        joinedload(models.Mesocycle.sessions).joinedload(models.Session.sets).joinedload(models.Set.exercise)
+    ).filter(models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    if not plan.is_published:
+        raise HTTPException(status_code=400, detail="Este plan todavía no está disponible")
+
+    prs = {
+        pr.exercise_name.strip().lower(): pr.max_weight_kg
+        for pr in db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == current_user.id).all()
+    }
+
+    nuevo_meso = models.Mesocycle(
+        user_id=current_user.id,
+        is_template=False,
+        source_plan_id=plan.id,
+        name=plan.name,
+        discipline=plan.discipline,
+        start_date=req.start_date,
+        ai_prompt_context=plan.description,
+    )
+    db.add(nuevo_meso)
+    db.flush()
+
+    max_offset = 0
+    sin_marca = set()
+
+    for sesion_plan in sorted(plan.sessions, key=lambda s: (s.day_offset if s.day_offset is not None else 0)):
+        offset = sesion_plan.day_offset
+        if offset is None:
+            offset = (sesion_plan.scheduled_date - PLAN_EPOCH).days
+        max_offset = max(max_offset, offset)
+
+        nueva_sesion = models.Session(
+            mesocycle_id=nuevo_meso.id,
+            scheduled_date=req.start_date + timedelta(days=offset),
+            athlete_notes=sesion_plan.athlete_notes,
+            status="pending",
+            duration_minutes=sesion_plan.duration_minutes,
+        )
+        db.add(nueva_sesion)
+        db.flush()
+
+        for set_plan in sorted(sesion_plan.sets, key=lambda x: x.set_order):
+            referencia = set_plan.reference_exercise or (set_plan.exercise.name if set_plan.exercise else "")
+            peso = _resolver_peso(set_plan.prescribed_percentage, set_plan.prescribed_weight, referencia, prs)
+            if set_plan.prescribed_percentage and peso is None and referencia:
+                sin_marca.add(referencia)
+
+            db.add(models.Set(
+                session_id=nueva_sesion.id,
+                exercise_id=set_plan.exercise_id,
+                set_order=set_plan.set_order,
+                prescribed_reps=set_plan.prescribed_reps,
+                rpe=set_plan.rpe,
+                prescribed_weight=peso,
+                prescribed_percentage=set_plan.prescribed_percentage,
+                reference_exercise=set_plan.reference_exercise,
+            ))
+
+    nuevo_meso.end_date = req.start_date + timedelta(days=max_offset)
+    db.commit()
+
+    mensaje = f"¡Plan '{plan.name}' adquirido! Ya está en tus entrenamientos a partir del {req.start_date}."
+    if sin_marca:
+        mensaje += (
+            " Ojo: no tienes marcas registradas de "
+            + ", ".join(sorted(sin_marca))
+            + ", así que esas cargas quedaron sin kg (registra tus 1RM y ajústalas)."
+        )
+    return {"message": mensaje, "mesocycle_id": str(nuevo_meso.id), "missing_prs": sorted(sin_marca)}

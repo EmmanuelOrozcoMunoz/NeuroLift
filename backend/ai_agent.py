@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import json
 from dotenv import load_dotenv
@@ -7,18 +8,68 @@ from backend.database import SessionLocal # Importamos tu conexión a la BD
 
 load_dotenv()
 
+# Errores transitorios de Gemini (hipos momentáneos del servicio, rate limiting) que vale la
+# pena reintentar en vez de fallar de inmediato y obligar al usuario a repetir la acción a mano.
+_TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 2  # por modelo — con fallback entre modelos, no conviene insistir demasiado en uno solo
+_BASE_DELAY_SECONDS = 1.5
+_REQUEST_TIMEOUT_SECONDS = 45
+
+# Modelo principal (mejor calidad) primero; si está saturado o caído, se reintenta con el
+# secundario en vez de fallarle la sesión al usuario. Ver adapt_session_to_time/generate_workout_session.
+_MODELOS_CON_FALLBACK = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
+
+
+def _post_to_gemini(url: str, payload: dict, headers: dict) -> dict:
+    """POST a Gemini con reintentos automáticos (backoff exponencial: ~1.5s, 3s) ante errores
+    transitorios (503 Service Unavailable, 429 rate limit, timeouts o caídas de conexión).
+    Un error no-transitorio (ej. 400 por payload inválido) se relanza de inmediato, sin reintentar."""
+    last_exception = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=_REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            last_exception = e
+            status = getattr(e.response, "status_code", None)
+            es_transitorio = status in _TRANSIENT_STATUS_CODES or status is None
+            if es_transitorio and attempt < _MAX_RETRIES:
+                time.sleep(_BASE_DELAY_SECONDS * (2 ** (attempt - 1)))
+                continue
+            raise
+    raise last_exception
+
+
+def _generate_json_with_fallback(prompt: str, modelos: list[str] = _MODELOS_CON_FALLBACK) -> dict:
+    """Genera contenido JSON probando cada modelo de `modelos` en orden: si el primero está
+    saturado/caído (tras agotar sus reintentos), prueba automáticamente con el siguiente antes
+    de darse por vencido — un modelo momentáneamente sobrecargado no debería tumbar la función."""
+    api_key = os.getenv("GEMINI_API_KEY").strip()
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json"},
+    }
+    headers = {"Content-Type": "application/json"}
+
+    last_exception = None
+    for modelo in modelos:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
+        try:
+            return _post_to_gemini(url, payload, headers)
+        except requests.exceptions.RequestException as e:
+            last_exception = e
+            continue
+    raise last_exception
+
+
 def generate_workout_session(athlete_name: str, discipline: str, experience_notes: str) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY").strip() 
-    
-    # Manteniendo tu versión ganadora 3.6
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
-    
     prompt = f"""
     Eres el Head Coach de IA de NeuroLift. Crea UNA sesión de entrenamiento para este atleta.
     Atleta: {athlete_name}
     Disciplina: {discipline}
     Contexto: {experience_notes}
-    
+
     DEBES responder ÚNICAMENTE con un objeto JSON válido que siga exactamente esta estructura, sin texto adicional ni formato markdown:
     {{
         "session_focus": "string",
@@ -33,31 +84,19 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
         ]
     }}
     """
-    
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }],
-        # Esto obliga a la API a devolver un JSON estricto
-        "generationConfig": {
-            "responseMimeType": "application/json",
-        }
-    }
-    
-    headers = {'Content-Type': 'application/json'}
-    
+
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status() 
-        data = response.json()
-        
+        # Preferimos gemini-3.6-flash (mejor calidad); si está saturado/caído, cae
+        # automáticamente a gemini-3.5-flash-lite en vez de fallar la sesión completa.
+        data = _generate_json_with_fallback(prompt)
+
         # Extraemos el texto de la respuesta (que ahora sabemos que es un JSON)
         raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
-        
+
         # Convertimos ese texto en un diccionario real de Python
         structured_data = json.loads(raw_json_text)
         return structured_data
-        
+
     except Exception as e:
         return {"error": str(e)}
 
@@ -65,31 +104,31 @@ def search_knowledge_base(user_context: str) -> str:
     """Busca en el PDF inyectado los párrafos más relevantes para el atleta."""
     api_key = os.getenv("GEMINI_API_KEY").strip()
     embed_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
-    
+
     try:
         # 1. Convertimos lo que pide el usuario en un vector matemático
         payload = {"model": "models/gemini-embedding-001", "content": {"parts": [{"text": user_context}]}}
-        res = requests.post(embed_url, json=payload)
-        res.raise_for_status()
-        vector_busqueda = res.json()["embedding"]["values"]
-        
+        headers = {'Content-Type': 'application/json'}
+        data = _post_to_gemini(embed_url, payload, headers)
+        vector_busqueda = data["embedding"]["values"]
+
         # 2. Buscamos en PostgreSQL los 3 fragmentos más parecidos (Similitud del Coseno)
         db = SessionLocal()
         query = text("""
-            SELECT content 
-            FROM knowledge_base 
-            ORDER BY embedding <=> CAST(:vector AS vector) 
+            SELECT content
+            FROM knowledge_base
+            ORDER BY embedding <=> CAST(:vector AS vector)
             LIMIT 3
         """)
         resultados = db.execute(query, {"vector": str(vector_busqueda)}).fetchall()
         db.close()
-        
+
         # 3. Unimos los fragmentos en un solo texto
         if resultados:
             contexto_extra = "\n\n".join([row[0] for row in resultados])
             return f"\n--- LITERATURA DE REFERENCIA ENCONTRADA ---\n{contexto_extra}\n-------------------------------------------\n"
         return ""
-        
+
     except Exception as e:
         print(f"Error en búsqueda vectorial: {e}")
         return "" # Si falla, simplemente devolvemos texto vacío y la IA sigue normal
@@ -159,18 +198,17 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
         ]
     }}
     """
-    
+
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     headers = {'Content-Type': 'application/json'}
-    
+
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status() 
-        raw_json_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        
+        data = _post_to_gemini(url, payload, headers)
+        raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
+
         # Limpieza de seguridad
         raw_json_text = raw_json_text.replace("```json", "").replace("```", "").strip()
-        
+
         return json.loads(raw_json_text)
     except Exception as e:
         return {"error": str(e)}
@@ -187,9 +225,6 @@ def adapt_session_to_time(
     o recorta ejercicios) para que quepan en `available_minutes`, manteniendo el mismo enfoque
     de entrenamiento en la medida de lo posible. La sesión original NUNCA se modifica; esto
     genera una versión alterna."""
-    api_key = os.getenv("GEMINI_API_KEY").strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
-
     ejercicios_texto = "\n".join(
         f"- {e['exercise_name']}: {e['prescribed_sets']}x{e['prescribed_reps']}"
         + (f" @ {e['prescribed_weight']}kg" if e.get("prescribed_weight") else "")
@@ -229,16 +264,10 @@ def adapt_session_to_time(
     }}
     """
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
-    headers = {"Content-Type": "application/json"}
-
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        raw_json_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        # Mismo fallback que generate_workout_session: 3.6-flash primero, 3.5-flash-lite si falla.
+        data = _generate_json_with_fallback(prompt)
+        raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
         return json.loads(raw_json_text)
     except Exception as e:
         return {"error": str(e)}
