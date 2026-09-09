@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Tokens de diseño. Tema oscuro por defecto y único: la app se usa en el
+   gimnasio, muchas veces con poca luz y el celular en la mano.
+   ========================================================================== */
+@theme {
+  --color-ink: #0b0f14; /* fondo de la app */
+  --color-surface: #141a22; /* tarjetas */
+  --color-surface-2: #1b2430; /* inputs, filas dentro de tarjetas */
+  --color-line: #263140; /* bordes */
+  --color-fg: #e8eef5; /* texto principal */
+  --color-muted: #8fa0b3; /* texto secundario */
+  --color-brand: #7c5cff; /* violeta: acciones primarias */
+  --color-brand-soft: #2a2350;
+  --color-done: #a3e635; /* lima: completado */
+  --color-done-soft: #26350f;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+
+  --font-sans: "Inter var", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ink);
+    color-scheme: dark;
+    /* Evita el zoom automático de iOS al enfocar un input (necesita >= 16px) */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--color-ink);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    /* Nada de rebote elástico: se siente a página web, no a app */
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Los inputs por debajo de 16px hacen que iOS haga zoom al enfocarlos */
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    font-size: max(1rem, 16px);
+  }
+
+  /* Las flechitas del input number son inservibles con el dedo: se usan botones -/+ */
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  ::selection {
+    background-color: var(--color-brand);
+    color: white;
+  }
+}
+
+@layer components {
+  /* Respeta el notch y el indicador de gestos del iPhone */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@layer utilities {
+  /* Skeletons de carga */
+  @keyframes nl-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+  .animate-skeleton {
+    animation: nl-pulse 1.4s ease-in-out infinite;
+  }
+}
