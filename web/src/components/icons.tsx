@@ -94,6 +94,34 @@ export function IconSpark({ className = base }: IconProps) {
   );
 }
 
+export function IconUsers({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3 20c.7-3.4 3.3-5 6-5s5.3 1.6 6 5" strokeLinecap="round" />
+      <circle cx="17" cy="9" r="2.3" />
+      <path d="M15.5 12.2c1.9.3 3.6 1.6 4.1 3.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function IconCamera({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H8l1-2h6l1 2h2.5A1.5 1.5 0 0 1 20 8.5V17a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17V8.5Z" strokeLinejoin="round" />
+      <circle cx="12" cy="12.5" r="3.3" />
+    </svg>
+  );
+}
+
+export function IconTrash({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function IconOffline({ className = base }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

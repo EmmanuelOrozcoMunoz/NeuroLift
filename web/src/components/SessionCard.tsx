@@ -11,12 +11,15 @@ export function SessionCard({
   mesocycleId,
   adapted,
   highlight = false,
+  to,
 }: {
   session: TrainingSession;
   mesocycleId: string;
   /** Versión corta de esta sesión, si el atleta ya pidió una. */
   adapted?: TrainingSession;
   highlight?: boolean;
+  /** Override del destino — el panel de coach enlaza al editor, no al registro del atleta. */
+  to?: string;
 }) {
   const completed = session.status === "completed";
   const { logged, total } = sessionProgress(session);
@@ -26,7 +29,7 @@ export function SessionCard({
 
   return (
     <Link
-      to={`/entrenos/${mesocycleId}/sesion/${session.id}`}
+      to={to ?? `/entrenos/${mesocycleId}/sesion/${session.id}`}
       className={cx(
         "block rounded-2xl border p-4 transition-colors active:bg-surface-2",
         highlight ? "border-brand/50 bg-brand-soft/40" : "border-line bg-surface",

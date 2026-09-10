@@ -1,0 +1,112 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+
+import { PageHeader } from "@/components/AppShell";
+import { AvatarUploader } from "@/components/AvatarUploader";
+import { IconChevronRight, IconLogout } from "@/components/icons";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
+import { useAuth, useCurrentUser } from "@/lib/auth";
+import { usePersonalRecords, useUpsertPersonalRecord } from "@/lib/queries";
+
+export default function Profile() {
+  const user = useCurrentUser();
+  const { logout } = useAuth();
+  const { data: prs, isPending, error, refetch } = usePersonalRecords(user.id);
+  const upsertPr = useUpsertPersonalRecord(user.id);
+
+  const [exercise, setExercise] = useState("");
+  const [weight, setWeight] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const kg = Number(weight);
+    if (!exercise.trim() || !(kg > 0)) return;
+
+    upsertPr.mutate(
+      { exercise_name: exercise.trim(), max_weight_kg: kg },
+      {
+        onSuccess: (response) => {
+          setToast(response.message ?? "¡Marca guardada!");
+          setExercise("");
+          setWeight("");
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <PageHeader title="Perfil" />
+
+      <Card className="mb-4">
+        <AvatarUploader />
+      </Card>
+
+      <Link
+        to="/perfil/fit-level"
+        className="mb-4 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+      >
+        <div>
+          <p className="font-bold">🎯 Calcula tu Fit Level</p>
+          <p className="text-sm text-muted">Halterofilia, gimnasia y metcon</p>
+        </div>
+        <IconChevronRight className="h-5 w-5 text-muted" />
+      </Link>
+
+      <h2 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Mis récords (PRs)</h2>
+
+      {isPending && <LoadingList rows={2} />}
+      {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
+
+      {!isPending && !error && (prs?.length ?? 0) === 0 && (
+        <EmptyState title="Todavía no tienes marcas registradas" />
+      )}
+
+      {!isPending && !error && (prs?.length ?? 0) > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {prs!.map((pr) => (
+            <Card key={pr.id} className="p-3">
+              <p className="truncate text-xs font-semibold text-muted">{pr.exercise_name}</p>
+              <p className="mt-0.5 text-lg font-bold">{pr.max_weight_kg} kg</p>
+              <p className="text-xs text-muted">{pr.last_updated.split("T")[0]}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Card className="mt-4">
+        <p className="mb-3 font-bold">Registrar nueva marca</p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <Field
+            label="Ejercicio"
+            placeholder="Ej. Back Squat, Snatch"
+            value={exercise}
+            onChange={(event) => setExercise(event.target.value)}
+            required
+          />
+          <Field
+            label="1RM en kg"
+            type="number"
+            inputMode="decimal"
+            step="2.5"
+            min="0"
+            value={weight}
+            onChange={(event) => setWeight(event.target.value)}
+            required
+          />
+          <Button type="submit" full loading={upsertPr.isPending}>
+            Guardar marca
+          </Button>
+        </form>
+      </Card>
+
+      <Button variant="danger" full className="mt-6" onClick={() => void logout()}>
+        <IconLogout className="h-5 w-5" />
+        Cerrar sesión
+      </Button>
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+    </>
+  );
+}

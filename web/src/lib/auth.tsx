@@ -14,6 +14,9 @@ interface AuthState {
   clearNotice: () => void;
   login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  /** Vuelve a pedir /auth/me — se usa tras subir/borrar la foto de perfil para que
+   *  `has_avatar` quede al día sin forzar un logout/login. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -89,6 +92,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const refreshUser = useCallback(async () => {
+    if (!tokenStore.get()) return;
+    try {
+      const me = await apiFetch<User>("/auth/me");
+      setUser(me);
+    } catch {
+      /* si el token ya no sirve, apiFetch ya disparó el logout global */
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       // Revocación real del lado del servidor (avanza token_version): invalida este token
@@ -101,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reset]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, notice, clearNotice: () => setNotice(null), login, logout }),
-    [user, loading, notice, login, logout],
+    () => ({ user, loading, notice, clearNotice: () => setNotice(null), login, logout, refreshUser }),
+    [user, loading, notice, login, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

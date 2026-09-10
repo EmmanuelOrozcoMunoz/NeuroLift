@@ -125,3 +125,61 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
 }
+
+/** Sube un archivo (multipart/form-data). Nunca se fija Content-Type a mano: el navegador
+ *  tiene que generar el boundary del multipart, cosa que no puede hacer si el header ya
+ *  viene puesto. La validación real (tipo/tamaño/contenido) la hace el backend; esto solo
+ *  transporta el archivo. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const token = tokenStore.get();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { method: "POST", headers, body: formData });
+  } catch {
+    throw new ApiError(0, "Sin conexión con el servidor. Revisa tu red e intenta de nuevo.");
+  }
+
+  if (response.status === 401) {
+    onUnauthorized();
+    throw new ApiError(401, "Tu sesión expiró o fue cerrada. Inicia sesión de nuevo.");
+  }
+  if (response.status === 429) {
+    throw new ApiError(429, "Demasiadas subidas seguidas. Espera un momento e intenta de nuevo.");
+  }
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      /* respuesta sin JSON */
+    }
+    throw new ApiError(response.status, extractDetail(payload) ?? `Error ${response.status}`, payload);
+  }
+
+  return (await response.json()) as T;
+}
+
+/**
+ * Trae un recurso binario protegido (requiere el header Authorization) como Blob. Se usa
+ * para mostrar la foto de perfil: un <img src="..."> normal no puede llevar ese header, así
+ * que se descarga con fetch y se convierte en un object URL (ver useAvatarUrl).
+ */
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const token = tokenStore.get();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_URL}${path}`, { headers });
+  if (response.status === 401) {
+    onUnauthorized();
+    throw new ApiError(401, "Tu sesión expiró o fue cerrada.");
+  }
+  if (!response.ok) throw new ApiError(response.status, `Error ${response.status}`);
+  return response.blob();
+}

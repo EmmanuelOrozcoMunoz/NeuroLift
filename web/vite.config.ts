@@ -11,7 +11,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
+      includeAssets: ["favicon.svg"],
       manifest: {
         name: "NeuroLift",
         short_name: "NeuroLift",
@@ -24,13 +24,12 @@ export default defineConfig({
         background_color: "#0b0f14",
         theme_color: "#0b0f14",
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "/icon.svg", sizes: "192x192 512x512", type: "image/svg+xml" },
+          { src: "/icon-maskable.svg", sizes: "192x192 512x512", type: "image/svg+xml", purpose: "maskable" },
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,css,html,svg,woff2}"],
         // El shell se sirve desde caché para que la app abra sin red; los datos de la API
         // NUNCA se cachean aquí (van con token y cambian a cada rato) — de eso se encarga
         // TanStack Query en memoria.
@@ -48,6 +47,10 @@ export default defineConfig({
     port: 5173,
     // host: true -> expone el dev server en la red local para poder probar desde el celular
     host: true,
+    // Vite rechaza por defecto peticiones con un Host header que no reconoce (protección
+    // contra DNS rebinding). Necesario para servir detrás de un túnel (Cloudflare/ngrok),
+    // cuyo dominio cambia cada vez que se reinicia. Solo aplica al servidor de DESARROLLO.
+    allowedHosts: true,
   },
   build: {
     target: "es2022",

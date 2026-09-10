@@ -1,0 +1,156 @@
+<#
+.SINOPSIS
+  Regenera los túneles de Cloudflare (backend + frontend) para probar NeuroLift desde el
+  celular con una URL pública, y reinicia el backend y el dev server de Vite ya apuntando
+  a esa URL nueva.
+
+.USO
+  Desde la raíz del repo, en una terminal de PowerShell:
+    .\regenerar-tunel.ps1
+
+  Si Windows se queja de la política de ejecución de scripts, corre en vez esto:
+    powershell -ExecutionPolicy Bypass -File .\regenerar-tunel.ps1
+
+.NOTA
+  Los links de trycloudflare.com son gratuitos y no requieren cuenta, pero son ALEATORIOS
+  cada vez que se relanza el túnel — es justo lo que este script hace, así que después de
+  correrlo tendrás links NUEVOS. Compártele al celular los que imprima al final.
+#>
+
+$ErrorActionPreference = "Stop"
+$repoRoot = $PSScriptRoot
+$cloudflared = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+if (-not (Test-Path $cloudflared)) {
+    # algunas instalaciones de winget lo dejan en Program Files (sin x86)
+    $cloudflared = "C:\Program Files\cloudflared\cloudflared.exe"
+}
+if (-not (Test-Path $cloudflared)) {
+    $cmd = Get-Command cloudflared -ErrorAction SilentlyContinue
+    if ($cmd) { $cloudflared = $cmd.Source }
+}
+if (-not (Test-Path $cloudflared)) {
+    Write-Host "No se encontró cloudflared.exe. Instálalo con: winget install --id Cloudflare.cloudflared" -ForegroundColor Red
+    exit 1
+}
+
+$logsDir = Join-Path $repoRoot ".tunnels"
+New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
+$backendLog = Join-Path $logsDir "backend.log"
+$frontendLog = Join-Path $logsDir "frontend.log"
+Remove-Item $backendLog, $frontendLog -ErrorAction SilentlyContinue
+
+Write-Host "1) Deteniendo túneles y servidores anteriores..." -ForegroundColor Cyan
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+# Matar solo por el PID que tiene el puerto en este instante NO basta: uvicorn --reload separa
+# un proceso "padre" (vigila archivos) de un "hijo" (el que de verdad sirve peticiones, vía
+# multiprocessing en Windows). Si solo se mata al hijo, el padre queda vivo sin nada escuchando
+# y en la siguiente corrida vuelve a competir por el puerto — o peor, un hijo viejo con el
+# .env de ANTES queda huérfano reteniendo el puerto con la config vieja (CORS desactualizado).
+# Por eso aquí se matan por NOMBRE DE COMANDO: cualquier proceso de este repo con "uvicorn" en
+# su línea de comando, y cualquier worker "multiprocessing.spawn" (que en este proyecto solo
+# lo genera el --reload de uvicorn).
+Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*uvicorn*" -or $_.CommandLine -like "*multiprocessing.spawn*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+foreach ($port in 8000, 5173) {
+    $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    foreach ($c in $conns) {
+        Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+}
+Start-Sleep -Seconds 2
+
+Write-Host "2) Abriendo túneles de Cloudflare (todavía sin backend/frontend corriendo, es normal)..." -ForegroundColor Cyan
+Start-Process -WindowStyle Hidden -FilePath $cloudflared `
+    -ArgumentList "tunnel", "--url", "http://localhost:8000" `
+    -RedirectStandardError $backendLog
+Start-Process -WindowStyle Hidden -FilePath $cloudflared `
+    -ArgumentList "tunnel", "--url", "http://localhost:5173" `
+    -RedirectStandardError $frontendLog
+
+Write-Host "   Esperando a que Cloudflare asigne las URLs..." -ForegroundColor DarkGray
+$backendUrl = $null
+$frontendUrl = $null
+for ($i = 0; $i -lt 15; $i++) {
+    Start-Sleep -Seconds 1
+    if (-not $backendUrl -and (Test-Path $backendLog)) {
+        $m = Select-String -Path $backendLog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" | Select-Object -First 1
+        if ($m) { $backendUrl = $m.Matches[0].Value }
+    }
+    if (-not $frontendUrl -and (Test-Path $frontendLog)) {
+        $m = Select-String -Path $frontendLog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" | Select-Object -First 1
+        if ($m) { $frontendUrl = $m.Matches[0].Value }
+    }
+    if ($backendUrl -and $frontendUrl) { break }
+}
+
+if (-not $backendUrl -or -not $frontendUrl) {
+    Write-Host "No se pudieron leer las URLs a tiempo. Revisa los logs en $logsDir" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "   Backend:  $backendUrl" -ForegroundColor Green
+Write-Host "   Frontend: $frontendUrl" -ForegroundColor Green
+
+Write-Host "3) Actualizando configuración (.env y web\.env.development)..." -ForegroundColor Cyan
+
+$envDevPath = Join-Path $repoRoot "web\.env.development"
+$envDevContent = Get-Content $envDevPath -Raw
+# (?m)^ ancla al INICIO de línea: así no toca la línea comentada de ejemplo más abajo
+# (que también contiene el texto "VITE_API_URL=..." pero precedido de "# ").
+$envDevContent = $envDevContent -replace "(?m)^VITE_API_URL=\S+", "VITE_API_URL=$backendUrl"
+Set-Content -Path $envDevPath -Value $envDevContent -NoNewline
+
+$envPath = Join-Path $repoRoot ".env"
+$envLines = Get-Content $envPath
+$newLines = @()
+foreach ($line in $envLines) {
+    if ($line -like "CORS_ORIGINS=*") {
+        $origins = $line.Substring(13) -split "," | Where-Object { $_ -and ($_ -notlike "*trycloudflare.com*") }
+        $origins = @($origins) + $frontendUrl
+        $newLines += "CORS_ORIGINS=" + ($origins -join ",")
+    }
+    else {
+        $newLines += $line
+    }
+}
+Set-Content -Path $envPath -Value $newLines
+
+Write-Host "4) Levantando backend y frontend con la configuración nueva..." -ForegroundColor Cyan
+Start-Process -WindowStyle Hidden -FilePath "$repoRoot\venv\Scripts\python.exe" `
+    -ArgumentList "-m", "uvicorn", "backend.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000" `
+    -WorkingDirectory $repoRoot
+Start-Process -WindowStyle Hidden -FilePath "node" `
+    -ArgumentList "node_modules/vite/bin/vite.js", "--port", "5173", "--host" `
+    -WorkingDirectory (Join-Path $repoRoot "web")
+
+Start-Sleep -Seconds 5
+
+Write-Host "5) Verificando..." -ForegroundColor Cyan
+try {
+    $r1 = Invoke-WebRequest -Uri $backendUrl -UseBasicParsing -TimeoutSec 10
+    Write-Host "   Backend  -> $($r1.StatusCode)" -ForegroundColor Green
+} catch {
+    Write-Host "   Backend  -> todavía no responde, dale unos segundos más y reintenta en el navegador" -ForegroundColor Yellow
+}
+try {
+    $r2 = Invoke-WebRequest -Uri $frontendUrl -UseBasicParsing -TimeoutSec 10
+    Write-Host "   Frontend -> $($r2.StatusCode)" -ForegroundColor Green
+} catch {
+    Write-Host "   Frontend -> todavía no responde, dale unos segundos más y reintenta en el navegador" -ForegroundColor Yellow
+}
+
+# Si por lo que sea quedó más de un proceso escuchando el mismo puerto, uno de los dos tiene
+# el .env viejo (típicamente el CORS desactualizado) — mejor avisar que fallar en silencio.
+$backendOwners = @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)
+if ($backendOwners.Count -gt 1) {
+    Write-Host "   AVISO: hay $($backendOwners.Count) procesos escuchando en el puerto 8000 - corre el script de nuevo." -ForegroundColor Red
+}
+
+Write-Host ""
+Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host " Abre esto en el celular:"
+Write-Host " $frontendUrl" -ForegroundColor Green
+Write-Host "===========================================" -ForegroundColor Cyan

@@ -1,0 +1,160 @@
+import { useQueries } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+
+import { PageHeader } from "@/components/AppShell";
+import { IconChevronRight } from "@/components/icons";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
+import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
+import { apiFetch } from "@/lib/api";
+import { useAthletes, useGroups } from "@/lib/coachQueries";
+import { shortDate } from "@/lib/dates";
+import { usePersonalRecords, useUpsertPersonalRecord, useMesocycles } from "@/lib/queries";
+import type { GroupDetail } from "@/lib/types";
+
+export default function AthleteDetail() {
+  const { athleteId } = useParams<{ athleteId: string }>();
+  const athletes = useAthletes();
+  const athlete = athletes.data?.find((a) => a.id === athleteId);
+
+  const groups = useGroups();
+  const groupDetails = useQueries({
+    queries: (groups.data ?? []).map((group) => ({
+      queryKey: ["group", group.id],
+      queryFn: () => apiFetch<GroupDetail>(`/groups/${group.id}`),
+    })),
+  });
+  const myGroup = (groups.data ?? []).find((_group, index) =>
+    groupDetails[index]?.data?.members.some((m) => m.id === athleteId),
+  );
+
+  const mesocycles = useMesocycles(athleteId ?? "");
+  const prs = usePersonalRecords(athleteId ?? "");
+  const upsertPr = useUpsertPersonalRecord(athleteId ?? "");
+
+  const [exercise, setExercise] = useState("");
+  const [weight, setWeight] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function handleSubmitPr(event: React.FormEvent) {
+    event.preventDefault();
+    const kg = Number(weight);
+    if (!exercise.trim() || !(kg > 0)) return;
+    upsertPr.mutate(
+      { exercise_name: exercise.trim(), max_weight_kg: kg },
+      {
+        onSuccess: (response) => {
+          setToast(response.message ?? "¡Marca guardada!");
+          setExercise("");
+          setWeight("");
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <PageHeader title={athlete?.full_name ?? "Atleta"} subtitle={athlete?.email} back="/coach/atletas" />
+
+      <Card className="mb-4">
+        <p className="mb-3 font-bold">📈 Récords (PRs)</p>
+        {prs.isPending && <LoadingList rows={1} />}
+        {!prs.isPending && prs.error && <ErrorState error={prs.error} onRetry={() => void prs.refetch()} />}
+        {!prs.isPending && !prs.error && (prs.data?.length ?? 0) === 0 && (
+          <p className="text-sm text-muted">Todavía no tiene marcas registradas.</p>
+        )}
+        {!prs.isPending && (prs.data?.length ?? 0) > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {prs.data!.map((pr) => (
+              <div key={pr.id} className="rounded-xl bg-surface-2 p-2.5">
+                <p className="truncate text-xs font-semibold text-muted">{pr.exercise_name}</p>
+                <p className="text-base font-bold">{pr.max_weight_kg} kg</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmitPr} className="flex items-end gap-2">
+          <Field
+            label="Ejercicio"
+            placeholder="Back Squat"
+            value={exercise}
+            onChange={(e) => setExercise(e.target.value)}
+            className="grow"
+          />
+          <Field
+            label="kg"
+            type="number"
+            inputMode="decimal"
+            step="2.5"
+            min="0"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className="w-20"
+          />
+          <Button type="submit" loading={upsertPr.isPending}>
+            Guardar
+          </Button>
+        </form>
+      </Card>
+
+      <div className="mb-2 flex items-baseline justify-between">
+        <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>
+        {!myGroup && <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>}
+      </div>
+
+      {myGroup ? (
+        <Card className="border-brand/30 bg-brand-soft/30">
+          <p className="text-sm">
+            Este atleta pertenece al grupo <strong>{myGroup.name}</strong>. Programa y edita su
+            mesociclo desde ahí para que los cambios se puedan aplicar a todo el equipo.
+          </p>
+          <Link to={`/coach/grupos/${myGroup.id}`} className="mt-3 inline-block text-sm font-semibold text-brand">
+            Ir al grupo →
+          </Link>
+        </Card>
+      ) : (
+        <>
+          {mesocycles.isPending && <LoadingList rows={2} />}
+          {!mesocycles.isPending && mesocycles.error && (
+            <ErrorState error={mesocycles.error} onRetry={() => void mesocycles.refetch()} />
+          )}
+          {!mesocycles.isPending && !mesocycles.error && (mesocycles.data?.length ?? 0) === 0 && (
+            <EmptyState title="Todavía no tiene mesociclos">
+              Créale uno con el botón de arriba.
+            </EmptyState>
+          )}
+          <div className="space-y-3">
+            {mesocycles.data
+              ?.filter((m) => !m.group_id)
+              .map((meso) => (
+                <Link
+                  key={meso.id}
+                  to={`/coach/mesociclos/${meso.id}`}
+                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+                >
+                  <div className="min-w-0 grow">
+                    <p className="truncate font-bold">{meso.name ?? "Rutina"}</p>
+                    <p className="text-sm text-muted">
+                      {meso.discipline} · desde {shortDate(meso.start_date)}
+                    </p>
+                  </div>
+                  <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />
+                </Link>
+              ))}
+          </div>
+        </>
+      )}
+
+      <CreateMesocycleSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        target={{ type: "athlete", id: athleteId! }}
+        onCreated={(message) => setToast(message)}
+      />
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+    </>
+  );
+}

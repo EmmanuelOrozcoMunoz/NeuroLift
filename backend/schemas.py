@@ -48,6 +48,7 @@ class UserResponse(BaseModel):
     email: str
     body_weight: float | None = None
     role: str # ¡Agregamos el rol aquí!
+    has_avatar: bool = False  # true -> el cliente puede pedir GET /users/{id}/avatar
 
     class Config:
         from_attributes = True

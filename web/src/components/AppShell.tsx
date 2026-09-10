@@ -2,14 +2,30 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { IconBack, IconDumbbell, IconOffline, IconStore, IconToday, IconUser } from "@/components/icons";
+import {
+  IconBack,
+  IconDumbbell,
+  IconOffline,
+  IconStore,
+  IconToday,
+  IconUser,
+  IconUsers,
+} from "@/components/icons";
 import { cx } from "@/components/ui";
+import { useCurrentUser } from "@/lib/auth";
 
-const NAV_ITEMS = [
+const ATHLETE_NAV = [
   { to: "/", label: "Hoy", icon: IconToday },
   { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
   { to: "/planes", label: "Planes", icon: IconStore },
   { to: "/perfil", label: "Perfil", icon: IconUser },
+];
+
+const COACH_NAV = [
+  { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
+  { to: "/coach/planes", label: "Planes", icon: IconStore },
+  { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
 
 function useOnline(): boolean {
@@ -69,6 +85,8 @@ export function PageHeader({
 
 export function AppShell() {
   const online = useOnline();
+  const user = useCurrentUser();
+  const navItems = user.role === "coach" ? COACH_NAV : ATHLETE_NAV;
 
   return (
     <div className="mx-auto min-h-dvh max-w-md px-4">
@@ -86,7 +104,7 @@ export function AppShell() {
 
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ink/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-md">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

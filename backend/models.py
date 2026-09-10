@@ -20,7 +20,15 @@ class User(Base):
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
+    # Nombre de archivo ALEATORIO (uuid4 + extensión detectada por magic number, nunca el
+    # nombre que subió el usuario) de la foto de perfil ya re-renderizada y sin metadatos.
+    # Vive en backend/uploads/avatars/ (fuera de cualquier raíz servida como estática) — ver
+    # AVATAR_DIR en main.py. None = sin foto de perfil.
+    avatar_filename = Column(String(255), nullable=True)
 
+    @property
+    def has_avatar(self) -> bool:
+        return self.avatar_filename is not None
 
     # Relaciones
     # foreign_keys explícito: Mesocycle tiene DOS FKs a users (user_id = dueño del mesociclo,

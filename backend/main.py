@@ -1,8 +1,9 @@
 import logging
 import os
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from pathlib import Path
+from fastapi import FastAPI, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from typing import List
@@ -18,7 +19,7 @@ from slowapi.errors import RateLimitExceeded
 import jwt
 
 from backend.database import SessionLocal, engine
-from backend import models, schemas, fitness_scoring, ai_agent
+from backend import avatars, models, schemas, fitness_scoring, ai_agent
 
 load_dotenv()
 
@@ -54,7 +55,34 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 día (antes eran 7 días sin revocaci
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 _docs_enabled = ENVIRONMENT != "production"
 
+# Carpeta de fotos de perfil: fuera de cualquier raíz servida como estática (esta app no
+# expone ningún directorio del disco directamente — StaticFiles/app.mount no se usa en
+# ningún lado — así que ya está "fuera de la raíz web pública" por construcción; el único
+# camino para leer un archivo de aquí es el endpoint GET /users/{id}/avatar, que nunca
+# ejecuta el contenido, solo lo devuelve con su Content-Type real). Si este backend se
+# sirve alguna vez detrás de Nginx/Apache, hay que asegurarse de que ninguna `location`/alias
+# apunte a esta carpeta (o, si se hace, negar explícitamente la ejecución de scripts ahí).
+AVATAR_DIR = Path(__file__).resolve().parent / "uploads" / "avatars"
+
 limiter = Limiter(key_func=get_remote_address)
+
+
+def _ip_and_user_key(request: Request) -> str:
+    """Clave de rate limit por IP + usuario autenticado (no solo IP): decodifica el JWT del
+    header Authorization en un intento best-effort — si no hay token válido, usa solo la IP.
+    Así un solo usuario no puede evadir el límite cambiando de red, ni una IP compartida
+    (oficina, NAT) hace que un usuario agote la cuota de otro."""
+    ip = get_remote_address(request)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        try:
+            payload = jwt.decode(auth_header[7:], SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("id")
+            if user_id:
+                return f"{ip}:{user_id}"
+        except jwt.PyJWTError:
+            pass
+    return f"{ip}:anon"
 
 app = FastAPI(
     title="NeuroLift API",
@@ -274,6 +302,69 @@ def get_users(db: Session = Depends(get_db), current_user: models.User = Depends
 def get_athletes(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
     """Ruta para que el Coach vea a sus atletas en un menú desplegable."""
     return db.query(models.User).filter(models.User.role == "athlete").all()
+
+
+_AVATAR_CONTENT_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+@app.post("/users/me/avatar", response_model=schemas.UserResponse)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+async def upload_my_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Sube (o reemplaza) la foto de perfil del usuario autenticado. Solo uno mismo puede
+    subir su propia foto — no hay ruta equivalente para que un coach suba la de un atleta."""
+    raw = await avatars.read_and_validate_upload(file)
+    clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
+
+    nombre_anterior = current_user.avatar_filename
+    nuevo_nombre = avatars.save_avatar(AVATAR_DIR, clean_bytes, extension)
+
+    current_user.avatar_filename = nuevo_nombre
+    db.commit()
+    db.refresh(current_user)
+
+    # Se borra la anterior DESPUÉS de confirmar la nueva en la BD (si algo falla antes, la
+    # foto anterior sigue siendo válida en vez de quedar el usuario sin ninguna).
+    avatars.delete_avatar_if_exists(AVATAR_DIR, nombre_anterior)
+
+    security_logger.info("Foto de perfil actualizada: %s desde %s", current_user.email, _client_ip(request))
+    return current_user
+
+
+@app.delete("/users/me/avatar", response_model=schemas.MessageResponse)
+def delete_my_avatar(
+    db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    if not current_user.avatar_filename:
+        raise HTTPException(status_code=404, detail="No tienes foto de perfil.")
+    avatars.delete_avatar_if_exists(AVATAR_DIR, current_user.avatar_filename)
+    current_user.avatar_filename = None
+    db.commit()
+    return {"message": "Foto de perfil eliminada."}
+
+
+@app.get("/users/{user_id}/avatar")
+def get_user_avatar(
+    user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Cualquier usuario autenticado puede ver la foto de perfil de otro (no es información
+    sensible más allá del nombre, que ya es visible en toda la app)."""
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario or not usuario.avatar_filename:
+        raise HTTPException(status_code=404, detail="Este usuario no tiene foto de perfil.")
+
+    # Defensa en profundidad: el nombre siempre lo generamos nosotros (uuid4), pero por si
+    # algún dato corrupto llegara a tener un separador de ruta, nunca se sale de AVATAR_DIR.
+    path = (AVATAR_DIR / usuario.avatar_filename).resolve()
+    if path.parent != AVATAR_DIR.resolve() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Este usuario no tiene foto de perfil.")
+
+    media_type = _AVATAR_CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
 
 
 @app.get("/users/{user_id}/mesocycles/")
