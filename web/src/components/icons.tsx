@@ -122,6 +122,16 @@ export function IconTrash({ className = base }: IconProps) {
   );
 }
 
+export function IconImage({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" strokeLinejoin="round" />
+      <circle cx="9" cy="10" r="1.7" />
+      <path d="M4.5 16.5 9 12l3 3 4-4 3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function IconOffline({ className = base }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

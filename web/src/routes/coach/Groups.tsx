@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoverThumbnail } from "@/components/CoverImage";
 import { IconChevronRight } from "@/components/icons";
 import { Button, EmptyState, ErrorState, Field, LoadingList, Sheet } from "@/components/ui";
 import { useAthletes, useCreateGroup, useGroups } from "@/lib/coachQueries";
@@ -120,6 +121,7 @@ export default function Groups() {
             to={`/coach/grupos/${group.id}`}
             className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
           >
+            <CoverThumbnail coverPath={`/groups/${group.id}/cover`} hasImage={group.has_cover_image} />
             <div className="min-w-0 grow">
               <p className="truncate font-bold">{group.name}</p>
               <p className="text-sm text-muted">{group.member_count} atleta(s)</p>

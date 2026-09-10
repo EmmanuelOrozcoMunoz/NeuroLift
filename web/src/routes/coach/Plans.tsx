@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoverThumbnail } from "@/components/CoverImage";
 import { WeekdayPicker } from "@/components/WeekdayPicker";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
 import { useCreatePlan, useDeletePlan, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
@@ -172,17 +173,20 @@ export default function Plans() {
         {data?.map((plan) => (
           <Card key={plan.id}>
             <div className="flex items-start justify-between gap-2">
-              <Link to={`/coach/planes/${plan.id}`} className="min-w-0 grow">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold">{plan.name}</span>
-                  <Badge tone={plan.is_published ? "done" : "neutral"}>
-                    {plan.is_published ? "Publicado" : "Borrador"}
-                  </Badge>
+              <Link to={`/coach/planes/${plan.id}`} className="flex min-w-0 grow items-center gap-3">
+                <CoverThumbnail coverPath={`/plans/${plan.id}/cover`} hasImage={plan.has_cover_image} />
+                <div className="min-w-0 grow">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold">{plan.name}</span>
+                    <Badge tone={plan.is_published ? "done" : "neutral"}>
+                      {plan.is_published ? "Publicado" : "Borrador"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted">
+                    {plan.discipline} · {plan.level} · {plan.weeks_count} sem ({plan.sessions_per_week}/sem) ·{" "}
+                    {formatPrice(plan.price)}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-muted">
-                  {plan.discipline} · {plan.level} · {plan.weeks_count} sem ({plan.sessions_per_week}/sem) ·{" "}
-                  {formatPrice(plan.price)}
-                </p>
               </Link>
             </div>
 

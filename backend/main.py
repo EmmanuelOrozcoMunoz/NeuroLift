@@ -63,8 +63,25 @@ _docs_enabled = ENVIRONMENT != "production"
 # sirve alguna vez detrás de Nginx/Apache, hay que asegurarse de que ninguna `location`/alias
 # apunte a esta carpeta (o, si se hace, negar explícitamente la ejecución de scripts ahí).
 AVATAR_DIR = Path(__file__).resolve().parent / "uploads" / "avatars"
+# Mismo razonamiento que AVATAR_DIR: fuera de cualquier raíz servida como estática, solo
+# legibles vía sus endpoints GET dedicados (/groups/{id}/cover, /plans/{id}/cover).
+GROUP_COVER_DIR = Path(__file__).resolve().parent / "uploads" / "group_covers"
+PLAN_COVER_DIR = Path(__file__).resolve().parent / "uploads" / "plan_covers"
 
 limiter = Limiter(key_func=get_remote_address)
+
+
+def _serve_image(directory: Path, filename: str | None, content_types: dict[str, str]):
+    """Sirve una imagen ya saneada (avatar/portada) por su nombre ALEATORIO guardado en BD.
+    Defensa en profundidad: el nombre siempre lo generamos nosotros (uuid4), pero por si algún
+    dato corrupto llegara a tener un separador de ruta, nunca se sale de `directory`."""
+    if not filename:
+        raise HTTPException(status_code=404, detail="No hay imagen.")
+    path = (directory / filename).resolve()
+    if path.parent != directory.resolve() or not path.is_file():
+        raise HTTPException(status_code=404, detail="No hay imagen.")
+    media_type = content_types.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
 
 
 def _ip_and_user_key(request: Request) -> str:
@@ -189,6 +206,28 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def _optional_current_user(request: Request, db: Session) -> models.User | None:
+    """Como get_current_user, pero nunca lanza: /auth/register es público (un atleta se
+    auto-registra sin token) y a la vez lo usa un coach YA logueado para dar de alta a sus
+    propios atletas (con su token en el header). Si no hay header, o el token es inválido,
+    expiró o fue revocado, simplemente se trata como registro anónimo (devuelve None) en vez
+    de rechazar la petición."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    try:
+        payload = jwt.decode(auth_header[7:], SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+        usuario = db.query(models.User).filter(models.User.email == email).first()
+        if not usuario or payload.get("tv", 0) != usuario.token_version:
+            return None
+        return usuario
+    except jwt.PyJWTError:
+        return None
+
+
 def require_coach(current_user: models.User = Depends(get_current_user)) -> models.User:
     """Dependencia para endpoints de gestión de coach (el rol 'admin' también pasa: tiene
     visibilidad y control total sobre la app)."""
@@ -204,10 +243,31 @@ def require_admin(current_user: models.User = Depends(get_current_user)) -> mode
     return current_user
 
 
-def ensure_owner_or_coach(owner_id: UUID, current_user: models.User):
-    """Verifica que el usuario autenticado sea coach/admin o el dueño del recurso."""
-    if current_user.role not in ("coach", "admin") and current_user.id != owner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
+def _coach_athlete_ids(db: Session, coach_id: UUID) -> set[UUID]:
+    """IDs de los atletas que este coach puede gestionar: los que él registró directamente
+    (User.coach_id) más los que son miembros de alguno de sus grupos. Es la definición única
+    de "mis atletas" — úsala en vez de reimplementar el criterio en cada endpoint."""
+    directos = db.query(models.User.id).filter(models.User.coach_id == coach_id)
+    de_grupos = (
+        db.query(models.User.id)
+        .join(models.group_members, models.group_members.c.user_id == models.User.id)
+        .join(models.Group, models.Group.id == models.group_members.c.group_id)
+        .filter(models.Group.coach_id == coach_id)
+    )
+    return {row[0] for row in directos.union(de_grupos).all()}
+
+
+def ensure_owner_or_coach(db: Session, owner_id: UUID | None, current_user: models.User):
+    """Verifica que el usuario autenticado sea el dueño del recurso, un admin, o un coach que
+    tenga a `owner_id` entre sus propios atletas (ver _coach_athlete_ids) — ya NO basta con
+    "ser coach": cada coach queda limitado a sus propios atletas/grupos."""
+    if current_user.role == "admin":
+        return
+    if owner_id is not None and current_user.id == owner_id:
+        return
+    if owner_id is not None and current_user.role == "coach" and owner_id in _coach_athlete_ids(db, current_user.id):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
 
 
 @app.get("/")
@@ -238,12 +298,20 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
     hashed_password = get_password_hash(user.password)
 
     if not db_user:
+        # Si quien llama es un coach YA autenticado (p. ej. desde "Registrar atleta" en su
+        # propio panel), el atleta nuevo queda vinculado a él automáticamente — así aparece de
+        # inmediato entre "sus" atletas. Si es un registro anónimo (el atleta se dio de alta
+        # solo), queda sin coach hasta que alguno lo agregue a un grupo o lo reclame.
+        creador = _optional_current_user(request, db)
+        coach_id = creador.id if (user.role == "athlete" and creador is not None and creador.role == "coach") else None
+
         nuevo_usuario = models.User(
             email=user.email,
             full_name=user.full_name,
             hashed_password=hashed_password,
             role=user.role,
             body_weight=user.body_weight,
+            coach_id=coach_id,
         )
         db.add(nuevo_usuario)
         db.commit()
@@ -294,14 +362,39 @@ def logout_user(
 # --- ENDPOINTS PARA USUARIOS ---
 
 @app.get("/users/", response_model=List[schemas.UserResponse])
-def get_users(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
+def get_users(db: Session = Depends(get_db), current_user: models.User = Depends(require_admin)):
+    """Listado global de usuarios (todos los roles): solo un admin lo necesita — un coach ya
+    tiene su propio listado acotado en GET /users/athletes."""
     return db.query(models.User).all()
 
 
 @app.get("/users/athletes", response_model=List[schemas.UserResponse])
 def get_athletes(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    """Ruta para que el Coach vea a sus atletas en un menú desplegable."""
-    return db.query(models.User).filter(models.User.role == "athlete").all()
+    """Los atletas del coach autenticado (los que él registró + los de sus grupos) para su menú
+    desplegable. Un admin sigue viendo a todos."""
+    if current_user.role == "admin":
+        return db.query(models.User).filter(models.User.role == "athlete").all()
+    ids = _coach_athlete_ids(db, current_user.id)
+    if not ids:
+        return []
+    return db.query(models.User).filter(models.User.id.in_(ids)).all()
+
+
+@app.get("/users/search", response_model=schemas.UserResponse)
+@limiter.limit("30/hour", key_func=_ip_and_user_key)
+def search_athlete_by_email(
+    request: Request, email: str, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Busca UN atleta por correo EXACTO (case-insensitive) — para que un coach pueda encontrar
+    a un atleta que se auto-registró por su cuenta y agregarlo a un grupo, sin exponerle el
+    listado completo de usuarios de la plataforma (eso rompería el aislamiento por coach).
+    Limitado por hora para que no se use como herramienta de enumeración masiva de correos."""
+    usuario = db.query(models.User).filter(
+        models.User.role == "athlete", models.User.email.ilike(email.strip())
+    ).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="No hay ningún atleta registrado con ese correo.")
+    return usuario
 
 
 _AVATAR_CONTENT_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
@@ -371,7 +464,7 @@ def get_user_avatar(
 def obtener_mesociclos_usuario(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    ensure_owner_or_coach(user_id, current_user)
+    ensure_owner_or_coach(db, user_id, current_user)
     return db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id).all()
 
 
@@ -383,7 +476,7 @@ def upsert_personal_record(
     current_user: models.User = Depends(get_current_user),
 ):
     """Añade una nueva marca o la actualiza si el ejercicio ya existe."""
-    ensure_owner_or_coach(user_id, current_user)
+    ensure_owner_or_coach(db, user_id, current_user)
     pr_existente = db.query(models.PersonalRecord).filter(
         models.PersonalRecord.user_id == user_id,
         models.PersonalRecord.exercise_name == record.exercise_name,
@@ -409,7 +502,7 @@ def upsert_personal_record(
 def obtener_marcas_atleta(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    ensure_owner_or_coach(user_id, current_user)
+    ensure_owner_or_coach(db, user_id, current_user)
     return db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
 
 
@@ -424,7 +517,7 @@ def update_fitness_benchmarks(
 ):
     """Guarda las marcas que el atleta (dueño) o su coach hayan llenado, y devuelve el
     Fit Level ya recalculado. Solo se tocan los campos enviados (no None)."""
-    ensure_owner_or_coach(user_id, current_user)
+    ensure_owner_or_coach(db, user_id, current_user)
 
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
     if not usuario:
@@ -460,7 +553,7 @@ def get_fitness_level(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     """Devuelve las marcas guardadas y el Fit Level calculado a partir de ellas."""
-    ensure_owner_or_coach(user_id, current_user)
+    ensure_owner_or_coach(db, user_id, current_user)
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -500,7 +593,9 @@ def create_group(
 ):
     nuevo_grupo = models.Group(coach_id=current_user.id, name=req.name)
     if req.athlete_ids:
-        atletas = db.query(models.User).filter(models.User.id.in_(req.athlete_ids)).all()
+        atletas = db.query(models.User).filter(
+            models.User.id.in_(req.athlete_ids), models.User.role == "athlete"
+        ).all()
         nuevo_grupo.members = atletas
     db.add(nuevo_grupo)
     db.commit()
@@ -519,7 +614,7 @@ def list_my_groups(db: Session = Depends(get_db), current_user: models.User = De
     return [
         schemas.GroupSummaryResponse(
             id=g.id, name=g.name, created_at=g.created_at, member_count=len(g.members),
-            coach_name=g.coach.full_name,
+            coach_name=g.coach.full_name, has_cover_image=g.has_cover_image,
         )
         for g in grupos
     ]
@@ -530,6 +625,51 @@ def get_group_detail(
     group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
     return _get_owned_group(db, group_id, current_user)
+
+
+@app.post("/groups/{group_id}/cover", response_model=schemas.GroupResponse)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+async def upload_group_cover(
+    request: Request,
+    group_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Sube (o reemplaza) la foto de portada del grupo — mismo pipeline de saneo que el avatar
+    de usuario (magic-number, re-render sin metadatos, nombre aleatorio)."""
+    grupo = _get_owned_group(db, group_id, current_user)
+    raw = await avatars.read_and_validate_upload(file)
+    clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
+
+    nombre_anterior = grupo.cover_image_filename
+    nuevo_nombre = avatars.save_avatar(GROUP_COVER_DIR, clean_bytes, extension)
+    grupo.cover_image_filename = nuevo_nombre
+    db.commit()
+    db.refresh(grupo)
+    avatars.delete_avatar_if_exists(GROUP_COVER_DIR, nombre_anterior)
+    return grupo
+
+
+@app.delete("/groups/{group_id}/cover", response_model=schemas.MessageResponse)
+def delete_group_cover(
+    group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    grupo = _get_owned_group(db, group_id, current_user)
+    if not grupo.cover_image_filename:
+        raise HTTPException(status_code=404, detail="Este grupo no tiene foto de portada.")
+    avatars.delete_avatar_if_exists(GROUP_COVER_DIR, grupo.cover_image_filename)
+    grupo.cover_image_filename = None
+    db.commit()
+    return {"message": "Foto de portada eliminada."}
+
+
+@app.get("/groups/{group_id}/cover")
+def get_group_cover(
+    group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    grupo = _get_owned_group(db, group_id, current_user)
+    return _serve_image(GROUP_COVER_DIR, grupo.cover_image_filename, _AVATAR_CONTENT_TYPES)
 
 
 def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user_id: UUID) -> models.Mesocycle:
@@ -569,6 +709,7 @@ def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user
                 session_id=nueva_sesion.id,
                 exercise_id=set_ref.exercise_id,
                 set_order=set_ref.set_order,
+                block=set_ref.block,
                 prescribed_reps=set_ref.prescribed_reps,
                 prescribed_weight=set_ref.prescribed_weight,
                 prescribed_percentage=set_ref.prescribed_percentage,
@@ -591,7 +732,9 @@ def add_group_members(
     para que aparezca de inmediato en su propia pestaña de edición."""
     grupo = _get_owned_group(db, group_id, current_user)
     existentes = {m.id for m in grupo.members}
-    nuevos = db.query(models.User).filter(models.User.id.in_(req.athlete_ids)).all()
+    nuevos = db.query(models.User).filter(
+        models.User.id.in_(req.athlete_ids), models.User.role == "athlete"
+    ).all()
     atletas_nuevos = [a for a in nuevos if a.id not in existentes]
 
     for atleta in atletas_nuevos:
@@ -724,6 +867,18 @@ def _get_or_create_exercise(db: Session, name: str) -> models.Exercise:
     return ejercicio
 
 
+_BLOQUES_VALIDOS = {"warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"}
+
+
+def _clean_ai_block(value) -> str | None:
+    """Normaliza el bloque que devuelve la IA: minúsculas, recortado, y descartado si no es uno
+    de los valores válidos (ver schemas.Bloque) — mejor guardar None que un string inventado."""
+    if not isinstance(value, str):
+        return None
+    limpio = value.strip().lower()
+    return limpio if limpio in _BLOQUES_VALIDOS else None
+
+
 @app.post("/groups/{group_id}/sessions/bulk-add-exercise")
 def add_exercise_to_group_session(
     group_id: UUID,
@@ -756,6 +911,7 @@ def add_exercise_to_group_session(
                 prescribed_reps=req.prescribed_reps,
                 rpe=req.rpe,
                 prescribed_weight=req.prescribed_weight,
+                block=req.block,
             ))
         resultados.append({"full_name": meso.user.full_name, "status": "añadido"})
 
@@ -808,11 +964,14 @@ def update_exercise_in_group_session(
             sets_existentes[i].prescribed_reps = req.prescribed_reps
             sets_existentes[i].rpe = req.rpe
             sets_existentes[i].prescribed_weight = req.prescribed_weight
+            if req.block is not None:
+                sets_existentes[i].block = req.block
 
         if req.prescribed_sets < num_original:
             for extra in sets_existentes[req.prescribed_sets:]:
                 db.delete(extra)
         elif req.prescribed_sets > num_original:
+            bloque_nuevas = req.block if req.block is not None else sets_existentes[0].block
             for i in range(num_original, req.prescribed_sets):
                 db.add(models.Set(
                     session_id=sesion.id,
@@ -821,6 +980,7 @@ def update_exercise_in_group_session(
                     prescribed_reps=req.prescribed_reps,
                     rpe=req.rpe,
                     prescribed_weight=req.prescribed_weight,
+                    block=bloque_nuevas,
                 ))
 
         resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
@@ -881,6 +1041,7 @@ def create_mesocycle(
     db_user = db.query(models.User).filter(models.User.id == mesocycle.user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    ensure_owner_or_coach(db, db_user.id, current_user)
 
     new_meso = models.Mesocycle(
         user_id=mesocycle.user_id,
@@ -896,8 +1057,15 @@ def create_mesocycle(
 
 @app.get("/mesocycles/", response_model=List[schemas.MesocycleResponse])
 def listar_mesociclos(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    """Devuelve la lista de todos los mesociclos básicos (sin incluir plantillas de planes)."""
-    return db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False).all()
+    """Mesociclos básicos (sin plantillas de planes). Un admin los ve todos; un coach, solo los
+    de sus propios atletas."""
+    query = db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False)
+    if current_user.role != "admin":
+        ids = _coach_athlete_ids(db, current_user.id)
+        if not ids:
+            return []
+        query = query.filter(models.Mesocycle.user_id.in_(ids))
+    return query.all()
 
 
 @app.get("/mesocycles/{mesocycle_id}", response_model=schemas.MesocycleFullResponse)
@@ -914,7 +1082,7 @@ def get_full_mesocycle(
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
 
-    ensure_owner_or_coach(meso.user_id, current_user)
+    ensure_owner_or_coach(db, meso.user_id, current_user)
 
     # Ordenamos sesiones por fecha y series por su set_order
     meso.sessions.sort(key=lambda s: s.scheduled_date)
@@ -971,6 +1139,11 @@ def create_manual_mesocycle(
     req: schemas.MesocycleManualCreate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
     """Crea el cascarón del mesociclo y las sesiones vacías según el calendario."""
+    db_user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    ensure_owner_or_coach(db, db_user.id, current_user)
+
     resultado = _build_manual_mesocycle(
         db, req.user_id, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days
     )
@@ -1011,6 +1184,7 @@ def create_session(
     db_meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == session.mesocycle_id).first()
     if not db_meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+    ensure_owner_or_coach(db, db_meso.user_id, current_user)
 
     new_session = models.Session(
         mesocycle_id=session.mesocycle_id,
@@ -1031,13 +1205,21 @@ def update_set(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_coach),
 ):
-    db_set = db.query(models.Set).filter(models.Set.id == set_id).first()
+    db_set = (
+        db.query(models.Set)
+        .options(joinedload(models.Set.session).joinedload(models.Session.mesocycle))
+        .filter(models.Set.id == set_id)
+        .first()
+    )
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie (Set) no encontrada")
+    ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
 
     db_set.prescribed_reps = set_update.prescribed_reps
     db_set.rpe = set_update.rpe
     db_set.prescribed_weight = set_update.prescribed_weight
+    if set_update.block is not None:
+        db_set.block = set_update.block
 
     if set_update.exercise_name:
         ejercicio = db.query(models.Exercise).filter(models.Exercise.name == set_update.exercise_name).first()
@@ -1059,9 +1241,15 @@ def agregar_serie(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_coach),
 ):
-    sesion = db.query(models.Session).filter(models.Session.id == session_id).first()
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
 
     ejercicio = db.query(models.Exercise).filter(models.Exercise.name == req.exercise_name).first()
     if not ejercicio:
@@ -1079,6 +1267,7 @@ def agregar_serie(
         prescribed_reps=req.prescribed_reps,
         rpe=req.rpe,
         prescribed_weight=req.prescribed_weight,
+        block=req.block,
     )
     db.add(nuevo_set)
     db.commit()
@@ -1087,9 +1276,15 @@ def agregar_serie(
 
 @app.delete("/sets/{set_id}")
 def delete_set(set_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    db_set = db.query(models.Set).filter(models.Set.id == set_id).first()
+    db_set = (
+        db.query(models.Set)
+        .options(joinedload(models.Set.session).joinedload(models.Session.mesocycle))
+        .filter(models.Set.id == set_id)
+        .first()
+    )
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie no encontrada")
+    ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
 
     db.delete(db_set)
     db.commit()
@@ -1115,7 +1310,7 @@ def log_set_performance(
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie no encontrada")
 
-    ensure_owner_or_coach(db_set.session.mesocycle.user_id, current_user)
+    ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
 
     db_set.actual_reps = log.actual_reps
     db_set.actual_weight = log.actual_weight
@@ -1141,7 +1336,7 @@ def complete_session(
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
-    ensure_owner_or_coach(sesion.mesocycle.user_id, current_user)
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
 
     sesion.status = "completed"
     sesion.completed_date = datetime.utcnow()
@@ -1174,7 +1369,7 @@ def adapt_session_to_available_time(
     if not original:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
-    ensure_owner_or_coach(original.mesocycle.user_id, current_user)
+    ensure_owner_or_coach(db, original.mesocycle.user_id, current_user)
 
     if original.parent_session_id is not None:
         raise HTTPException(
@@ -1198,6 +1393,7 @@ def adapt_session_to_available_time(
             "prescribed_reps": s.prescribed_reps,
             "rpe": s.rpe,
             "prescribed_weight": s.prescribed_weight,
+            "block": s.block,
         }
         for s in original.sets
     ]
@@ -1241,6 +1437,7 @@ def adapt_session_to_available_time(
             prescribed_reps=ej_data.get("prescribed_reps", 1),
             rpe=ej_data.get("rpe_target"),
             prescribed_weight=ej_data.get("prescribed_weight"),
+            block=_clean_ai_block(ej_data.get("block")),
         ))
         orden += 1
 
@@ -1260,6 +1457,7 @@ def generate_and_save_session(
     meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == req.mesocycle_id).first()
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+    ensure_owner_or_coach(db, meso.user_id, current_user)
 
     from backend.ai_agent import generate_workout_session
     rutina_ai = generate_workout_session(
@@ -1294,6 +1492,7 @@ def generate_and_save_session(
             set_order=orden,
             prescribed_reps=ex_data["prescribed_reps"],
             rpe=ex_data["rpe_target"],
+            block=_clean_ai_block(ex_data.get("block")),
         )
         db.add(nuevo_set)
         orden += 1
@@ -1424,6 +1623,8 @@ def _build_smart_mesocycle(
                             except (ValueError, TypeError):
                                 peso_limpio = None
 
+                        bloque_limpio = _clean_ai_block(ej_data.get("block"))
+
                         for _ in range(num_series):
                             nuevo_set = models.Set(
                                 session_id=nueva_sesion.id,
@@ -1432,6 +1633,7 @@ def _build_smart_mesocycle(
                                 prescribed_reps=reps,
                                 rpe=rpe_limpio,
                                 prescribed_weight=peso_limpio,
+                                block=bloque_limpio,
                             )
                             db.add(nuevo_set)
                             contador_orden += 1
@@ -1458,6 +1660,7 @@ def generate_and_save_smart_mesocycle(
     atleta = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not atleta:
         raise HTTPException(status_code=404, detail="Atleta no encontrado")
+    ensure_owner_or_coach(db, atleta.id, current_user)
 
     try:
         _build_smart_mesocycle(
@@ -1624,6 +1827,7 @@ def _plan_summary(db: Session, plan: models.Mesocycle) -> schemas.PlanSummaryRes
         sessions_per_week=round(len(sesiones) / semanas) if semanas else len(sesiones),
         coach_name=plan.created_by_coach.full_name if plan.created_by_coach else None,
         is_published=plan.is_published,
+        has_cover_image=plan.has_cover_image,
         created_at=plan.created_at,
     )
 
@@ -1673,6 +1877,60 @@ def create_plan(
     db.commit()
     db.refresh(plan)
     return _plan_summary(db, plan)
+
+
+@app.post("/plans/{plan_id}/cover", response_model=schemas.PlanSummaryResponse)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+async def upload_plan_cover(
+    request: Request,
+    plan_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Sube (o reemplaza) la foto de portada del plan — mismo pipeline de saneo que el avatar
+    de usuario (magic-number, re-render sin metadatos, nombre aleatorio)."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+    raw = await avatars.read_and_validate_upload(file)
+    clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
+
+    nombre_anterior = plan.cover_image_filename
+    nuevo_nombre = avatars.save_avatar(PLAN_COVER_DIR, clean_bytes, extension)
+    plan.cover_image_filename = nuevo_nombre
+    db.commit()
+    db.refresh(plan)
+    avatars.delete_avatar_if_exists(PLAN_COVER_DIR, nombre_anterior)
+    return _plan_summary(db, plan)
+
+
+@app.delete("/plans/{plan_id}/cover", response_model=schemas.MessageResponse)
+def delete_plan_cover(
+    plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    plan = _get_owned_plan(db, plan_id, current_user)
+    if not plan.cover_image_filename:
+        raise HTTPException(status_code=404, detail="Este plan no tiene foto de portada.")
+    avatars.delete_avatar_if_exists(PLAN_COVER_DIR, plan.cover_image_filename)
+    plan.cover_image_filename = None
+    db.commit()
+    return {"message": "Foto de portada eliminada."}
+
+
+@app.get("/plans/{plan_id}/cover")
+def get_plan_cover(
+    plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Mismo criterio de visibilidad que GET /plans/{id}: el autor/admin ve la portada de
+    borradores, cualquiera autenticado ve la de planes ya publicados."""
+    plan = db.query(models.Mesocycle).filter(
+        models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True
+    ).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    es_autor = plan.created_by_coach_id == current_user.id or current_user.role == "admin"
+    if not plan.is_published and not es_autor:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
+    return _serve_image(PLAN_COVER_DIR, plan.cover_image_filename, _AVATAR_CONTENT_TYPES)
 
 
 @app.get("/plans/mine", response_model=List[schemas.PlanSummaryResponse])
@@ -1786,6 +2044,7 @@ def add_set_to_plan_session(
             prescribed_weight=req.prescribed_weight,
             prescribed_percentage=req.prescribed_percentage,
             reference_exercise=req.reference_exercise,
+            block=req.block,
         ))
 
     db.commit()
@@ -1888,6 +2147,7 @@ def acquire_plan(
                 session_id=nueva_sesion.id,
                 exercise_id=set_plan.exercise_id,
                 set_order=set_plan.set_order,
+                block=set_plan.block,
                 prescribed_reps=set_plan.prescribed_reps,
                 rpe=set_plan.rpe,
                 prescribed_weight=peso,

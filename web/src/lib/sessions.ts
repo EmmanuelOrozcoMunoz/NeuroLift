@@ -1,3 +1,4 @@
+import { BLOCK_KEYS, blockLabel } from "@/lib/blocks";
 import { formatKg, parseApiDate } from "@/lib/dates";
 import type { SetItem, TrainingSession } from "@/lib/types";
 
@@ -27,6 +28,50 @@ export function groupSets(sets: SetItem[]): ExerciseGroup[] {
   }
 
   return groups;
+}
+
+/** Un bloque de la sesión (calentamiento, fuerza...) con sus ejercicios ya agrupados. */
+export interface SessionBlockGroup {
+  /** null = sin bloque asignado (dato viejo, o el coach no lo especificó). */
+  key: string | null;
+  /** Vacío cuando NINGÚN set de la sesión tiene bloque — así el llamador sabe que no debe
+   *  mostrar encabezados de sección (comportamiento idéntico al de antes de que existieran). */
+  label: string;
+  groups: ExerciseGroup[];
+}
+
+/**
+ * Agrupa las series de una sesión por bloque (calentamiento/fuerza/weightlifting/skills/metcon/
+ * accesorios/principal) en el orden canónico, y dentro de cada bloque por ejercicio (groupSets).
+ * Si NINGÚN set trae bloque (sesiones viejas, o el coach no los usa), devuelve un solo grupo sin
+ * etiqueta — se ve exactamente igual que antes de que existieran los bloques.
+ */
+export function groupByBlock(sets: SetItem[]): SessionBlockGroup[] {
+  const ordered = [...sets].sort((a, b) => a.set_order - b.set_order);
+  const anyBlocked = ordered.some((set) => set.block);
+  if (!anyBlocked) {
+    return [{ key: null, label: "", groups: groupSets(ordered) }];
+  }
+
+  const buckets = new Map<string | null, SetItem[]>();
+  for (const set of ordered) {
+    const key = set.block ?? null;
+    const list = buckets.get(key);
+    if (list) list.push(set);
+    else buckets.set(key, [set]);
+  }
+
+  const known = BLOCK_KEYS.filter((key) => buckets.has(key));
+  const custom = [...buckets.keys()].filter(
+    (key): key is string => key !== null && !(BLOCK_KEYS as readonly string[]).includes(key),
+  );
+  const orderedKeys: (string | null)[] = [...known, ...custom, ...(buckets.has(null) ? [null] : [])];
+
+  return orderedKeys.map((key) => ({
+    key,
+    label: key ? blockLabel(key) : "Otros ejercicios",
+    groups: groupSets(buckets.get(key)!),
+  }));
 }
 
 export function sortSessions(sessions: TrainingSession[]): TrainingSession[] {

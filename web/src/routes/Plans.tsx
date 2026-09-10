@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoverThumbnail } from "@/components/CoverImage";
 import { IconChevronRight, IconStore } from "@/components/icons";
 import { Badge, EmptyState, ErrorState, LoadingList } from "@/components/ui";
 import { formatPrice } from "@/lib/dates";
@@ -30,6 +31,7 @@ export default function Plans() {
             className="block rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
           >
             <div className="flex items-start gap-3">
+              <CoverThumbnail coverPath={`/plans/${plan.id}/cover`} hasImage={plan.has_cover_image} className="h-14 w-14 rounded-xl" />
               <div className="min-w-0 grow">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-bold">{plan.name}</span>
@@ -38,6 +40,7 @@ export default function Plans() {
                 <p className="mt-1 text-sm text-muted">
                   {plan.discipline} · {plan.weeks_count} sem · {plan.sessions_per_week}/sem
                 </p>
+                {plan.coach_name && <p className="mt-0.5 text-xs text-muted">Por {plan.coach_name}</p>}
                 <p className="mt-1.5 text-sm font-semibold text-brand">{formatPrice(plan.price)}</p>
               </div>
               <IconChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted" />

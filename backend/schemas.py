@@ -8,6 +8,12 @@ from backend.sanitize import clean_text
 
 Dia = Annotated[int, Field(ge=0, le=6)]  # 0 = Lunes ... 6 = Domingo
 
+# Parte de la sesión a la que pertenece un ejercicio. "warmup"/"strength"/"accessory" sirven
+# para cualquier disciplina; "weightlifting"/"skills"/"metcon" son específicos de CrossFit;
+# "main" es un cajón genérico para disciplinas que no necesitan más desglose que
+# calentamiento + entrenamiento principal. None = sin bloque asignado.
+Bloque = Literal["warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"]
+
 
 class SanitizedModel(BaseModel):
     """Base para esquemas de ENTRADA: sanea todo campo string (quita HTML/scripts, colapsa
@@ -97,12 +103,14 @@ class SetUpdate(SanitizedModel):
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    block: Bloque | None = None
 
 class SetCreate(SanitizedModel):
     exercise_name: str = Field(..., min_length=1, max_length=100)
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    block: Bloque | None = None
 
 class SetLogUpdate(SanitizedModel):
     """Lo que el ATLETA reporta tras entrenar: lo que hizo de verdad, no lo prescrito."""
@@ -113,6 +121,7 @@ class SetLogUpdate(SanitizedModel):
 class SetResponse(BaseModel):
     id: UUID
     set_order: int
+    block: Optional[str] = None
     prescribed_reps: int
     rpe: Optional[int] = None
     prescribed_weight: float | None = None # <-- ¡ESTO FALTABA!
@@ -151,6 +160,7 @@ class MesocycleFullResponse(BaseModel):
     description: Optional[str] = None
     level: Optional[str] = None
     is_template: bool = False
+    has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     sessions: List[SessionResponse] = [] # ¡Aquí anidamos las sesiones!
 
     class Config:
@@ -212,6 +222,7 @@ class GroupResponse(BaseModel):
     id: UUID
     name: str
     created_at: datetime
+    has_cover_image: bool = False  # true -> el cliente puede pedir GET /groups/{id}/cover
     members: List[GroupMemberResponse] = []
 
     class Config:
@@ -223,6 +234,7 @@ class GroupSummaryResponse(BaseModel):
     created_at: datetime
     member_count: int
     coach_name: str | None = None  # solo relevante cuando lo consulta un admin
+    has_cover_image: bool = False
 
 
 # --- ESQUEMAS PARA PROGRAMAR MESOCICLOS A UN GRUPO COMPLETO ---
@@ -273,6 +285,7 @@ class GroupSessionExerciseAdd(SanitizedModel):
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    block: Bloque | None = None
 
 
 class GroupSessionExerciseUpdate(SanitizedModel):
@@ -288,6 +301,7 @@ class GroupSessionExerciseUpdate(SanitizedModel):
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    block: Bloque | None = None
 
 
 class GroupSessionExerciseDelete(SanitizedModel):
@@ -383,6 +397,7 @@ class PlanSetCreate(SanitizedModel):
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
     prescribed_percentage: float | None = Field(None, ge=1, le=150)
     reference_exercise: str | None = Field(None, min_length=1, max_length=100)
+    block: Bloque | None = None
 
 
 class PlanAcquireRequest(SanitizedModel):
@@ -401,4 +416,5 @@ class PlanSummaryResponse(BaseModel):
     sessions_per_week: int
     coach_name: str | None = None
     is_published: bool
+    has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     created_at: datetime

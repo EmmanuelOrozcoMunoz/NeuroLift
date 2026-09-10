@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { BlockSelect } from "@/components/BlockSelect";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast } from "@/components/ui";
 import { useGroupBulkAdd, useGroupBulkDelete, useGroupBulkUpdate, useGroupMesocycles } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
 import { useMesocycle } from "@/lib/queries";
-import { groupSets } from "@/lib/sessions";
+import { groupByBlock } from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession } from "@/lib/types";
 
@@ -36,6 +37,7 @@ function BulkExerciseBlock({
   const [reps, setReps] = useState(first.prescribed_reps);
   const [rpe, setRpe] = useState(first.rpe ?? 0);
   const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
+  const [block, setBlock] = useState(first.block ?? "");
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
 
@@ -60,6 +62,7 @@ function BulkExerciseBlock({
       </div>
 
       <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
+      <BlockSelect value={block} onChange={setBlock} />
       <div className="grid grid-cols-2 gap-3">
         <div>
           <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
@@ -94,6 +97,7 @@ function BulkExerciseBlock({
               prescribed_reps: reps,
               rpe: rpe > 0 ? rpe : null,
               prescribed_weight: weight > 0 ? weight : null,
+              block: block || null,
             },
             { onSuccess: (r) => onFeedback(r.message) },
           )
@@ -124,12 +128,14 @@ function BulkAddForm({
   const [reps, setReps] = useState(8);
   const [rpe, setRpe] = useState(7);
   const [weight, setWeight] = useState(0);
+  const [block, setBlock] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   return (
     <Card className="border-dashed">
       <p className="mb-3 font-bold">➕ Añadir para TODO el grupo</p>
       <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
+      <BlockSelect value={block} onChange={setBlock} />
       <div className="grid grid-cols-2 gap-3">
         <div>
           <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
@@ -166,6 +172,7 @@ function BulkAddForm({
               prescribed_reps: reps,
               rpe: rpe > 0 ? rpe : null,
               prescribed_weight: weight > 0 ? weight : null,
+              block: block || null,
             },
             { onSuccess: (r) => { onFeedback(r.message); setName(""); } },
           );
@@ -222,20 +229,27 @@ function GroupWideTab({
         cambies explícitamente aquí.
       </p>
       {sessions.map((session) => {
-        const groups = groupSets(session.sets);
+        const bloques = groupByBlock(session.sets);
         return (
           <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-            {groups.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
-            {groups.map((group, index) => (
-              <BulkExerciseBlock
-                key={`${group.name}-${index}`}
-                groupId={groupId}
-                programName={programName}
-                programStartDate={programStartDate}
-                scheduledDate={session.scheduled_date}
-                group={group}
-                onFeedback={onFeedback}
-              />
+            {session.sets.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
+            {bloques.map((bloque, indiceBloque) => (
+              <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
+                {bloque.label && (
+                  <p className="text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+                )}
+                {bloque.groups.map((group, index) => (
+                  <BulkExerciseBlock
+                    key={`${group.name}-${index}`}
+                    groupId={groupId}
+                    programName={programName}
+                    programStartDate={programStartDate}
+                    scheduledDate={session.scheduled_date}
+                    group={group}
+                    onFeedback={onFeedback}
+                  />
+                ))}
+              </div>
             ))}
             <BulkAddForm
               groupId={groupId}

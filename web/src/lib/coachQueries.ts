@@ -43,6 +43,16 @@ export function useAthletes(): UseQueryResult<User[]> {
   });
 }
 
+/** Busca un atleta ya registrado por correo EXACTO — para agregar a un grupo a alguien que se
+ *  auto-registró por su cuenta (GET /users/athletes solo devuelve "tus" atletas, así que ese
+ *  atleta no aparece ahí hasta que lo agregues). Es una mutation (no query) porque se dispara
+ *  a demanda con un botón, no automáticamente al montar el componente. */
+export function useSearchAthleteByEmail() {
+  return useMutation({
+    mutationFn: (email: string) => apiFetch<User>(`/users/search?email=${encodeURIComponent(email.trim())}`),
+  });
+}
+
 export function useRegisterAthlete() {
   const queryClient = useQueryClient();
   return useMutation({

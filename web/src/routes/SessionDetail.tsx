@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { longDate, relativeDay } from "@/lib/dates";
 import { useAdaptSession, useCompleteSession, useMesocycle } from "@/lib/queries";
-import { groupSets, groupSummary, sessionProgress } from "@/lib/sessions";
+import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
 
 type Vista = "normal" | "adaptada";
 
@@ -78,7 +78,7 @@ export default function SessionDetail() {
 
   const { logged, total } = sessionProgress(activa);
   const completada = activa.status === "completed";
-  const grupos = groupSets(activa.sets);
+  const bloques = groupByBlock(activa.sets);
 
   return (
     <>
@@ -114,29 +114,40 @@ export default function SessionDetail() {
         </Card>
       )}
 
-      {grupos.length === 0 ? (
+      {activa.sets.length === 0 ? (
         <EmptyState title="Sin ejercicios asignados">
           Tu coach todavía no cargó los ejercicios de este día.
         </EmptyState>
       ) : (
-        <div className="space-y-4">
-          {grupos.map((grupo, indiceGrupo) => (
-            <Card key={`${grupo.name}-${indiceGrupo}`} className="p-3">
-              <div className="mb-2.5 px-1">
-                <p className="leading-tight font-bold">{grupo.name}</p>
-                <p className="text-xs text-muted">{groupSummary(grupo)}</p>
-              </div>
-              <div className="space-y-2">
-                {grupo.sets.map((set, indiceSerie) => (
-                  <SetRow
-                    key={set.id}
-                    set={set}
-                    index={indiceSerie + 1}
-                    mesocycleId={mesocycleId!}
-                  />
+        <div className="space-y-5">
+          {bloques.map((bloque, indiceBloque) => (
+            <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
+              {bloque.label && (
+                <p className="mb-2 px-1 text-xs font-semibold tracking-wide text-muted uppercase">
+                  {bloque.label}
+                </p>
+              )}
+              <div className="space-y-3">
+                {bloque.groups.map((grupo, indiceGrupo) => (
+                  <Card key={`${grupo.name}-${indiceGrupo}`} className="p-3">
+                    <div className="mb-2.5 px-1">
+                      <p className="leading-tight font-bold">{grupo.name}</p>
+                      <p className="text-xs text-muted">{groupSummary(grupo)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      {grupo.sets.map((set, indiceSerie) => (
+                        <SetRow
+                          key={set.id}
+                          set={set}
+                          index={indiceSerie + 1}
+                          mesocycleId={mesocycleId!}
+                        />
+                      ))}
+                    </div>
+                  </Card>
                 ))}
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -150,7 +161,7 @@ export default function SessionDetail() {
         </Button>
       )}
 
-      {grupos.length > 0 && (
+      {activa.sets.length > 0 && (
         <Button
           variant={completada ? "secondary" : "done"}
           full

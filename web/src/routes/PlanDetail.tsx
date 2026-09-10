@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoverThumbnail } from "@/components/CoverImage";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { formatPrice, todayIso } from "@/lib/dates";
@@ -47,6 +48,14 @@ export default function PlanDetail() {
   return (
     <>
       <PageHeader title={resumen?.name ?? detail.data?.name ?? "Plan"} back="/planes" />
+
+      {resumen?.has_cover_image && (
+        <CoverThumbnail
+          coverPath={`/plans/${planId}/cover`}
+          hasImage
+          className="mb-4 h-40 w-full rounded-2xl"
+        />
+      )}
 
       {resumen && (
         <Card className="mb-4">

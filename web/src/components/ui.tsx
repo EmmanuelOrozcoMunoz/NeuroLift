@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // ------------------------------------------------------------------- utilidades
 
@@ -113,8 +113,11 @@ export function Field({ label, hint, className, ...rest }: FieldProps) {
 }
 
 /**
- * Contador con botones -/+ grandes. Con la barra en las manos, teclear en un input numérico
- * de celular no es viable; un tap en un botón de 48px sí.
+ * Contador con botones -/+ grandes (con la barra en las manos, teclear en un input numérico
+ * de celular no es viable; un tap en un botón de 48px sí) PERO el número del centro también se
+ * puede tocar para escribirlo directo: para marcas altas (ej. un Back Squat de 150kg) ir
+ * tap-a-tap con +1/+2.5 es incómodo. Ambos caminos quedan disponibles, cada quien usa el que le
+ * convenga en el momento.
  */
 export function Stepper({
   value,
@@ -133,7 +136,21 @@ export function Stepper({
   suffix?: string;
   compact?: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
   const clamp = (next: number) => Math.min(max, Math.max(min, Math.round(next * 100) / 100));
+
+  function startEditing() {
+    setDraft(value ? String(value) : "");
+    setEditing(true);
+  }
+
+  function commit() {
+    const parsed = Number(draft.replace(",", "."));
+    if (draft.trim() !== "" && !Number.isNaN(parsed)) onChange(clamp(parsed));
+    setEditing(false);
+  }
 
   return (
     <div className="flex items-stretch overflow-hidden rounded-xl border border-line bg-surface-2">
@@ -145,15 +162,37 @@ export function Stepper({
       >
         −
       </button>
-      <div
-        className={cx(
-          "flex min-w-0 grow items-baseline justify-center gap-0.5 py-2.5 tabular-nums",
-          compact ? "text-base" : "text-lg",
-        )}
-      >
-        <span className="font-bold">{Number.isInteger(value) ? value : value.toFixed(1)}</span>
-        {suffix && <span className="text-xs text-muted">{suffix}</span>}
-      </div>
+      {editing ? (
+        <input
+          type="number"
+          inputMode="decimal"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className={cx(
+            "min-w-0 grow bg-transparent text-center font-bold tabular-nums outline-none",
+            compact ? "text-base" : "text-lg",
+          )}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={startEditing}
+          className={cx(
+            "flex min-w-0 grow items-baseline justify-center gap-0.5 py-2.5 tabular-nums",
+            compact ? "text-base" : "text-lg",
+          )}
+        >
+          <span className="font-bold">{Number.isInteger(value) ? value : value.toFixed(1)}</span>
+          {suffix && <span className="text-xs text-muted">{suffix}</span>}
+        </button>
+      )}
       <button
         type="button"
         aria-label="Sumar"

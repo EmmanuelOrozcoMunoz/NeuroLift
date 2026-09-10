@@ -19,6 +19,28 @@ _REQUEST_TIMEOUT_SECONDS = 45
 # secundario en vez de fallarle la sesión al usuario. Ver adapt_session_to_time/generate_workout_session.
 _MODELOS_CON_FALLBACK = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
 
+# Instrucción compartida por todos los prompts que generan ejercicios: cada uno debe traer un
+# "block" (parte de la sesión) tomado de esta lista fija — ver backend/schemas.py:Bloque, que
+# valida lo mismo del lado de los endpoints manuales, y web/src/lib/blocks.ts, que define las
+# etiquetas/orden en el frontend. Si la IA devuelve otra cosa, backend/main.py:_clean_ai_block
+# la descarta (mejor sin bloque que un valor inventado).
+_INSTRUCCION_BLOQUES = """
+Cada ejercicio debe incluir un campo "block" (en inglés, EXACTAMENTE uno de estos valores) que
+indique la parte de la sesión a la que pertenece:
+- "warmup": calentamiento (movilidad, activación, series de aproximación).
+- "strength": fuerza tipo squat/press/deadlift y sus variantes.
+- "weightlifting": weightlifting olímpico — snatch, clean & jerk y sus derivados/técnica.
+- "skills": gimnasia / skills — dominadas, muscle-ups, handstand, técnica gimnástica.
+- "metcon": trabajo metabólico / condicionamiento (AMRAP, EMOM, for time, intervalos).
+- "accessory": accesorios, core, trabajo complementario de bajo riesgo/intensidad.
+- "main": bloque principal genérico — úsalo SOLO si la disciplina NO es CrossFit y el ejercicio
+  no encaja mejor en "strength" o "accessory".
+Si la disciplina es CrossFit, reparte los ejercicios entre warmup/strength/weightlifting/skills/
+metcon/accessory según corresponda (no uses "main"). Si NO es CrossFit, usa normalmente solo
+"warmup", "strength" y, cuando aplique, "accessory" — no inventes weightlifting/skills/metcon
+salvo que el ejercicio sea literalmente eso.
+"""
+
 
 def _post_to_gemini(url: str, payload: dict, headers: dict) -> dict:
     """POST a Gemini con reintentos automáticos (backoff exponencial: ~1.5s, 3s) ante errores
@@ -70,6 +92,8 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
     Disciplina: {discipline}
     Contexto: {experience_notes}
 
+    {_INSTRUCCION_BLOQUES}
+
     DEBES responder ÚNICAMENTE con un objeto JSON válido que siga exactamente esta estructura, sin texto adicional ni formato markdown:
     {{
         "session_focus": "string",
@@ -77,6 +101,7 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
         "exercises": [
             {{
                 "exercise_name": "string",
+                "block": "string",
                 "prescribed_sets": int,
                 "prescribed_reps": int,
                 "rpe_target": int
@@ -173,6 +198,8 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
 
     REGLA DE INTENSIDAD: Si el atleta tiene marcas de 1RM registradas, DEBES calcular los pesos exactos en kilogramos para sus series según la intensidad que programes, e incluir el peso exacto dentro del campo 'athlete_notes' de cada sesión o en las repeticiones.
 
+    {_INSTRUCCION_BLOQUES}
+
     DEBES responder ÚNICAMENTE con un objeto JSON válido con esta estructura, sin texto adicional:
     {{
         "mesocycle_focus": "string",
@@ -186,6 +213,7 @@ def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_note
                         "exercises": [
                             {{
                                 "exercise_name": "string",
+                                "block": "string",
                                 "prescribed_sets": int,
                                 "prescribed_reps": int,
                                 "rpe_target": int,
@@ -226,7 +254,7 @@ def adapt_session_to_time(
     de entrenamiento en la medida de lo posible. La sesión original NUNCA se modifica; esto
     genera una versión alterna."""
     ejercicios_texto = "\n".join(
-        f"- {e['exercise_name']}: {e['prescribed_sets']}x{e['prescribed_reps']}"
+        f"- [{e.get('block') or 'sin bloque'}] {e['exercise_name']}: {e['prescribed_sets']}x{e['prescribed_reps']}"
         + (f" @ {e['prescribed_weight']}kg" if e.get("prescribed_weight") else "")
         + (f" (RPE {e['rpe']})" if e.get("rpe") is not None else "")
         for e in original_exercises
@@ -244,8 +272,13 @@ def adapt_session_to_time(
     Disciplina: {discipline}
     Contexto y marcas actuales: {experience_notes}
 
-    Sesión original prescrita:
+    Sesión original prescrita (cada línea ya trae entre corchetes el bloque al que pertenece):
     {ejercicios_texto}
+
+    {_INSTRUCCION_BLOQUES}
+    Para cada ejercicio que conserves o recortes de la sesión original, usa el MISMO bloque que
+    ya tenía (el que está entre corchetes arriba); solo asigna un bloque distinto si sustituyes
+    el ejercicio por otro de una categoría distinta.
 
     DEBES responder ÚNICAMENTE con un objeto JSON válido que siga exactamente esta estructura,
     sin texto adicional ni formato markdown:
@@ -255,6 +288,7 @@ def adapt_session_to_time(
         "exercises": [
             {{
                 "exercise_name": "string",
+                "block": "string",
                 "prescribed_sets": int,
                 "prescribed_reps": int,
                 "rpe_target": int,

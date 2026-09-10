@@ -28,6 +28,8 @@ export interface Exercise {
 export interface SetItem {
   id: string;
   set_order: number;
+  /** Parte de la sesión (calentamiento, fuerza, weightlifting, skills, metcon...). Ver lib/blocks.ts. */
+  block: string | null;
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
@@ -81,6 +83,8 @@ export interface MesocycleFull {
   description: string | null;
   level: string | null;
   is_template: boolean;
+  /** true -> el cliente puede pedir GET /plans/{id}/cover (solo relevante si is_template) */
+  has_cover_image: boolean;
   sessions: TrainingSession[];
 }
 
@@ -103,6 +107,8 @@ export interface PlanSummary {
   sessions_per_week: number;
   coach_name: string | null;
   is_published: boolean;
+  /** true -> el cliente puede pedir GET /plans/{id}/cover */
+  has_cover_image: boolean;
   created_at: string;
 }
 
@@ -136,6 +142,8 @@ export interface GroupDetail {
   id: string;
   name: string;
   created_at: string;
+  /** true -> el cliente puede pedir GET /groups/{id}/cover */
+  has_cover_image: boolean;
   members: GroupMember[];
 }
 
@@ -146,6 +154,7 @@ export interface GroupSummary {
   created_at: string;
   member_count: number;
   coach_name: string | null;
+  has_cover_image: boolean;
 }
 
 export interface GroupMesocycleAthlete {
@@ -226,6 +235,7 @@ export interface SetCreatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  block?: string | null;
 }
 
 export interface SetUpdatePayload {
@@ -233,6 +243,7 @@ export interface SetUpdatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  block?: string | null;
 }
 
 export interface GroupBulkAddPayload {
@@ -244,6 +255,7 @@ export interface GroupBulkAddPayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  block?: string | null;
 }
 
 export interface GroupBulkUpdatePayload {
@@ -256,6 +268,7 @@ export interface GroupBulkUpdatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  block?: string | null;
 }
 
 export interface GroupBulkDeletePayload {
@@ -295,4 +308,5 @@ export interface PlanSetCreatePayload {
   prescribed_weight: number | null;
   prescribed_percentage: number | null;
   reference_exercise: string | null;
+  block?: string | null;
 }

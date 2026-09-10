@@ -1,19 +1,63 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoverUploader } from "@/components/CoverImage";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Badge, Button, Card, EmptyState, ErrorState, LoadingList, Sheet, Toast } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
 import {
+  coachKeys,
   useAddGroupMembers,
   useAthletes,
   useDeleteGroup,
   useGroupDetail,
   useGroupMesocycles,
   useRemoveGroupMember,
+  useSearchAthleteByEmail,
 } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
+import type { User } from "@/lib/types";
+
+/** Busca por correo exacto a un atleta que todavía no es "tuyo" (se auto-registró por su
+ *  cuenta), para poder agregarlo a este grupo. GET /users/athletes solo trae tus propios
+ *  atletas, así que uno recién auto-registrado no aparece ahí hasta que lo agregues aquí. */
+function SearchAndAddByEmail({ onFound }: { onFound: (athlete: User) => void }) {
+  const search = useSearchAthleteByEmail();
+  const [email, setEmail] = useState("");
+
+  function handleSearch(event: React.FormEvent) {
+    event.preventDefault();
+    if (!email.trim()) return;
+    search.mutate(email, { onSuccess: onFound });
+  }
+
+  return (
+    <form onSubmit={handleSearch} className="space-y-2 border-b border-line pb-4">
+      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+        Un atleta que se registró por su cuenta
+      </p>
+      <div className="flex items-end gap-2">
+        <Field
+          label="Su correo exacto"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="grow"
+        />
+        <Button type="submit" loading={search.isPending}>
+          Buscar
+        </Button>
+      </div>
+      {search.isError && (
+        <p className="text-sm font-medium text-danger">
+          {search.error instanceof Error ? search.error.message : "No se encontró ese atleta."}
+        </p>
+      )}
+    </form>
+  );
+}
 
 function AddMembersSheet({
   open,
@@ -29,6 +73,7 @@ function AddMembersSheet({
   const athletes = useAthletes();
   const addMembers = useAddGroupMembers(groupId);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [found, setFound] = useState<User | null>(null);
 
   const disponibles = (athletes.data ?? []).filter((a) => !currentIds.has(a.id));
 
@@ -41,42 +86,70 @@ function AddMembersSheet({
     });
   }
 
+  function addOne(id: string) {
+    addMembers.mutate([id], {
+      onSuccess: () => {
+        setFound(null);
+        onClose();
+      },
+    });
+  }
+
   return (
     <Sheet open={open} onClose={onClose} title="Añadir atletas">
-      {disponibles.length === 0 ? (
-        <p className="text-sm text-muted">Todos tus atletas ya están en este grupo.</p>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            {disponibles.map((athlete) => (
-              <label key={athlete.id} className="flex items-center gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
-                <input
-                  type="checkbox"
-                  checked={selected.has(athlete.id)}
-                  onChange={() => toggle(athlete.id)}
-                  className="h-5 w-5 accent-brand"
-                />
-                <span className="text-sm">{athlete.full_name}</span>
-              </label>
-            ))}
-          </div>
-          <Button
-            full
-            loading={addMembers.isPending}
-            disabled={selected.size === 0}
-            onClick={() =>
-              addMembers.mutate([...selected], {
-                onSuccess: () => {
-                  setSelected(new Set());
-                  onClose();
-                },
-              })
-            }
-          >
-            Añadir seleccionados
-          </Button>
-        </div>
-      )}
+      <div className="space-y-4">
+        <SearchAndAddByEmail onFound={setFound} />
+
+        {found &&
+          (currentIds.has(found.id) ? (
+            <p className="text-sm text-muted">{found.full_name} ya está en este grupo.</p>
+          ) : (
+            <Card className="flex items-center justify-between p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{found.full_name}</p>
+                <p className="truncate text-xs text-muted">{found.email}</p>
+              </div>
+              <Button loading={addMembers.isPending} onClick={() => addOne(found.id)}>
+                Añadir
+              </Button>
+            </Card>
+          ))}
+
+        {disponibles.length === 0 ? (
+          <p className="text-sm text-muted">Todos tus atletas ya están en este grupo.</p>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              {disponibles.map((athlete) => (
+                <label key={athlete.id} className="flex items-center gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(athlete.id)}
+                    onChange={() => toggle(athlete.id)}
+                    className="h-5 w-5 accent-brand"
+                  />
+                  <span className="text-sm">{athlete.full_name}</span>
+                </label>
+              ))}
+            </div>
+            <Button
+              full
+              loading={addMembers.isPending}
+              disabled={selected.size === 0}
+              onClick={() =>
+                addMembers.mutate([...selected], {
+                  onSuccess: () => {
+                    setSelected(new Set());
+                    onClose();
+                  },
+                })
+              }
+            >
+              Añadir seleccionados
+            </Button>
+          </>
+        )}
+      </div>
     </Sheet>
   );
 }
@@ -84,6 +157,7 @@ function AddMembersSheet({
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: group, isPending, error, refetch } = useGroupDetail(groupId);
   const programs = useGroupMesocycles(groupId);
   const removeMember = useRemoveGroupMember(groupId ?? "");
@@ -113,6 +187,17 @@ export default function GroupDetail() {
   return (
     <>
       <PageHeader title={group.name} subtitle={`${group.members.length} atleta(s)`} back="/coach/grupos" />
+
+      <CoverUploader
+        coverPath={`/groups/${groupId}/cover`}
+        uploadPath={`/groups/${groupId}/cover`}
+        hasImage={group.has_cover_image}
+        onChanged={() => {
+          void refetch();
+          void queryClient.invalidateQueries({ queryKey: coachKeys.groups });
+        }}
+        label="Foto de portada"
+      />
 
       <div className="mb-2 flex items-baseline justify-between">
         <p className="text-sm font-semibold tracking-wide text-muted uppercase">Miembros</p>

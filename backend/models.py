@@ -25,6 +25,12 @@ class User(Base):
     # Vive en backend/uploads/avatars/ (fuera de cualquier raíz servida como estática) — ver
     # AVATAR_DIR en main.py. None = sin foto de perfil.
     avatar_filename = Column(String(255), nullable=True)
+    # Coach "dueño" directo de este atleta (solo tiene sentido cuando role="athlete"): se fija
+    # automáticamente cuando un coach autenticado crea la cuenta desde /auth/register (ver
+    # main.py). Si el atleta se auto-registró por su cuenta, queda en None ("sin afiliar") hasta
+    # que un coach lo agregue a un grupo (eso también le da acceso, vía Group.members) o lo
+    # reclame explícitamente. Es la base de que "cada coach solo vea a sus propios atletas".
+    coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     @property
     def has_avatar(self) -> bool:
@@ -36,6 +42,7 @@ class User(Base):
     mesocycles = relationship("Mesocycle", back_populates="user", foreign_keys="Mesocycle.user_id")
     personal_records = relationship("PersonalRecord", back_populates="user", cascade="all, delete-orphan")
     coached_groups = relationship("Group", back_populates="coach", foreign_keys="Group.coach_id", cascade="all, delete-orphan")
+    coach = relationship("User", remote_side=[id], foreign_keys=[coach_id])
 
 
 # Tabla puente para la relación muchos-a-muchos Grupo <-> Atleta
@@ -54,9 +61,16 @@ class Group(Base):
     coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Foto de portada (mismo pipeline de saneo que el avatar de usuario: magic-number, re-render
+    # sin metadatos, nombre aleatorio). Vive en backend/uploads/group_covers/. None = sin foto.
+    cover_image_filename = Column(String(255), nullable=True)
 
     coach = relationship("User", back_populates="coached_groups", foreign_keys=[coach_id])
     members = relationship("User", secondary=group_members)
+
+    @property
+    def has_cover_image(self) -> bool:
+        return self.cover_image_filename is not None
 
 class Mesocycle(Base):
     __tablename__ = "mesocycles"
@@ -83,11 +97,19 @@ class Mesocycle(Base):
     level = Column(String(20))          # "Principiante" | "Intermedio" | "Avanzado"
     price = Column(Float, nullable=True)
     source_plan_id = Column(UUID(as_uuid=True), ForeignKey("mesocycles.id", ondelete="SET NULL"), nullable=True)
+    # Foto de portada del plan (mismo pipeline de saneo que el avatar de usuario). Solo tiene
+    # sentido en plantillas (is_template=True) pero vive en esta tabla como el resto de campos
+    # exclusivos de plan (description, level, price). Vive en backend/uploads/plan_covers/.
+    cover_image_filename = Column(String(255), nullable=True)
 
     user = relationship("User", back_populates="mesocycles", foreign_keys=[user_id])
     created_by_coach = relationship("User", foreign_keys=[created_by_coach_id])
     group = relationship("Group")
     sessions = relationship("Session", back_populates="mesocycle", cascade="all, delete-orphan")
+
+    @property
+    def has_cover_image(self) -> bool:
+        return self.cover_image_filename is not None
 
 class Session(Base):
     __tablename__ = "sessions"
@@ -127,6 +149,11 @@ class Set(Base):
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True)
     exercise_id = Column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="SET NULL"), nullable=True)
     set_order = Column(Integer, nullable=False)
+    # Parte de la sesión a la que pertenece este ejercicio (calentamiento, fuerza, weightlifting,
+    # skills/gimnasia, metabólico...). Ver backend/schemas.py:Bloque para los valores válidos y
+    # web/src/lib/blocks.ts para las etiquetas/orden en el frontend. None = sin bloque asignado
+    # (series creadas antes de esta función, o el coach no lo especificó).
+    block = Column(String(30), nullable=True)
     prescribed_reps = Column(Integer)
     prescribed_weight = Column(Float)
     actual_reps = Column(Integer)

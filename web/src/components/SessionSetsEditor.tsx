@@ -1,9 +1,10 @@
 import { useState } from "react";
 
+import { BlockSelect } from "@/components/BlockSelect";
 import { IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, Field, Stepper } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
-import { groupSets } from "@/lib/sessions";
+import { groupByBlock } from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession } from "@/lib/types";
 
@@ -28,6 +29,7 @@ function ExerciseBlock({
   const [reps, setReps] = useState(first.prescribed_reps);
   const [rpe, setRpe] = useState(first.rpe ?? 0);
   const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
+  const [block, setBlock] = useState(first.block ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const busy = updateSet.isPending || addSet.isPending || deleteSet.isPending;
@@ -40,6 +42,7 @@ function ExerciseBlock({
       prescribed_reps: reps,
       rpe: rpe > 0 ? rpe : null,
       prescribed_weight: weight > 0 ? weight : null,
+      block: block || null,
     };
 
     try {
@@ -84,6 +87,7 @@ function ExerciseBlock({
       </div>
 
       <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
+      <BlockSelect value={block} onChange={setBlock} />
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -128,6 +132,7 @@ function AddExerciseForm({
   const [reps, setReps] = useState(10);
   const [rpe, setRpe] = useState(7);
   const [weight, setWeight] = useState(0);
+  const [block, setBlock] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function handleAdd() {
@@ -138,6 +143,7 @@ function AddExerciseForm({
       prescribed_reps: reps,
       rpe: rpe > 0 ? rpe : null,
       prescribed_weight: weight > 0 ? weight : null,
+      block: block || null,
     };
     try {
       for (let i = 0; i < series; i++) {
@@ -155,6 +161,7 @@ function AddExerciseForm({
     <Card className="border-dashed">
       <p className="mb-3 font-bold">➕ Añadir ejercicio</p>
       <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
+      <BlockSelect value={block} onChange={setBlock} />
       <div className="grid grid-cols-2 gap-3">
         <div>
           <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
@@ -193,19 +200,26 @@ export function SessionSetsEditor({
   session: TrainingSession;
   onFeedback: (message: string) => void;
 }) {
-  const groups = groupSets(session.sets);
+  const bloques = groupByBlock(session.sets);
 
   return (
-    <div className="space-y-3">
-      {groups.length === 0 && <EmptyState title="Esta sesión todavía no tiene ejercicios" />}
-      {groups.map((group, index) => (
-        <ExerciseBlock
-          key={`${group.name}-${index}`}
-          mesocycleId={mesocycleId}
-          sessionId={session.id}
-          group={group}
-          onSaved={() => onFeedback("¡Ajustes guardados!")}
-        />
+    <div className="space-y-4">
+      {session.sets.length === 0 && <EmptyState title="Esta sesión todavía no tiene ejercicios" />}
+      {bloques.map((bloque, indiceBloque) => (
+        <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
+          {bloque.label && (
+            <p className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+          )}
+          {bloque.groups.map((group, index) => (
+            <ExerciseBlock
+              key={`${group.name}-${index}`}
+              mesocycleId={mesocycleId}
+              sessionId={session.id}
+              group={group}
+              onSaved={() => onFeedback("¡Ajustes guardados!")}
+            />
+          ))}
+        </div>
       ))}
       <AddExerciseForm
         mesocycleId={mesocycleId}

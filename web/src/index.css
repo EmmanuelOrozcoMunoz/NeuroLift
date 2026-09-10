@@ -63,6 +63,16 @@
     margin: 0;
   }
 
+  /* Bug conocido de Safari/iOS: el input de fecha se dibuja como una píldora con SU PROPIO
+     ancho intrínseco (según el formato de fecha del sistema), ignorando width:100% — se sale
+     de la tarjeta que lo contiene en vez de encogerse a su ancho disponible. appearance:none
+     lo vuelve una caja normal que sí respeta el ancho y el padding del contenedor. */
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
   ::selection {
     background-color: var(--color-brand);
     color: white;

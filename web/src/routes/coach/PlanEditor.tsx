@@ -1,13 +1,16 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { BlockSelect } from "@/components/BlockSelect";
+import { CoverUploader } from "@/components/CoverImage";
 import { IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast } from "@/components/ui";
-import { useAddPlanSet, useDeletePlanSet } from "@/lib/coachQueries";
+import { coachKeys, useAddPlanSet, useDeletePlanSet } from "@/lib/coachQueries";
 import { usePlanDetail } from "@/lib/queries";
-import { groupSets, groupSummary } from "@/lib/sessions";
-import type { ExerciseGroup } from "@/lib/sessions";
+import { groupByBlock, groupSummary } from "@/lib/sessions";
+import type { SetItem } from "@/lib/types";
 
 type TipoCarga = "porcentaje" | "kg" | "libre";
 
@@ -15,17 +18,18 @@ function DayEditor({
   planId,
   sessionId,
   dayNumber,
-  groups,
+  sets,
   onFeedback,
 }: {
   planId: string;
   sessionId: string;
   dayNumber: number;
-  groups: ExerciseGroup[];
+  sets: SetItem[];
   onFeedback: (message: string) => void;
 }) {
   const addSet = useAddPlanSet(planId);
   const deleteSet = useDeletePlanSet(planId);
+  const bloques = groupByBlock(sets);
 
   const [name, setName] = useState("");
   const [series, setSeries] = useState(3);
@@ -34,6 +38,7 @@ function DayEditor({
   const [tipo, setTipo] = useState<TipoCarga>("porcentaje");
   const [valor, setValor] = useState(75);
   const [referencia, setReferencia] = useState("");
+  const [block, setBlock] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleAdd() {
@@ -51,6 +56,7 @@ function DayEditor({
           prescribed_weight: tipo === "kg" ? valor : null,
           prescribed_percentage: tipo === "porcentaje" ? valor : null,
           reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
+          block: block || null,
         },
       },
       {
@@ -68,28 +74,37 @@ function DayEditor({
     <Card>
       <p className="mb-3 font-bold">📆 Día {dayNumber}</p>
 
-      {groups.length === 0 ? (
+      {sets.length === 0 ? (
         <p className="mb-3 text-sm text-muted">Todavía sin ejercicios.</p>
       ) : (
-        <div className="mb-3 space-y-2">
-          {groups.map((group, index) => (
-            <div
-              key={`${group.name}-${index}`}
-              className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2.5"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
-                <p className="truncate text-xs text-muted">{groupSummary(group)}</p>
+        <div className="mb-3 space-y-3">
+          {bloques.map((bloque, indiceBloque) => (
+            <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
+              {bloque.label && (
+                <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+              )}
+              <div className="space-y-2">
+                {bloque.groups.map((group, index) => (
+                  <div
+                    key={`${group.name}-${index}`}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
+                      <p className="truncate text-xs text-muted">{groupSummary(group)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Quitar ejercicio"
+                      disabled={deleteSet.isPending}
+                      onClick={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
+                      className="shrink-0 rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
+                    >
+                      <IconTrash className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <button
-                type="button"
-                aria-label="Quitar ejercicio"
-                disabled={deleteSet.isPending}
-                onClick={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
-                className="shrink-0 rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
-              >
-                <IconTrash className="h-4 w-4" />
-              </button>
             </div>
           ))}
         </div>
@@ -98,6 +113,7 @@ function DayEditor({
       <div className="space-y-3 border-t border-line pt-3">
         <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>
         <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} />
+        <BlockSelect value={block} onChange={setBlock} className="" />
 
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -159,6 +175,7 @@ function DayEditor({
 
 export default function PlanEditor() {
   const { planId } = useParams<{ planId: string }>();
+  const queryClient = useQueryClient();
   const { data, isPending, error, refetch } = usePlanDetail(planId);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -167,6 +184,19 @@ export default function PlanEditor() {
   return (
     <>
       <PageHeader title={data?.name ?? "Plan"} subtitle="Contenido del plan" back="/coach/planes" />
+
+      {data && (
+        <CoverUploader
+          coverPath={`/plans/${planId}/cover`}
+          uploadPath={`/plans/${planId}/cover`}
+          hasImage={data.has_cover_image}
+          onChanged={() => {
+            void refetch();
+            void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans });
+          }}
+          label="Foto de portada"
+        />
+      )}
 
       <p className="mb-4 text-sm text-muted">
         Las cargas en % de 1RM se convierten a kilos automáticamente cuando alguien adquiere el
@@ -186,7 +216,7 @@ export default function PlanEditor() {
             planId={planId!}
             sessionId={session.id}
             dayNumber={(session.day_offset ?? 0) + 1}
-            groups={groupSets(session.sets)}
+            sets={session.sets}
             onFeedback={setToast}
           />
         ))}
