@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/AppShell";
 import { CoverThumbnail } from "@/components/CoverImage";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
+import { blockLabel } from "@/lib/blocks";
 import { formatPrice, todayIso } from "@/lib/dates";
 import { useAcquirePlan, usePlanCatalog, usePlanDetail } from "@/lib/queries";
 import { groupSets, groupSummary } from "@/lib/sessions";
@@ -41,9 +42,11 @@ export default function PlanDetail() {
     );
   }
 
-  const sesiones = [...(detail.data?.sessions ?? [])].sort(
-    (a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0),
-  );
+  // Si el plan no es tuyo (el caso normal para un atleta navegando el catálogo), el backend
+  // manda una VISTA PREVIA sin ejercicios/series/pesos — mostrar la programación completa antes
+  // de comprarlo no tendría sentido comercial. Solo el autor/admin recibe el detalle completo.
+  const esVistaPrevia = detail.data?.is_preview ?? true;
+  const totalDias = detail.data?.sessions.length ?? 0;
 
   return (
     <>
@@ -86,37 +89,69 @@ export default function PlanDetail() {
         </Card>
       )}
 
-      <h2 className="mt-2 mb-2 text-sm font-semibold tracking-wide text-muted uppercase">
+      <h2 className="mt-2 mb-1 text-sm font-semibold tracking-wide text-muted uppercase">
         Contenido del plan
       </h2>
-
-      {sesiones.length === 0 ? (
-        <EmptyState title="Este plan todavía no tiene ejercicios cargados" />
-      ) : (
-        <div className="space-y-3">
-          {sesiones.map((sesion) => {
-            const grupos = groupSets(sesion.sets);
-            const dia = (sesion.day_offset ?? 0) + 1;
-            return (
-              <Card key={sesion.id}>
-                <p className="mb-2 font-bold">Día {dia}</p>
-                {grupos.length === 0 ? (
-                  <p className="text-sm text-muted">Sin ejercicios</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {grupos.map((grupo, index) => (
-                      <p key={`${grupo.name}-${index}`} className="text-sm">
-                        <span className="font-semibold">{grupo.name}</span>{" "}
-                        <span className="text-muted">— {groupSummary(grupo)}</span>
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+      {esVistaPrevia && (
+        <p className="mb-2 text-xs text-muted">
+          Vista previa — al adquirirlo verás cada ejercicio, serie y peso exacto.
+        </p>
       )}
+
+      {totalDias === 0 ? (
+        <EmptyState title="Este plan todavía no tiene ejercicios cargados" />
+      ) : detail.data && detail.data.is_preview ? (
+        <div className="space-y-3">
+          {[...detail.data.sessions]
+            .sort((a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0))
+            .map((sesion) => {
+              const dia = (sesion.day_offset ?? 0) + 1;
+              return (
+                <Card key={sesion.id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold">Día {dia}</p>
+                    <span className="text-xs text-muted">
+                      {sesion.exercise_count} ejercicio{sesion.exercise_count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  {sesion.blocks.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {sesion.blocks.map((b) => (
+                        <Badge key={b}>{blockLabel(b)}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+        </div>
+      ) : detail.data ? (
+        <div className="space-y-3">
+          {[...detail.data.sessions]
+            .sort((a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0))
+            .map((sesion) => {
+              const grupos = groupSets(sesion.sets);
+              const dia = (sesion.day_offset ?? 0) + 1;
+              return (
+                <Card key={sesion.id}>
+                  <p className="mb-2 font-bold">Día {dia}</p>
+                  {grupos.length === 0 ? (
+                    <p className="text-sm text-muted">Sin ejercicios</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {grupos.map((grupo, index) => (
+                        <p key={`${grupo.name}-${index}`} className="text-sm">
+                          <span className="font-semibold">{grupo.name}</span>{" "}
+                          <span className="text-muted">— {groupSummary(grupo)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+        </div>
+      ) : null}
 
       <Card className="mt-5">
         <p className="mb-3 font-bold">Adquirir este plan</p>

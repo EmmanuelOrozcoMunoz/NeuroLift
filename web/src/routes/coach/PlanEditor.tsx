@@ -179,17 +179,20 @@ export default function PlanEditor() {
   const { data, isPending, error, refetch } = usePlanDetail(planId);
   const [toast, setToast] = useState<string | null>(null);
 
-  const sessions = [...(data?.sessions ?? [])].sort((a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0));
+  // El backend solo manda el contenido completo (con ejercicios/series) al autor/admin — si
+  // esto viniera en modo "vista previa" es que este plan no es tuyo, no hay nada que editar.
+  const full = data && !data.is_preview ? data : undefined;
+  const sessions = [...(full?.sessions ?? [])].sort((a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0));
 
   return (
     <>
       <PageHeader title={data?.name ?? "Plan"} subtitle="Contenido del plan" back="/coach/planes" />
 
-      {data && (
+      {full && (
         <CoverUploader
           coverPath={`/plans/${planId}/cover`}
           uploadPath={`/plans/${planId}/cover`}
-          hasImage={data.has_cover_image}
+          hasImage={full.has_cover_image}
           onChanged={() => {
             void refetch();
             void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans });
@@ -205,7 +208,12 @@ export default function PlanEditor() {
 
       {isPending && <LoadingList rows={3} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
-      {!isPending && !error && sessions.length === 0 && (
+      {!isPending && !error && data?.is_preview && (
+        <EmptyState title="Este plan no te pertenece">
+          Solo el coach que lo creó (o un admin) puede editar su contenido.
+        </EmptyState>
+      )}
+      {!isPending && !error && full && sessions.length === 0 && (
         <EmptyState title="Este plan no tiene días configurados" />
       )}
 

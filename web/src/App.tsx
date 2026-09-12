@@ -11,6 +11,7 @@ import Athletes from "@/routes/coach/Athletes";
 import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
 import Groups from "@/routes/coach/Groups";
+import Leaderboard from "@/routes/coach/Leaderboard";
 import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
 import CoachPlanEditor from "@/routes/coach/PlanEditor";
 import CoachPlans from "@/routes/coach/Plans";
@@ -183,6 +184,14 @@ export default function App() {
           element={
             <RoleGate role="coach">
               <Athletes />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/coach/actividad"
+          element={
+            <RoleGate role="coach">
+              <Leaderboard />
             </RoleGate>
           }
         />

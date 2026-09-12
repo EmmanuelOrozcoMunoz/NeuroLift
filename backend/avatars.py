@@ -1,6 +1,6 @@
-"""Subida segura de foto de perfil.
+"""Validación y saneo de imágenes subidas por el usuario (avatar, portada de grupo/plan).
 
-Implementa las medidas exigidas para cualquier upload de imagen de usuario:
+Implementa las medidas exigidas para cualquier upload de imagen:
 
 1. Validación de entrada: tamaño estricto ANTES de decodificar nada, y verificación del
    "magic number" real del archivo (nunca del Content-Type ni de la extensión que mandó el
@@ -9,13 +9,12 @@ Implementa las medidas exigidas para cualquier upload de imagen de usuario:
    lienzo nuevo — esto destruye cualquier payload oculto en la estructura del archivo original
    (polyglots, chunks manipulados, etc.) y de paso elimina TODOS los metadatos (EXIF, GPS,
    perfiles ICC, comentarios) porque el objeto nuevo no hereda el `.info` del original.
-3. Almacenamiento: nombre de archivo aleatorio (uuid4), nunca el del usuario ni derivado de su
-   entrada — así no hay forma de inyectar un path (`../../algo`) ni de sobrescribir otro
-   archivo. Ver AVATAR_DIR en main.py para el aislamiento de la carpeta.
+
+El almacenamiento de los bytes ya saneados (Supabase Storage, con nombre aleatorio uuid4) vive
+en backend/storage.py, no aquí — este módulo solo se preocupa de que el contenido sea una
+imagen válida y esté limpia, sin importar dónde termine guardándose.
 """
-import uuid
 from io import BytesIO
-from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
@@ -130,20 +129,3 @@ def rerender_and_strip_metadata(data: bytes) -> tuple[bytes, str]:
         raise AvatarRejected("La imagen es demasiado grande en resolución.")
     except (UnidentifiedImageError, OSError, ValueError):
         raise AvatarRejected("No se pudo procesar la imagen.")
-
-
-def save_avatar(directory: Path, data: bytes, extension: str) -> str:
-    """Guarda los bytes ya saneados con un nombre 100% aleatorio (nunca derivado de la
-    entrada del usuario) y devuelve el nombre de archivo generado."""
-    directory.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}{extension}"
-    (directory / filename).write_bytes(data)
-    return filename
-
-
-def delete_avatar_if_exists(directory: Path, filename: str | None) -> None:
-    if not filename:
-        return
-    path = directory / filename
-    if path.is_file():
-        path.unlink(missing_ok=True)

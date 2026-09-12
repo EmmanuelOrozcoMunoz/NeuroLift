@@ -19,6 +19,8 @@ import {
 import { longDate, relativeDay } from "@/lib/dates";
 import { useAdaptSession, useCompleteSession, useMesocycle } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
+import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
+import type { SessionCompletePayload } from "@/lib/types";
 
 type Vista = "normal" | "adaptada";
 
@@ -30,6 +32,15 @@ export default function SessionDetail() {
   const [sheetAbierta, setSheetAbierta] = useState(false);
   const [minutos, setMinutos] = useState(60);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Resultado del WOD (solo se usa si la sesión tiene wod_format "for_time"/"amrap"/"emom" —
+  // "1rm" no necesita esto, el peso real ya queda en las series de SetRow).
+  const [wodSheetAbierta, setWodSheetAbierta] = useState(false);
+  const [wodMin, setWodMin] = useState(0);
+  const [wodSeg, setWodSeg] = useState(0);
+  const [wodRondas, setWodRondas] = useState(0);
+  const [wodRepsExtra, setWodRepsExtra] = useState(0);
+  const [wodEmomCumplido, setWodEmomCumplido] = useState(true);
 
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
@@ -80,6 +91,36 @@ export default function SessionDetail() {
   const completada = activa.status === "completed";
   const bloques = groupByBlock(activa.sets);
 
+  function completarConResultado(wodResult?: SessionCompletePayload) {
+    completar.mutate(
+      {
+        mesocycleId: mesocycleId!,
+        sessionId: activa!.id,
+        alsoCompleteId: activa!.id === original!.id ? undefined : original!.id,
+        wodResult,
+      },
+      {
+        onSuccess: () => {
+          setWodSheetAbierta(false);
+          setToast("¡Entrenamiento registrado! Buen trabajo 💪");
+        },
+      },
+    );
+  }
+
+  function abrirRegistroDeResultado() {
+    setWodMin(Math.floor((activa!.wod_time_seconds ?? 0) / 60));
+    setWodSeg((activa!.wod_time_seconds ?? 0) % 60);
+    setWodRondas(activa!.wod_rounds ?? 0);
+    setWodRepsExtra(activa!.wod_extra_reps ?? 0);
+    setWodEmomCumplido(activa!.wod_emom_completed ?? true);
+    setWodSheetAbierta(true);
+  }
+
+  // "1rm" no necesita un resultado aparte: el peso real ya se logueó por serie (SetRow).
+  const pideResultadoAparte =
+    activa.wod_format === "for_time" || activa.wod_format === "amrap" || activa.wod_format === "emom";
+
   return (
     <>
       <PageHeader
@@ -111,6 +152,22 @@ export default function SessionDetail() {
       {activa.athlete_notes && (
         <Card className="mb-4 border-brand/30 bg-brand-soft/30">
           <p className="text-sm leading-relaxed">{activa.athlete_notes}</p>
+        </Card>
+      )}
+
+      {activa.wod_format && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+            🔥 {WOD_FORMAT_LABELS[activa.wod_format]}
+          </p>
+          <p className="mt-1 text-sm font-bold">
+            {completada
+              ? (formatWodResult(
+                  activa,
+                  activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
+                ) ?? "Sin resultado registrado")
+              : "Registra tu resultado al terminar"}
+          </p>
         </Card>
       )}
 
@@ -167,16 +224,10 @@ export default function SessionDetail() {
           full
           className="mt-3"
           loading={completar.isPending}
-          onClick={() =>
-            completar.mutate(
-              {
-                mesocycleId: mesocycleId!,
-                sessionId: activa.id,
-                alsoCompleteId: activa.id === original.id ? undefined : original.id,
-              },
-              { onSuccess: () => setToast("¡Entrenamiento registrado! Buen trabajo 💪") },
-            )
-          }
+          onClick={() => {
+            if (!completada && pideResultadoAparte) abrirRegistroDeResultado();
+            else completarConResultado();
+          }}
         >
           {completada ? (
             <>
@@ -236,6 +287,78 @@ export default function SessionDetail() {
             Esto puede tardar unos segundos: la IA está rearmando la sesión.
           </p>
         )}
+      </Sheet>
+
+      <Sheet
+        open={wodSheetAbierta}
+        onClose={() => setWodSheetAbierta(false)}
+        title={activa.wod_format ? `Resultado — ${WOD_FORMAT_LABELS[activa.wod_format]}` : "Resultado del WOD"}
+      >
+        {activa.wod_format === "for_time" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuánto tiempo tardaste en completarlo?</p>
+            <div className="flex items-center gap-2">
+              <div className="grow">
+                <Stepper value={wodMin} onChange={setWodMin} min={0} max={180} suffix="min" />
+              </div>
+              <div className="grow">
+                <Stepper value={wodSeg} onChange={setWodSeg} min={0} max={59} suffix="seg" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {activa.wod_format === "amrap" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántas rondas completas hiciste, y cuántas reps extra?</p>
+            <div className="flex items-center gap-2">
+              <div className="grow">
+                <Stepper value={wodRondas} onChange={setWodRondas} min={0} max={200} suffix="rondas" />
+              </div>
+              <div className="grow">
+                <Stepper value={wodRepsExtra} onChange={setWodRepsExtra} min={0} max={500} suffix="reps" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {activa.wod_format === "emom" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Mantuviste el ritmo todo el WOD, sin atrasarte?</p>
+            <Segmented<"si" | "no">
+              value={wodEmomCumplido ? "si" : "no"}
+              onChange={(v) => setWodEmomCumplido(v === "si")}
+              options={[
+                { value: "si", label: "Sí, lo cumplí" },
+                { value: "no", label: "No, me atrasé" },
+              ]}
+            />
+          </>
+        )}
+
+        {completar.isError && (
+          <p className="mt-3 text-sm font-medium text-danger">
+            {completar.error instanceof Error ? completar.error.message : "No se pudo guardar. Intenta de nuevo."}
+          </p>
+        )}
+
+        <Button
+          full
+          className="mt-4"
+          loading={completar.isPending}
+          onClick={() => {
+            if (activa.wod_format === "for_time") {
+              completarConResultado({ wod_time_seconds: wodMin * 60 + wodSeg });
+            } else if (activa.wod_format === "amrap") {
+              completarConResultado({ wod_rounds: wodRondas, wod_extra_reps: wodRepsExtra });
+            } else if (activa.wod_format === "emom") {
+              completarConResultado({ wod_emom_completed: wodEmomCumplido });
+            }
+          }}
+        >
+          <IconCheck className="h-5 w-5" />
+          Guardar resultado
+        </Button>
       </Sheet>
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}

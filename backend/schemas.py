@@ -55,6 +55,7 @@ class UserResponse(BaseModel):
     body_weight: float | None = None
     role: str # ¡Agregamos el rol aquí!
     has_avatar: bool = False  # true -> el cliente puede pedir GET /users/{id}/avatar
+    created_at: datetime | None = None  # para mostrar "Miembro desde..." en el perfil
 
     class Config:
         from_attributes = True
@@ -145,10 +146,58 @@ class SessionResponse(BaseModel):
     parent_session_id: Optional[UUID] = None  # si no es None, es una versión adaptada de otra sesión
     duration_minutes: Optional[int] = None
     day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
+    # --- resultado del WOD/metcon, ver models.py:Session ---
+    wod_format: Optional[str] = None
+    wod_time_seconds: Optional[int] = None
+    wod_rounds: Optional[int] = None
+    wod_extra_reps: Optional[int] = None
+    wod_emom_completed: Optional[bool] = None
     sets: List[SetResponse] = [] # ¡Aquí anidamos los sets!
 
     class Config:
         from_attributes = True
+
+
+# Formatos estándar de WOD de CrossFit que el coach puede prescribir para una sesión.
+FormatoWod = Literal["for_time", "amrap", "emom", "1rm"]
+
+
+class WodFormatUpdate(SanitizedModel):
+    """El coach marca (o quita, mandando null) qué formato de WOD tiene esta sesión."""
+    wod_format: FormatoWod | None = None
+
+
+class SessionCompleteRequest(SanitizedModel):
+    """Lo que el atleta reporta al terminar una sesión, si tenía un formato de WOD prescrito.
+    Todo opcional: una sesión sin wod_format (o sin metcon) se completa sin mandar nada de esto."""
+    wod_time_seconds: int | None = Field(None, ge=1, le=36_000)
+    wod_rounds: int | None = Field(None, ge=0, le=500)
+    wod_extra_reps: int | None = Field(None, ge=0, le=2000)
+    wod_emom_completed: bool | None = None
+
+
+class RecentSessionExercise(BaseModel):
+    """Un ejercicio ya completado, con lo REALMENTE hecho (no lo prescrito) — para que el coach
+    vea sin adivinar qué pesos está moviendo su atleta."""
+    exercise_name: str
+    block: Optional[str] = None
+    sets_logged: int = 0
+    actual_reps: List[int] = []
+    actual_weight: List[float] = []
+
+
+class RecentSessionSummary(BaseModel):
+    session_id: UUID
+    scheduled_date: date
+    completed_date: Optional[datetime] = None
+    mesocycle_name: str | None = None
+    discipline: str
+    wod_format: Optional[str] = None
+    wod_time_seconds: Optional[int] = None
+    wod_rounds: Optional[int] = None
+    wod_extra_reps: Optional[int] = None
+    wod_emom_completed: Optional[bool] = None
+    exercises: List[RecentSessionExercise] = []
 
 class MesocycleFullResponse(BaseModel):
     id: UUID
@@ -161,10 +210,38 @@ class MesocycleFullResponse(BaseModel):
     level: Optional[str] = None
     is_template: bool = False
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
+    is_preview: bool = False  # ver PlanPreviewResponse: esta es SIEMPRE la versión completa
     sessions: List[SessionResponse] = [] # ¡Aquí anidamos las sesiones!
 
     class Config:
         from_attributes = True
+
+
+class PlanSessionPreview(BaseModel):
+    """Un día de un plan, SIN revelar sus ejercicios/series/pesos — solo la estructura (qué
+    bloques trae y cuántos ejercicios). Ver PlanPreviewResponse."""
+    id: UUID
+    day_offset: Optional[int] = None
+    blocks: List[str] = []
+    exercise_count: int = 0
+
+
+class PlanPreviewResponse(BaseModel):
+    """Lo que ve de un plan cualquiera que NO sea su autor/admin (típicamente un atleta
+    navegando el catálogo antes de comprarlo): mismos datos generales que MesocycleFullResponse,
+    pero el contenido día por día se reduce a PlanSessionPreview — mostrar la programación
+    completa (ejercicios, series, pesos) antes de pagar no tendría sentido comercial."""
+    id: UUID
+    name: str | None = None
+    discipline: str
+    start_date: date
+    end_date: Optional[date] = None
+    description: Optional[str] = None
+    level: Optional[str] = None
+    is_template: bool = True
+    has_cover_image: bool = False
+    is_preview: bool = True
+    sessions: List[PlanSessionPreview] = []
 
 class PRResponse(BaseModel):
     id: UUID
@@ -317,6 +394,23 @@ class GroupSessionExerciseDelete(SanitizedModel):
 class UserRoleUpdate(SanitizedModel):
     """Solo un admin puede cambiar el rol de un usuario (incluyendo promover a otro admin)."""
     role: Literal["athlete", "coach", "admin"]
+
+
+# --- TABLA DE POSICIONES DE ACTIVIDAD (panel del coach) ---
+class AthleteActivityResponse(BaseModel):
+    """Una fila de la 'tabla de posiciones': cuántos entrenamientos ha completado este atleta
+    (los que él mismo marcó como hechos, con sus pesos/reps reales) — visibilidad que antes el
+    coach no tenía sin entrar mesociclo por mesociclo."""
+    user_id: UUID
+    full_name: str
+    has_avatar: bool = False
+    completed_total: int = 0
+    completed_this_week: int = 0
+    last_completed_at: Optional[datetime] = None
+    # Texto ya armado del lado del servidor (ej. "Fran: 12:34", "AMRAP: 5 rondas + 12 reps") del
+    # último WOD con resultado registrado — el detalle completo (ejercicio por ejercicio, con
+    # los pesos reales) vive en GET /users/{id}/recent-activity, no aquí, para no saturar la fila.
+    last_wod_summary: Optional[str] = None
 
 
 class AdminOverview(BaseModel):

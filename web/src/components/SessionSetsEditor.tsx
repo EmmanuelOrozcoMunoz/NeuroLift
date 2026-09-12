@@ -2,11 +2,62 @@ import { useState } from "react";
 
 import { BlockSelect } from "@/components/BlockSelect";
 import { IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, Field, Stepper } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
+import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
+import { WOD_FORMAT_OPTIONS } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
-import type { TrainingSession } from "@/lib/types";
+import type { TrainingSession, WodFormat } from "@/lib/types";
+
+/** El coach marca (o quita) el formato de WOD de esta sesión — el atleta lo ve al completarla
+ *  y reporta el resultado que corresponda (tiempo, rondas+reps, o si cumplió el ritmo). */
+function WodFormatCard({
+  mesocycleId,
+  session,
+  onSaved,
+}: {
+  mesocycleId: string;
+  session: TrainingSession;
+  onSaved: () => void;
+}) {
+  const setWodFormat = useSetWodFormat(mesocycleId);
+  const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
+
+  function elegir(valor: WodFormat) {
+    const nuevo = seleccionado === valor ? "" : valor;
+    setSeleccionado(nuevo);
+    setWodFormat.mutate(
+      { sessionId: session.id, body: { wod_format: nuevo || null } },
+      { onSuccess: onSaved },
+    );
+  }
+
+  return (
+    <Card>
+      <p className="mb-2 text-sm font-semibold text-muted">🔥 Formato del WOD (opcional)</p>
+      <div className="grid grid-cols-2 gap-2">
+        {WOD_FORMAT_OPTIONS.map((opcion) => (
+          <button
+            key={opcion.value}
+            type="button"
+            disabled={setWodFormat.isPending}
+            onClick={() => elegir(opcion.value)}
+            className={cx(
+              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+              seleccionado === opcion.value
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-line bg-surface-2 text-fg",
+            )}
+          >
+            <p className="text-sm font-bold">{opcion.label}</p>
+            <p className="text-xs text-muted">{opcion.hint}</p>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function ExerciseBlock({
   mesocycleId,
@@ -204,6 +255,11 @@ export function SessionSetsEditor({
 
   return (
     <div className="space-y-4">
+      <WodFormatCard
+        mesocycleId={mesocycleId}
+        session={session}
+        onSaved={() => onFeedback("Formato de WOD actualizado.")}
+      />
       {session.sets.length === 0 && <EmptyState title="Esta sesión todavía no tiene ejercicios" />}
       {bloques.map((bloque, indiceBloque) => (
         <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">

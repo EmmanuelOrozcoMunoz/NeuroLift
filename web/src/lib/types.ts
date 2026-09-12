@@ -12,6 +12,7 @@ export interface User {
   role: Role;
   /** true -> el cliente puede pedir GET /users/{id}/avatar */
   has_avatar: boolean;
+  created_at: string | null;
 }
 
 export interface LoginResponse {
@@ -43,6 +44,9 @@ export interface SetItem {
 
 export type SessionStatus = "pending" | "completed" | string;
 
+/** Formatos estándar de WOD que el coach puede prescribir para una sesión. */
+export type WodFormat = "for_time" | "amrap" | "emom" | "1rm";
+
 export interface TrainingSession {
   id: string;
   mesocycle_id: string;
@@ -54,7 +58,50 @@ export interface TrainingSession {
   parent_session_id: string | null;
   duration_minutes: number | null;
   day_offset: number | null;
+  /** El coach lo prescribe (PUT /sessions/{id}/wod-format); el atleta reporta el resultado al
+   *  completar la sesión. null = esta sesión no tiene un WOD con formato de puntaje formal. */
+  wod_format: WodFormat | null;
+  wod_time_seconds: number | null;
+  wod_rounds: number | null;
+  wod_extra_reps: number | null;
+  wod_emom_completed: boolean | null;
   sets: SetItem[];
+}
+
+/** Body de PUT /sessions/{id}/wod-format. */
+export interface WodFormatPayload {
+  wod_format: WodFormat | null;
+}
+
+/** Body opcional de POST /sessions/{id}/complete — solo aplica si la sesión tenía wod_format. */
+export interface SessionCompletePayload {
+  wod_time_seconds?: number | null;
+  wod_rounds?: number | null;
+  wod_extra_reps?: number | null;
+  wod_emom_completed?: boolean | null;
+}
+
+/** GET /users/{id}/recent-activity — una sesión ya completada, con lo REALMENTE hecho. */
+export interface RecentSessionExercise {
+  exercise_name: string;
+  block: string | null;
+  sets_logged: number;
+  actual_reps: number[];
+  actual_weight: number[];
+}
+
+export interface RecentSessionSummary {
+  session_id: string;
+  scheduled_date: string;
+  completed_date: string | null;
+  mesocycle_name: string | null;
+  discipline: string;
+  wod_format: WodFormat | null;
+  wod_time_seconds: number | null;
+  wod_rounds: number | null;
+  wod_extra_reps: number | null;
+  wod_emom_completed: boolean | null;
+  exercises: RecentSessionExercise[];
 }
 
 /** GET /users/{id}/mesocycles/ — el backend devuelve el modelo ORM crudo (sin response_model). */
@@ -85,8 +132,40 @@ export interface MesocycleFull {
   is_template: boolean;
   /** true -> el cliente puede pedir GET /plans/{id}/cover (solo relevante si is_template) */
   has_cover_image: boolean;
+  /** Siempre false aquí — esta es la forma COMPLETA. Ver PlanPreview para la otra mitad de la
+   *  unión que puede devolver GET /plans/{id}. */
+  is_preview?: false;
   sessions: TrainingSession[];
 }
+
+/** Un día de un plan tal como lo ve alguien que NO es su autor/admin: estructura (bloques +
+ *  cuántos ejercicios), sin los ejercicios/series/pesos exactos. */
+export interface PlanPreviewSession {
+  id: string;
+  day_offset: number | null;
+  blocks: string[];
+  exercise_count: number;
+}
+
+/** GET /plans/{id} para cualquiera que no sea el autor/admin del plan (típicamente un atleta
+ *  viendo el catálogo antes de comprarlo) — vista previa sin revelar la programación completa. */
+export interface PlanPreview {
+  id: string;
+  name: string | null;
+  discipline: string;
+  start_date: string;
+  end_date: string | null;
+  description: string | null;
+  level: string | null;
+  is_template: boolean;
+  has_cover_image: boolean;
+  is_preview: true;
+  sessions: PlanPreviewSession[];
+}
+
+/** GET /plans/{id} devuelve una de las dos formas según quién pregunte — discrimina por
+ *  `is_preview`. */
+export type PlanDetailResponse = MesocycleFull | PlanPreview;
 
 export interface PersonalRecord {
   id: string;
@@ -127,6 +206,19 @@ export interface FitnessLevel {
 
 export interface MessageResponse {
   message: string;
+}
+
+/** GET /coach/leaderboard — una fila por atleta, ya ordenadas por actividad de esta semana. */
+export interface AthleteActivity {
+  user_id: string;
+  full_name: string;
+  has_avatar: boolean;
+  completed_total: number;
+  completed_this_week: number;
+  last_completed_at: string | null;
+  /** Ya viene formateado del backend, ej. "Por tiempo: 12:34" — null si no tiene ningún WOD
+   *  con resultado registrado todavía. */
+  last_wod_summary: string | null;
 }
 
 // ============================================================ panel de coach

@@ -4,6 +4,7 @@ import { IconCamera, IconTrash, IconUser } from "@/components/icons";
 import { Spinner, cx } from "@/components/ui";
 import { apiFetch, apiUpload, ApiError } from "@/lib/api";
 import { useAuth, useCurrentUser } from "@/lib/auth";
+import { monthYear } from "@/lib/dates";
 import { useAvatarUrl } from "@/lib/useAvatarUrl";
 import type { MessageResponse, User } from "@/lib/types";
 
@@ -122,6 +123,9 @@ export function AvatarUploader() {
       <div className="min-w-0 grow">
         <p className="truncate font-bold">{user.full_name}</p>
         <p className="truncate text-sm text-muted">{user.email}</p>
+        {user.created_at && (
+          <p className="truncate text-xs text-muted">Miembro desde {monthYear(user.created_at)}</p>
+        )}
         <button
           type="button"
           disabled={busy}

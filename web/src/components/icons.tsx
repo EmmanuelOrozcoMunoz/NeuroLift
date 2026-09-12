@@ -122,6 +122,16 @@ export function IconTrash({ className = base }: IconProps) {
   );
 }
 
+export function IconTrophy({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" strokeLinejoin="round" />
+      <path d="M7 5H4.5A1.5 1.5 0 0 0 3 6.5C3 8.5 4.5 10 7 10M17 5h2.5A1.5 1.5 0 0 1 21 6.5C21 8.5 19.5 10 17 10" strokeLinecap="round" />
+      <path d="M12 14v3M9 20.5h6M9.5 20.5c0-2 .8-2.7 1-3.5M14.5 20.5c0-2-.8-2.7-1-3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function IconImage({ className = base }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

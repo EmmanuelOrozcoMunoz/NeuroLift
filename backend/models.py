@@ -13,6 +13,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String, nullable=False) # Contraseña (bcrypt), siempre generada por la app
     role = Column(String, default="athlete")
+    created_at = Column(DateTime, default=datetime.utcnow)
     body_weight = Column(Float, nullable=True)
     sex = Column(String(10), nullable=True)   # "male" | "female" — usado para el Fit Level
     age = Column(Integer, nullable=True)      # autorreportada, igual que body_weight
@@ -130,6 +131,19 @@ class Session(Base):
     # también guarda un scheduled_date sintético (PLAN_EPOCH + day_offset) para no romper el
     # ordenamiento ni las vistas existentes; al adquirir el plan se recalcula la fecha real.
     day_offset = Column(Integer, nullable=True)
+
+    # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
+    # El coach prescribe el formato al programar la sesión; el atleta reporta su resultado real
+    # al completarla (ver PUT /sessions/{id}/wod-format y POST /sessions/{id}/complete).
+    # "for_time": tiempo total (wod_time_seconds). "amrap": rondas completas + reps sueltas del
+    # intento final (wod_rounds/wod_extra_reps). "emom"/"e2mom": si mantuvo el ritmo todo el
+    # tiempo (wod_emom_completed). "1rm": no necesita campos propios — el peso máximo ya queda
+    # en Set.actual_weight de esa sesión.
+    wod_format = Column(String(20), nullable=True)
+    wod_time_seconds = Column(Integer, nullable=True)
+    wod_rounds = Column(Integer, nullable=True)
+    wod_extra_reps = Column(Integer, nullable=True)
+    wod_emom_completed = Column(Boolean, nullable=True)
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
     sets = relationship("Set", back_populates="session", cascade="all, delete-orphan")

@@ -8,8 +8,9 @@ import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from 
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
-import { shortDate } from "@/lib/dates";
-import { usePersonalRecords, useUpsertPersonalRecord, useMesocycles } from "@/lib/queries";
+import { formatKg, shortDate } from "@/lib/dates";
+import { usePersonalRecords, useUpsertPersonalRecord, useMesocycles, useRecentActivity } from "@/lib/queries";
+import { formatWodResult } from "@/lib/wod";
 import type { GroupDetail } from "@/lib/types";
 
 export default function AthleteDetail() {
@@ -31,6 +32,7 @@ export default function AthleteDetail() {
   const mesocycles = useMesocycles(athleteId ?? "");
   const prs = usePersonalRecords(athleteId ?? "");
   const upsertPr = useUpsertPersonalRecord(athleteId ?? "");
+  const recent = useRecentActivity(athleteId ?? "");
 
   const [exercise, setExercise] = useState("");
   const [weight, setWeight] = useState("");
@@ -97,6 +99,49 @@ export default function AthleteDetail() {
             Guardar
           </Button>
         </form>
+      </Card>
+
+      <Card className="mb-4">
+        <p className="mb-3 font-bold">📋 Actividad reciente</p>
+        {recent.isPending && <LoadingList rows={2} />}
+        {!recent.isPending && recent.error && (
+          <ErrorState error={recent.error} onRetry={() => void recent.refetch()} />
+        )}
+        {!recent.isPending && !recent.error && (recent.data?.length ?? 0) === 0 && (
+          <p className="text-sm text-muted">Todavía no ha completado ningún entrenamiento.</p>
+        )}
+        {!recent.isPending && (recent.data?.length ?? 0) > 0 && (
+          <div className="space-y-2.5">
+            {recent.data!.map((sesion) => {
+              const resultado = formatWodResult(
+                sesion,
+                sesion.exercises.flatMap((e) => e.actual_weight),
+              );
+              return (
+                <div key={sesion.session_id} className="rounded-xl bg-surface-2 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">{shortDate(sesion.scheduled_date)}</p>
+                    {resultado && <span className="text-xs font-bold text-brand">{resultado}</span>}
+                  </div>
+                  {sesion.exercises.length === 0 ? (
+                    <p className="mt-1 text-xs text-muted">Sin series registradas.</p>
+                  ) : (
+                    <div className="mt-1.5 space-y-1">
+                      {sesion.exercises.map((ej, index) => (
+                        <p key={`${ej.exercise_name}-${index}`} className="text-xs text-muted">
+                          <span className="font-medium text-fg">{ej.exercise_name}</span>
+                          {ej.actual_weight.length > 0 &&
+                            ` — ${ej.actual_weight.map(formatKg).join(", ")} kg`}
+                          {ej.actual_reps.length > 0 && ` (${ej.actual_reps.join(", ")} reps)`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       <div className="mb-2 flex items-baseline justify-between">

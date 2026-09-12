@@ -8,8 +8,12 @@ import type {
   MesocycleSummary,
   MessageResponse,
   PersonalRecord,
+  PlanDetailResponse,
   PlanSummary,
+  RecentSessionSummary,
+  SessionCompletePayload,
   TrainingSession,
+  WodFormatPayload,
 } from "@/lib/types";
 
 export const queryKeys = {
@@ -17,6 +21,7 @@ export const queryKeys = {
   mesocycle: (id: string) => ["mesocycle", id] as const,
   prs: (userId: string) => ["prs", userId] as const,
   fitness: (userId: string) => ["fitness", userId] as const,
+  recentActivity: (userId: string) => ["recent-activity", userId] as const,
   planCatalog: ["plans", "catalog"] as const,
   plan: (id: string) => ["plan", id] as const,
 };
@@ -35,6 +40,26 @@ export function useMesocycle(mesocycleId: string | undefined): UseQueryResult<Me
     queryKey: queryKeys.mesocycle(mesocycleId ?? "none"),
     queryFn: () => apiFetch<MesocycleFull>(`/mesocycles/${mesocycleId}`),
     enabled: Boolean(mesocycleId),
+  });
+}
+
+/** El coach prescribe (o quita) el formato de WOD de una sesión — el atleta ve ese formato al
+ *  completarla y reporta el resultado que le corresponda (tiempo, rondas+reps, o si cumplió). */
+export function useSetWodFormat(mesocycleId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, body }: { sessionId: string; body: WodFormatPayload }) =>
+      apiFetch<MessageResponse>(`/sessions/${sessionId}/wod-format`, { method: "PUT", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) }),
+  });
+}
+
+/** Últimas sesiones completadas de un atleta con lo que REALMENTE hizo — pesos/reps reales y
+ *  resultado del WOD, no lo prescrito. Coach o el propio atleta pueden pedirlo. */
+export function useRecentActivity(userId: string): UseQueryResult<RecentSessionSummary[]> {
+  return useQuery({
+    queryKey: queryKeys.recentActivity(userId),
+    queryFn: () => apiFetch<RecentSessionSummary[]>(`/users/${userId}/recent-activity`),
   });
 }
 
@@ -96,14 +121,16 @@ interface CompleteSessionVars {
   /** Si se completó la versión adaptada, la original se marca también: para el calendario
    *  ese día ya está entrenado, y no tiene sentido que quede pendiente para siempre. */
   alsoCompleteId?: string;
+  /** Solo si la sesión tenía un wod_format prescrito — lo que el atleta reportó como resultado. */
+  wodResult?: SessionCompletePayload;
 }
 
 export function useCompleteSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ sessionId, alsoCompleteId }: CompleteSessionVars) => {
-      await apiFetch<MessageResponse>(`/sessions/${sessionId}/complete`, { method: "POST" });
+    mutationFn: async ({ sessionId, alsoCompleteId, wodResult }: CompleteSessionVars) => {
+      await apiFetch<MessageResponse>(`/sessions/${sessionId}/complete`, { method: "POST", body: wodResult });
       if (alsoCompleteId) {
         await apiFetch<MessageResponse>(`/sessions/${alsoCompleteId}/complete`, { method: "POST" });
       }
@@ -189,6 +216,9 @@ export function useSaveBenchmarks(userId: string) {
       apiFetch<FitnessLevel>(`/users/${userId}/fitness-benchmarks`, { method: "PUT", body }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.fitness(userId), data);
+      // Snatch/Clean & Jerk/Back Squat/Deadlift también quedan como PersonalRecord del lado del
+      // backend — refresca "Récords (PRs)" para que se vean sin tener que cambiar de pantalla.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.prs(userId) });
     },
   });
 }
@@ -202,10 +232,13 @@ export function usePlanCatalog(): UseQueryResult<PlanSummary[]> {
   });
 }
 
-export function usePlanDetail(planId: string | undefined): UseQueryResult<MesocycleFull> {
+/** El backend devuelve el plan completo (autor/admin) o una vista previa sin ejercicios/series
+ *  (cualquier otro usuario) — ver PlanDetailResponse. Cada pantalla que consume esto debe
+ *  chequear `is_preview` antes de asumir la forma. */
+export function usePlanDetail(planId: string | undefined): UseQueryResult<PlanDetailResponse> {
   return useQuery({
     queryKey: queryKeys.plan(planId ?? "none"),
-    queryFn: () => apiFetch<MesocycleFull>(`/plans/${planId}`),
+    queryFn: () => apiFetch<PlanDetailResponse>(`/plans/${planId}`),
     enabled: Boolean(planId),
   });
 }

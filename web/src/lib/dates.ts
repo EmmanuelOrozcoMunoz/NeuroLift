@@ -77,3 +77,14 @@ export function formatPrice(price: number | null | undefined): string {
 export function formatKg(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
+
+/**
+ * "septiembre 2026" — para "Miembro desde" en el perfil. `created_at` es un datetime COMPLETO
+ * (con hora), a diferencia de las fechas YYYY-MM-DD de sesiones/mesociclos — así que acá sí es
+ * seguro usar `new Date()` directo, sin el ajuste de zona horaria que hace parseApiDate.
+ */
+export function monthYear(isoDatetime: string): string {
+  const date = new Date(isoDatetime);
+  const mes = date.toLocaleDateString("es", { month: "long" });
+  return `${mes} ${date.getFullYear()}`;
+}

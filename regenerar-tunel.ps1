@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SINOPSIS
   Regenera los túneles de Cloudflare (backend + frontend) para probar NeuroLift desde el
   celular con una URL pública, y reinicia el backend y el dev server de Vite ya apuntando
@@ -37,7 +37,44 @@ $logsDir = Join-Path $repoRoot ".tunnels"
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 $backendLog = Join-Path $logsDir "backend.log"
 $frontendLog = Join-Path $logsDir "frontend.log"
-Remove-Item $backendLog, $frontendLog -ErrorAction SilentlyContinue
+
+# Lanza un túnel rápido y espera su URL, reintentando si Cloudflare falla al provisionarlo
+# ("failed to request quick Tunnel: ... context deadline exceeded" — timeout de red contra
+# Cloudflare, no un error de este script; el servicio gratis de túneles rápidos a veces se
+# satura). Antes, un fallo así dejaba en el log el mensaje de error con la URL de la API de
+# Cloudflare (https://api.trycloudflare.com) y el script la confundía con la URL real del
+# túnel — por eso el regex de éxito EXCLUYE explícitamente el subdominio "api.".
+function Start-QuickTunnel {
+    param(
+        [string]$LocalUrl,
+        [string]$LogPath,
+        [string]$Label
+    )
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        Remove-Item $LogPath -ErrorAction SilentlyContinue
+        Start-Process -WindowStyle Hidden -FilePath $cloudflared `
+            -ArgumentList "tunnel", "--url", $LocalUrl `
+            -RedirectStandardError $LogPath
+
+        for ($i = 0; $i -lt 15; $i++) {
+            Start-Sleep -Seconds 1
+            if (-not (Test-Path $LogPath)) { continue }
+            $contenido = Get-Content $LogPath -Raw -ErrorAction SilentlyContinue
+            if ($contenido -match "https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com") {
+                return $Matches[0]
+            }
+            if ($contenido -match "failed to request quick Tunnel") {
+                break  # corta la espera interna para reintentar con un proceso nuevo
+            }
+        }
+
+        Write-Host "   $Label : intento $attempt de $maxAttempts fallo (Cloudflare no respondio a tiempo), reintentando..." -ForegroundColor Yellow
+        Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+    return $null
+}
 
 Write-Host "1) Deteniendo túneles y servidores anteriores..." -ForegroundColor Cyan
 Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -63,31 +100,12 @@ foreach ($port in 8000, 5173) {
 Start-Sleep -Seconds 2
 
 Write-Host "2) Abriendo túneles de Cloudflare (todavía sin backend/frontend corriendo, es normal)..." -ForegroundColor Cyan
-Start-Process -WindowStyle Hidden -FilePath $cloudflared `
-    -ArgumentList "tunnel", "--url", "http://localhost:8000" `
-    -RedirectStandardError $backendLog
-Start-Process -WindowStyle Hidden -FilePath $cloudflared `
-    -ArgumentList "tunnel", "--url", "http://localhost:5173" `
-    -RedirectStandardError $frontendLog
-
-Write-Host "   Esperando a que Cloudflare asigne las URLs..." -ForegroundColor DarkGray
-$backendUrl = $null
-$frontendUrl = $null
-for ($i = 0; $i -lt 15; $i++) {
-    Start-Sleep -Seconds 1
-    if (-not $backendUrl -and (Test-Path $backendLog)) {
-        $m = Select-String -Path $backendLog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" | Select-Object -First 1
-        if ($m) { $backendUrl = $m.Matches[0].Value }
-    }
-    if (-not $frontendUrl -and (Test-Path $frontendLog)) {
-        $m = Select-String -Path $frontendLog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" | Select-Object -First 1
-        if ($m) { $frontendUrl = $m.Matches[0].Value }
-    }
-    if ($backendUrl -and $frontendUrl) { break }
-}
+Write-Host "   Esperando a que Cloudflare asigne las URLs (reintenta solo si hace falta)..." -ForegroundColor DarkGray
+$backendUrl = Start-QuickTunnel -LocalUrl "http://localhost:8000" -LogPath $backendLog -Label "Backend"
+$frontendUrl = Start-QuickTunnel -LocalUrl "http://localhost:5173" -LogPath $frontendLog -Label "Frontend"
 
 if (-not $backendUrl -or -not $frontendUrl) {
-    Write-Host "No se pudieron leer las URLs a tiempo. Revisa los logs en $logsDir" -ForegroundColor Red
+    Write-Host "No se pudo levantar el tunel tras varios intentos (Cloudflare puede estar saturado en este momento). Revisa los logs en $logsDir o intenta de nuevo en un minuto." -ForegroundColor Red
     exit 1
 }
 

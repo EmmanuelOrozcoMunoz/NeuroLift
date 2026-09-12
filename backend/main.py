@@ -1,11 +1,10 @@
 import logging
 import os
-from pathlib import Path
 from fastapi import FastAPI, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func, case
 from typing import List
 from uuid import UUID
 from datetime import timedelta, datetime, date
@@ -19,7 +18,7 @@ from slowapi.errors import RateLimitExceeded
 import jwt
 
 from backend.database import SessionLocal, engine
-from backend import avatars, models, schemas, fitness_scoring, ai_agent
+from backend import avatars, models, schemas, fitness_scoring, ai_agent, storage
 
 load_dotenv()
 
@@ -36,6 +35,8 @@ def _client_ip(request: Request) -> str:
 
 # Esto crea las tablas si por alguna razón no existieran en la BD
 models.Base.metadata.create_all(bind=engine)
+# Ídem para los buckets de Storage (avatares, portadas) — ver backend/storage.py.
+storage.ensure_buckets()
 
 # ==========================================
 # CONFIGURACIÓN JWT (cargada desde .env, nunca hardcodeada)
@@ -55,33 +56,19 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 día (antes eran 7 días sin revocaci
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 _docs_enabled = ENVIRONMENT != "production"
 
-# Carpeta de fotos de perfil: fuera de cualquier raíz servida como estática (esta app no
-# expone ningún directorio del disco directamente — StaticFiles/app.mount no se usa en
-# ningún lado — así que ya está "fuera de la raíz web pública" por construcción; el único
-# camino para leer un archivo de aquí es el endpoint GET /users/{id}/avatar, que nunca
-# ejecuta el contenido, solo lo devuelve con su Content-Type real). Si este backend se
-# sirve alguna vez detrás de Nginx/Apache, hay que asegurarse de que ninguna `location`/alias
-# apunte a esta carpeta (o, si se hace, negar explícitamente la ejecución de scripts ahí).
-AVATAR_DIR = Path(__file__).resolve().parent / "uploads" / "avatars"
-# Mismo razonamiento que AVATAR_DIR: fuera de cualquier raíz servida como estática, solo
-# legibles vía sus endpoints GET dedicados (/groups/{id}/cover, /plans/{id}/cover).
-GROUP_COVER_DIR = Path(__file__).resolve().parent / "uploads" / "group_covers"
-PLAN_COVER_DIR = Path(__file__).resolve().parent / "uploads" / "plan_covers"
-
 limiter = Limiter(key_func=get_remote_address)
 
 
-def _serve_image(directory: Path, filename: str | None, content_types: dict[str, str]):
-    """Sirve una imagen ya saneada (avatar/portada) por su nombre ALEATORIO guardado en BD.
-    Defensa en profundidad: el nombre siempre lo generamos nosotros (uuid4), pero por si algún
-    dato corrupto llegara a tener un separador de ruta, nunca se sale de `directory`."""
+def _redirect_to_image(bucket: str, filename: str | None):
+    """Redirige a una URL firmada de corta duración de Supabase Storage — los buckets son
+    PRIVADOS, así que esta es la única forma de leer un objeto. Se llama DESPUÉS de que el
+    endpoint ya comprobó que quien pregunta tiene permiso de ver esta imagen en particular; la
+    firma en sí no vuelve a chequear nada de eso. El navegador sigue la redirección solo, sin
+    reenviar el header Authorization (va a otro origen) — no hace falta, la firma ya autoriza."""
     if not filename:
         raise HTTPException(status_code=404, detail="No hay imagen.")
-    path = (directory / filename).resolve()
-    if path.parent != directory.resolve() or not path.is_file():
-        raise HTTPException(status_code=404, detail="No hay imagen.")
-    media_type = content_types.get(path.suffix.lower(), "application/octet-stream")
-    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
+    url = storage.create_signed_url(bucket, filename)
+    return RedirectResponse(url, status_code=307)
 
 
 def _ip_and_user_key(request: Request) -> str:
@@ -380,6 +367,130 @@ def get_athletes(db: Session = Depends(get_db), current_user: models.User = Depe
     return db.query(models.User).filter(models.User.id.in_(ids)).all()
 
 
+@app.get("/coach/leaderboard", response_model=List[schemas.AthleteActivityResponse])
+def get_athlete_leaderboard(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
+    """Tabla de posiciones: cuántos entrenamientos completó cada uno de TUS atletas (los que el
+    propio atleta marcó como hechos, con sus reps/pesos reales) — antes el coach no tenía forma
+    de ver esto sin entrar mesociclo por mesociclo. Ordenado por actividad de esta semana."""
+    if current_user.role == "admin":
+        ids = {u.id for u in db.query(models.User.id).filter(models.User.role == "athlete").all()}
+    else:
+        ids = _coach_athlete_ids(db, current_user.id)
+    if not ids:
+        return []
+
+    atletas = db.query(models.User).filter(models.User.id.in_(ids)).all()
+
+    hoy = date.today()
+    inicio_semana = hoy - timedelta(days=hoy.weekday())  # lunes de esta semana
+
+    filas = (
+        db.query(
+            models.Mesocycle.user_id.label("user_id"),
+            func.count(models.Session.id).label("total"),
+            func.sum(case((models.Session.completed_date >= inicio_semana, 1), else_=0)).label("esta_semana"),
+            func.max(models.Session.completed_date).label("ultima"),
+        )
+        .join(models.Session, models.Session.mesocycle_id == models.Mesocycle.id)
+        .filter(models.Mesocycle.user_id.in_(ids), models.Session.status == "completed")
+        .group_by(models.Mesocycle.user_id)
+        .all()
+    )
+    stats_por_atleta = {f.user_id: f for f in filas}
+
+    # Último WOD con resultado registrado, uno por atleta (el más reciente primero en la
+    # consulta, así que el primero que aparece por atleta ya es el que queremos).
+    sesiones_wod = (
+        db.query(models.Session)
+        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .options(joinedload(models.Session.mesocycle), joinedload(models.Session.sets))
+        .filter(
+            models.Mesocycle.user_id.in_(ids),
+            models.Session.status == "completed",
+            models.Session.wod_format.isnot(None),
+        )
+        .order_by(models.Session.completed_date.desc())
+        .all()
+    )
+    ultimo_wod_por_atleta: dict = {}
+    for s in sesiones_wod:
+        ultimo_wod_por_atleta.setdefault(s.mesocycle.user_id, s)
+
+    resultados = [
+        schemas.AthleteActivityResponse(
+            user_id=atleta.id,
+            full_name=atleta.full_name,
+            has_avatar=atleta.has_avatar,
+            completed_total=(stats_por_atleta[atleta.id].total if atleta.id in stats_por_atleta else 0),
+            completed_this_week=(
+                int(stats_por_atleta[atleta.id].esta_semana) if atleta.id in stats_por_atleta else 0
+            ),
+            last_completed_at=(stats_por_atleta[atleta.id].ultima if atleta.id in stats_por_atleta else None),
+            last_wod_summary=_format_wod_summary(ultimo_wod_por_atleta.get(atleta.id)),
+        )
+        for atleta in atletas
+    ]
+    resultados.sort(key=lambda r: (r.completed_this_week, r.completed_total), reverse=True)
+    return resultados
+
+
+@app.get("/users/{user_id}/recent-activity", response_model=List[schemas.RecentSessionSummary])
+def get_recent_activity(
+    user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """Últimas 10 sesiones COMPLETADAS de este atleta, con lo que REALMENTE hizo (reps/pesos
+    reales por ejercicio, resultado del WOD si tenía uno prescrito) — antes el coach no tenía
+    forma de ver esto sin entrar mesociclo por mesociclo."""
+    ensure_owner_or_coach(db, user_id, current_user)
+
+    sesiones = (
+        db.query(models.Session)
+        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .options(
+            joinedload(models.Session.mesocycle),
+            joinedload(models.Session.sets).joinedload(models.Set.exercise),
+        )
+        .filter(models.Mesocycle.user_id == user_id, models.Session.status == "completed")
+        .order_by(models.Session.completed_date.desc())
+        .limit(10)
+        .all()
+    )
+
+    resultados = []
+    for sesion in sesiones:
+        # Agrupa series CONSECUTIVAS del mismo ejercicio+bloque (igual que groupSets en el
+        # frontend) — así "Back Squat" con 4 series seguidas se lee como un solo renglón.
+        ejercicios: list[schemas.RecentSessionExercise] = []
+        for s in sorted(sesion.sets, key=lambda x: x.set_order):
+            nombre = s.exercise.name if s.exercise else "Ejercicio"
+            anterior = ejercicios[-1] if ejercicios else None
+            if anterior and anterior.exercise_name == nombre and anterior.block == s.block:
+                fila = anterior
+            else:
+                fila = schemas.RecentSessionExercise(exercise_name=nombre, block=s.block)
+                ejercicios.append(fila)
+            if s.actual_reps is not None:
+                fila.actual_reps.append(s.actual_reps)
+                fila.sets_logged += 1
+            if s.actual_weight is not None:
+                fila.actual_weight.append(s.actual_weight)
+
+        resultados.append(schemas.RecentSessionSummary(
+            session_id=sesion.id,
+            scheduled_date=sesion.scheduled_date,
+            completed_date=sesion.completed_date,
+            mesocycle_name=sesion.mesocycle.name,
+            discipline=sesion.mesocycle.discipline,
+            wod_format=sesion.wod_format,
+            wod_time_seconds=sesion.wod_time_seconds,
+            wod_rounds=sesion.wod_rounds,
+            wod_extra_reps=sesion.wod_extra_reps,
+            wod_emom_completed=sesion.wod_emom_completed,
+            exercises=ejercicios,
+        ))
+    return resultados
+
+
 @app.get("/users/search", response_model=schemas.UserResponse)
 @limiter.limit("30/hour", key_func=_ip_and_user_key)
 def search_athlete_by_email(
@@ -414,7 +525,9 @@ async def upload_my_avatar(
     clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
 
     nombre_anterior = current_user.avatar_filename
-    nuevo_nombre = avatars.save_avatar(AVATAR_DIR, clean_bytes, extension)
+    nuevo_nombre = storage.upload_object(
+        storage.AVATAR_BUCKET, clean_bytes, extension, _AVATAR_CONTENT_TYPES[extension]
+    )
 
     current_user.avatar_filename = nuevo_nombre
     db.commit()
@@ -422,7 +535,7 @@ async def upload_my_avatar(
 
     # Se borra la anterior DESPUÉS de confirmar la nueva en la BD (si algo falla antes, la
     # foto anterior sigue siendo válida en vez de quedar el usuario sin ninguna).
-    avatars.delete_avatar_if_exists(AVATAR_DIR, nombre_anterior)
+    storage.delete_object(storage.AVATAR_BUCKET, nombre_anterior)
 
     security_logger.info("Foto de perfil actualizada: %s desde %s", current_user.email, _client_ip(request))
     return current_user
@@ -434,7 +547,7 @@ def delete_my_avatar(
 ):
     if not current_user.avatar_filename:
         raise HTTPException(status_code=404, detail="No tienes foto de perfil.")
-    avatars.delete_avatar_if_exists(AVATAR_DIR, current_user.avatar_filename)
+    storage.delete_object(storage.AVATAR_BUCKET, current_user.avatar_filename)
     current_user.avatar_filename = None
     db.commit()
     return {"message": "Foto de perfil eliminada."}
@@ -449,15 +562,7 @@ def get_user_avatar(
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
     if not usuario or not usuario.avatar_filename:
         raise HTTPException(status_code=404, detail="Este usuario no tiene foto de perfil.")
-
-    # Defensa en profundidad: el nombre siempre lo generamos nosotros (uuid4), pero por si
-    # algún dato corrupto llegara a tener un separador de ruta, nunca se sale de AVATAR_DIR.
-    path = (AVATAR_DIR / usuario.avatar_filename).resolve()
-    if path.parent != AVATAR_DIR.resolve() or not path.is_file():
-        raise HTTPException(status_code=404, detail="Este usuario no tiene foto de perfil.")
-
-    media_type = _AVATAR_CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
-    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
+    return _redirect_to_image(storage.AVATAR_BUCKET, usuario.avatar_filename)
 
 
 @app.get("/users/{user_id}/mesocycles/")
@@ -466,6 +571,34 @@ def obtener_mesociclos_usuario(
 ):
     ensure_owner_or_coach(db, user_id, current_user)
     return db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id).all()
+
+
+# Los 4 levantamientos de halterofilia del calculador de Fit Level son, ni más ni menos, un
+# 1RM — lo mismo que ya representa una fila de PersonalRecord. Antes vivían aislados en
+# fitness_benchmarks (metric_key) sin aparecer nunca en "Récords (PRs)", así que el atleta
+# terminaba registrando el mismo número dos veces en dos pantallas distintas. Estos mapeos
+# mantienen ambas tablas en sincronía sin importar por cuál pantalla se haya registrado.
+_FIT_LEVEL_LIFT_TO_PR_NAME = {
+    "snatch_kg": "Snatch",
+    "clean_jerk_kg": "Clean & Jerk",
+    "back_squat_kg": "Back Squat",
+    "deadlift_kg": "Deadlift",
+}
+_PR_NAME_TO_FIT_LEVEL_LIFT = {name.lower(): key for key, name in _FIT_LEVEL_LIFT_TO_PR_NAME.items()}
+
+
+def _upsert_personal_record_by_name(db: Session, user_id: UUID, exercise_name: str, max_weight_kg: float) -> None:
+    """Como upsert_personal_record, pero para uso interno (sync con Fit Level): busca SIN
+    importar mayúsculas/minúsculas, para no crear un duplicado si el ejercicio ya existía escrito
+    distinto (p. ej. "back squat" vs "Back Squat")."""
+    existente = db.query(models.PersonalRecord).filter(
+        models.PersonalRecord.user_id == user_id,
+        func.lower(models.PersonalRecord.exercise_name) == exercise_name.lower(),
+    ).first()
+    if existente:
+        existente.max_weight_kg = max_weight_kg
+    else:
+        db.add(models.PersonalRecord(user_id=user_id, exercise_name=exercise_name, max_weight_kg=max_weight_kg))
 
 
 @app.post("/users/{user_id}/records/")
@@ -484,18 +617,27 @@ def upsert_personal_record(
 
     if pr_existente:
         pr_existente.max_weight_kg = record.max_weight_kg
-        db.commit()
-        db.refresh(pr_existente)
-        return {"message": f"RM de {record.exercise_name} actualizado a {record.max_weight_kg}kg"}
+        mensaje = f"RM de {record.exercise_name} actualizado a {record.max_weight_kg}kg"
     else:
-        nuevo_pr = models.PersonalRecord(
-            user_id=user_id,
-            exercise_name=record.exercise_name,
-            max_weight_kg=record.max_weight_kg,
-        )
-        db.add(nuevo_pr)
-        db.commit()
-        return {"message": f"Nuevo RM de {record.exercise_name} registrado."}
+        db.add(models.PersonalRecord(
+            user_id=user_id, exercise_name=record.exercise_name, max_weight_kg=record.max_weight_kg,
+        ))
+        mensaje = f"Nuevo RM de {record.exercise_name} registrado."
+
+    # Si el nombre coincide con uno de los 4 levantamientos del Fit Level, esta marca también
+    # actualiza esa métrica — así no hay que volver a escribirla en la otra pantalla.
+    metric_key = _PR_NAME_TO_FIT_LEVEL_LIFT.get(record.exercise_name.strip().lower())
+    if metric_key:
+        fila = db.query(models.FitnessBenchmark).filter(
+            models.FitnessBenchmark.user_id == user_id, models.FitnessBenchmark.metric_key == metric_key,
+        ).first()
+        if fila:
+            fila.value = record.max_weight_kg
+        else:
+            db.add(models.FitnessBenchmark(user_id=user_id, metric_key=metric_key, value=record.max_weight_kg))
+
+    db.commit()
+    return {"message": mensaje}
 
 
 @app.get("/users/{user_id}/records/", response_model=List[schemas.PRResponse])
@@ -535,14 +677,21 @@ def update_fitness_benchmarks(
     for metric_key, value in datos.items():
         if metric_key not in fitness_scoring.METRICS:
             continue
+        valor = float(value)
         fila = db.query(models.FitnessBenchmark).filter(
             models.FitnessBenchmark.user_id == user_id,
             models.FitnessBenchmark.metric_key == metric_key,
         ).first()
         if fila:
-            fila.value = float(value)
+            fila.value = valor
         else:
-            db.add(models.FitnessBenchmark(user_id=user_id, metric_key=metric_key, value=float(value)))
+            db.add(models.FitnessBenchmark(user_id=user_id, metric_key=metric_key, value=valor))
+
+        # Los 4 levantamientos de halterofilia también son un RM: que aparezcan en "Récords
+        # (PRs)" sin tener que volver a escribirlos ahí a mano.
+        nombre_pr = _FIT_LEVEL_LIFT_TO_PR_NAME.get(metric_key)
+        if nombre_pr:
+            _upsert_personal_record_by_name(db, user_id, nombre_pr, valor)
 
     db.commit()
     return _build_fitness_level_response(db, usuario)
@@ -563,6 +712,19 @@ def get_fitness_level(
 def _build_fitness_level_response(db: Session, usuario: models.User) -> schemas.FitnessLevelResponse:
     filas = db.query(models.FitnessBenchmark).filter(models.FitnessBenchmark.user_id == usuario.id).all()
     valores = {f.metric_key: f.value for f in filas}
+
+    # Si algún RM de halterofilia no se llenó nunca desde Fit Level pero sí existe como
+    # PersonalRecord (p. ej. lo registró el coach desde "Récords (PRs)" antes de que esta
+    # sincronización existiera), se usa ese valor en vez de dejar el campo vacío.
+    faltantes = [k for k in _FIT_LEVEL_LIFT_TO_PR_NAME if k not in valores]
+    if faltantes:
+        prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == usuario.id).all()
+        prs_por_nombre = {pr.exercise_name.strip().lower(): pr.max_weight_kg for pr in prs}
+        for metric_key in faltantes:
+            nombre_pr = _FIT_LEVEL_LIFT_TO_PR_NAME[metric_key].lower()
+            if nombre_pr in prs_por_nombre:
+                valores[metric_key] = prs_por_nombre[nombre_pr]
+
     resultado = fitness_scoring.compute_fitness_level(valores, usuario.body_weight, usuario.sex, usuario.age)
     return schemas.FitnessLevelResponse(
         body_weight=usuario.body_weight,
@@ -643,11 +805,13 @@ async def upload_group_cover(
     clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
 
     nombre_anterior = grupo.cover_image_filename
-    nuevo_nombre = avatars.save_avatar(GROUP_COVER_DIR, clean_bytes, extension)
+    nuevo_nombre = storage.upload_object(
+        storage.GROUP_COVER_BUCKET, clean_bytes, extension, _AVATAR_CONTENT_TYPES[extension]
+    )
     grupo.cover_image_filename = nuevo_nombre
     db.commit()
     db.refresh(grupo)
-    avatars.delete_avatar_if_exists(GROUP_COVER_DIR, nombre_anterior)
+    storage.delete_object(storage.GROUP_COVER_BUCKET, nombre_anterior)
     return grupo
 
 
@@ -658,7 +822,7 @@ def delete_group_cover(
     grupo = _get_owned_group(db, group_id, current_user)
     if not grupo.cover_image_filename:
         raise HTTPException(status_code=404, detail="Este grupo no tiene foto de portada.")
-    avatars.delete_avatar_if_exists(GROUP_COVER_DIR, grupo.cover_image_filename)
+    storage.delete_object(storage.GROUP_COVER_BUCKET, grupo.cover_image_filename)
     grupo.cover_image_filename = None
     db.commit()
     return {"message": "Foto de portada eliminada."}
@@ -669,7 +833,7 @@ def get_group_cover(
     group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     grupo = _get_owned_group(db, group_id, current_user)
-    return _serve_image(GROUP_COVER_DIR, grupo.cover_image_filename, _AVATAR_CONTENT_TYPES)
+    return _redirect_to_image(storage.GROUP_COVER_BUCKET, grupo.cover_image_filename)
 
 
 def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user_id: UUID) -> models.Mesocycle:
@@ -865,6 +1029,27 @@ def _get_or_create_exercise(db: Session, name: str) -> models.Exercise:
         db.add(ejercicio)
         db.flush()
     return ejercicio
+
+
+def _format_wod_summary(sesion: "models.Session | None") -> str | None:
+    """Texto corto y legible del resultado de un WOD, según su formato — para la tabla de
+    posiciones del coach (el detalle completo vive en /users/{id}/recent-activity)."""
+    if sesion is None or not sesion.wod_format:
+        return None
+    if sesion.wod_format == "for_time" and sesion.wod_time_seconds is not None:
+        minutos, segundos = divmod(sesion.wod_time_seconds, 60)
+        return f"Por tiempo: {minutos}:{segundos:02d}"
+    if sesion.wod_format == "amrap" and (sesion.wod_rounds is not None or sesion.wod_extra_reps is not None):
+        rondas = sesion.wod_rounds or 0
+        reps = sesion.wod_extra_reps or 0
+        return f"AMRAP: {rondas} rondas + {reps} reps" if reps else f"AMRAP: {rondas} rondas"
+    if sesion.wod_format == "emom" and sesion.wod_emom_completed is not None:
+        return "EMOM: cumplido ✓" if sesion.wod_emom_completed else "EMOM: no completo ✗"
+    if sesion.wod_format == "1rm":
+        pesos = [s.actual_weight for s in sesion.sets if s.actual_weight]
+        if pesos:
+            return f"1RM: {max(pesos):g} kg"
+    return None
 
 
 _BLOQUES_VALIDOS = {"warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"}
@@ -1322,11 +1507,40 @@ def log_set_performance(
     return db_set
 
 
+@app.put("/sessions/{session_id}/wod-format", response_model=schemas.MessageResponse)
+def set_session_wod_format(
+    session_id: UUID,
+    req: schemas.WodFormatUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """El coach marca (o quita) qué formato de WOD tiene esta sesión — así el atleta sabe qué
+    reportar al completarla (tiempo, rondas+reps, o si cumplió el EMOM)."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+
+    sesion.wod_format = req.wod_format
+    db.commit()
+    return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
+
+
 @app.post("/sessions/{session_id}/complete")
 def complete_session(
-    session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    session_id: UUID,
+    req: schemas.SessionCompleteRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    """El ATLETA (dueño) o su coach marcan una sesión como completada."""
+    """El ATLETA (dueño) o su coach marcan una sesión como completada. Si la sesión tenía un
+    formato de WOD prescrito (wod_format), `req` trae el resultado real que reportó el atleta
+    (tiempo, rondas+reps, o si cumplió el EMOM) — queda guardado junto con la sesión."""
     sesion = (
         db.query(models.Session)
         .options(joinedload(models.Session.mesocycle))
@@ -1340,6 +1554,15 @@ def complete_session(
 
     sesion.status = "completed"
     sesion.completed_date = datetime.utcnow()
+    if req is not None:
+        if req.wod_time_seconds is not None:
+            sesion.wod_time_seconds = req.wod_time_seconds
+        if req.wod_rounds is not None:
+            sesion.wod_rounds = req.wod_rounds
+        if req.wod_extra_reps is not None:
+            sesion.wod_extra_reps = req.wod_extra_reps
+        if req.wod_emom_completed is not None:
+            sesion.wod_emom_completed = req.wod_emom_completed
     db.commit()
     return {"message": "Sesión marcada como completada"}
 
@@ -1895,11 +2118,13 @@ async def upload_plan_cover(
     clean_bytes, extension = avatars.rerender_and_strip_metadata(raw)
 
     nombre_anterior = plan.cover_image_filename
-    nuevo_nombre = avatars.save_avatar(PLAN_COVER_DIR, clean_bytes, extension)
+    nuevo_nombre = storage.upload_object(
+        storage.PLAN_COVER_BUCKET, clean_bytes, extension, _AVATAR_CONTENT_TYPES[extension]
+    )
     plan.cover_image_filename = nuevo_nombre
     db.commit()
     db.refresh(plan)
-    avatars.delete_avatar_if_exists(PLAN_COVER_DIR, nombre_anterior)
+    storage.delete_object(storage.PLAN_COVER_BUCKET, nombre_anterior)
     return _plan_summary(db, plan)
 
 
@@ -1910,7 +2135,7 @@ def delete_plan_cover(
     plan = _get_owned_plan(db, plan_id, current_user)
     if not plan.cover_image_filename:
         raise HTTPException(status_code=404, detail="Este plan no tiene foto de portada.")
-    avatars.delete_avatar_if_exists(PLAN_COVER_DIR, plan.cover_image_filename)
+    storage.delete_object(storage.PLAN_COVER_BUCKET, plan.cover_image_filename)
     plan.cover_image_filename = None
     db.commit()
     return {"message": "Foto de portada eliminada."}
@@ -1930,7 +2155,7 @@ def get_plan_cover(
     es_autor = plan.created_by_coach_id == current_user.id or current_user.role == "admin"
     if not plan.is_published and not es_autor:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
-    return _serve_image(PLAN_COVER_DIR, plan.cover_image_filename, _AVATAR_CONTENT_TYPES)
+    return _redirect_to_image(storage.PLAN_COVER_BUCKET, plan.cover_image_filename)
 
 
 @app.get("/plans/mine", response_model=List[schemas.PlanSummaryResponse])
@@ -1957,12 +2182,15 @@ def list_plan_catalog(db: Session = Depends(get_db), current_user: models.User =
     return [_plan_summary(db, p) for p in planes]
 
 
-@app.get("/plans/{plan_id}", response_model=schemas.MesocycleFullResponse)
+@app.get("/plans/{plan_id}")
 def get_plan_detail(
     plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    """Detalle completo (días + ejercicios). El autor/admin ve sus borradores; el resto solo
-    puede ver planes ya publicados."""
+    """El autor/admin ve el contenido COMPLETO (lo necesita para editarlo). Cualquier otro
+    usuario autenticado — típicamente un atleta viendo el catálogo antes de comprarlo — recibe
+    una VISTA PREVIA (schemas.PlanPreviewResponse): se ven los bloques y cuántos ejercicios trae
+    cada día, pero no los ejercicios/series/pesos exactos. Mostrar la programación completa
+    antes de pagar no tendría sentido comercial."""
     plan = db.query(models.Mesocycle).options(
         joinedload(models.Mesocycle.sessions).joinedload(models.Session.sets).joinedload(models.Set.exercise)
     ).filter(models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True).first()
@@ -1976,7 +2204,37 @@ def get_plan_detail(
     plan.sessions.sort(key=lambda s: (s.day_offset if s.day_offset is not None else 0))
     for sesion in plan.sessions:
         sesion.sets.sort(key=lambda x: x.set_order)
-    return plan
+
+    if es_autor:
+        return schemas.MesocycleFullResponse.model_validate(plan)
+
+    sesiones_preview = []
+    for sesion in plan.sessions:
+        bloques_del_dia: list[str] = []
+        ejercicios_del_dia: set = set()
+        for s in sesion.sets:
+            if s.block and s.block not in bloques_del_dia:
+                bloques_del_dia.append(s.block)
+            if s.exercise_id:
+                ejercicios_del_dia.add(s.exercise_id)
+        sesiones_preview.append(schemas.PlanSessionPreview(
+            id=sesion.id,
+            day_offset=sesion.day_offset,
+            blocks=bloques_del_dia,
+            exercise_count=len(ejercicios_del_dia),
+        ))
+
+    return schemas.PlanPreviewResponse(
+        id=plan.id,
+        name=plan.name,
+        discipline=plan.discipline,
+        start_date=plan.start_date,
+        end_date=plan.end_date,
+        description=plan.description,
+        level=plan.level,
+        has_cover_image=plan.has_cover_image,
+        sessions=sesiones_preview,
+    )
 
 
 @app.put("/plans/{plan_id}/publish", response_model=schemas.PlanSummaryResponse)

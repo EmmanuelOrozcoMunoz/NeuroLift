@@ -6,6 +6,7 @@ import { queryKeys } from "@/lib/queries";
 import type {
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
+  AthleteActivity,
   BulkResponse,
   CreateGroupPayload,
   GroupBulkAddPayload,
@@ -28,6 +29,7 @@ import type {
 
 export const coachKeys = {
   athletes: ["athletes"] as const,
+  leaderboard: ["leaderboard"] as const,
   groups: ["groups"] as const,
   group: (id: string) => ["group", id] as const,
   groupMesocycles: (id: string) => ["group-mesocycles", id] as const,
@@ -40,6 +42,15 @@ export function useAthletes(): UseQueryResult<User[]> {
   return useQuery({
     queryKey: coachKeys.athletes,
     queryFn: () => apiFetch<User[]>("/users/athletes"),
+  });
+}
+
+/** Tabla de posiciones: cuántos entrenamientos completó cada uno de tus atletas (con sus
+ *  reps/pesos reales), ordenados por actividad de esta semana. */
+export function useAthleteLeaderboard(): UseQueryResult<AthleteActivity[]> {
+  return useQuery({
+    queryKey: coachKeys.leaderboard,
+    queryFn: () => apiFetch<AthleteActivity[]>("/coach/leaderboard"),
   });
 }
 

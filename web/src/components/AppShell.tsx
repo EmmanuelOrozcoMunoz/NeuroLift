@@ -8,6 +8,7 @@ import {
   IconOffline,
   IconStore,
   IconToday,
+  IconTrophy,
   IconUser,
   IconUsers,
 } from "@/components/icons";
@@ -23,6 +24,7 @@ const ATHLETE_NAV = [
 
 const COACH_NAV = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
   { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
   { to: "/coach/planes", label: "Planes", icon: IconStore },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
