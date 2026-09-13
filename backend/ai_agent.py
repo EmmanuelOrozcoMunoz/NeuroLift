@@ -159,13 +159,23 @@ def search_knowledge_base(user_context: str) -> str:
         return "" # Si falla, simplemente devolvemos texto vacío y la IA sigue normal
 
 
-def generate_mesocycle_chunk(athlete_name: str, discipline: str, experience_notes: str, start_week: int, end_week: int, session_dates: list[str], session_duration_minutes: int | None = None) -> dict:
+def generate_mesocycle_chunk(
+    athlete_name: str,
+    discipline: str,
+    experience_notes: str,
+    start_week: int,
+    end_week: int,
+    session_dates: list[str],
+    session_duration_minutes: int | None = None,
+    literatura_cientifica: str = "",
+) -> dict:
+    """`literatura_cientifica` se calcula UNA sola vez por mesociclo (search_knowledge_base) y se
+    pasa ya lista a cada chunk — discipline/experience_notes no cambian entre chunks del mismo
+    mesociclo, así que repetir la búsqueda vectorial en cada uno era una llamada a Gemini +
+    consulta a la base de datos completamente redundante."""
     api_key = os.getenv("GEMINI_API_KEY").strip()
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={api_key}"
-
-    # Tu sistema RAG intacto
-    literatura_cientifica = search_knowledge_base(f"{discipline} - {experience_notes}")
 
     # Convertimos la lista de fechas en un texto legible para Gemini
     fechas_str = ", ".join(session_dates)

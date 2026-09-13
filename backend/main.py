@@ -482,10 +482,14 @@ def get_recent_activity(
             mesocycle_name=sesion.mesocycle.name,
             discipline=sesion.mesocycle.discipline,
             wod_format=sesion.wod_format,
+            wod_time_cap_seconds=sesion.wod_time_cap_seconds,
             wod_time_seconds=sesion.wod_time_seconds,
             wod_rounds=sesion.wod_rounds,
             wod_extra_reps=sesion.wod_extra_reps,
             wod_emom_completed=sesion.wod_emom_completed,
+            wod_calories=sesion.wod_calories,
+            wod_distance_meters=sesion.wod_distance_meters,
+            wod_watts=sesion.wod_watts,
             exercises=ejercicios,
         ))
     return resultados
@@ -565,7 +569,7 @@ def get_user_avatar(
     return _redirect_to_image(storage.AVATAR_BUCKET, usuario.avatar_filename)
 
 
-@app.get("/users/{user_id}/mesocycles/")
+@app.get("/users/{user_id}/mesocycles/", response_model=List[schemas.MesocycleSummaryResponse])
 def obtener_mesociclos_usuario(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
@@ -1043,13 +1047,71 @@ def _format_wod_summary(sesion: "models.Session | None") -> str | None:
         rondas = sesion.wod_rounds or 0
         reps = sesion.wod_extra_reps or 0
         return f"AMRAP: {rondas} rondas + {reps} reps" if reps else f"AMRAP: {rondas} rondas"
+    if sesion.wod_format == "amrap_reps" and sesion.wod_extra_reps is not None:
+        return f"AMRAP: {sesion.wod_extra_reps} reps"
+    if sesion.wod_format == "tabata" and sesion.wod_extra_reps is not None:
+        return f"Tabata: {sesion.wod_extra_reps} reps (peor ronda)"
     if sesion.wod_format == "emom" and sesion.wod_emom_completed is not None:
         return "EMOM: cumplido ✓" if sesion.wod_emom_completed else "EMOM: no completo ✗"
     if sesion.wod_format == "1rm":
         pesos = [s.actual_weight for s in sesion.sets if s.actual_weight]
         if pesos:
             return f"1RM: {max(pesos):g} kg"
+    if sesion.wod_format == "calories" and sesion.wod_calories is not None:
+        return f"{sesion.wod_calories:g} cal"
+    if sesion.wod_format == "distance" and sesion.wod_distance_meters is not None:
+        return f"{sesion.wod_distance_meters:g} m"
+    if sesion.wod_format == "watts" and sesion.wod_watts is not None:
+        return f"{sesion.wod_watts:g} W"
     return None
+
+
+# Formatos donde un número MENOR es mejor resultado (todos los demás: mayor es mejor).
+_WOD_LOWER_IS_BETTER = {"for_time"}
+
+
+def _wod_score_value(sesion: "models.Session") -> float | None:
+    """Valor numérico para ordenar el leaderboard de un WOD — None si el atleta no reportó
+    (o no le aplica) resultado para el formato prescrito."""
+    fmt = sesion.wod_format
+    if fmt == "for_time":
+        return sesion.wod_time_seconds
+    if fmt == "amrap":
+        if sesion.wod_rounds is None and sesion.wod_extra_reps is None:
+            return None
+        # Reps "sueltas" como fracción de ronda: permite comparar en un solo número ordenable
+        # sin saber cuántas reps tiene una ronda completa de este WOD en particular.
+        return (sesion.wod_rounds or 0) + (sesion.wod_extra_reps or 0) / 10_000
+    if fmt == "amrap_reps":
+        return sesion.wod_extra_reps
+    if fmt == "tabata":
+        return sesion.wod_extra_reps
+    if fmt == "emom":
+        if sesion.wod_emom_completed is None:
+            return None
+        return 1.0 if sesion.wod_emom_completed else 0.0
+    if fmt == "1rm":
+        pesos = [s.actual_weight for s in sesion.sets if s.actual_weight]
+        return max(pesos) if pesos else None
+    if fmt == "calories":
+        return sesion.wod_calories
+    if fmt == "distance":
+        return sesion.wod_distance_meters
+    if fmt == "watts":
+        return sesion.wod_watts
+    return None
+
+
+def _rank_wod_sessions(sesiones: "list[models.Session]") -> "list[models.Session]":
+    """Ordena sesiones COMPLETADAS del mismo WOD por su resultado (mejor primero). Las que no
+    reportaron un valor numérico (formato sin datos suficientes) quedan al final, en el orden
+    en que llegaron."""
+    con_score = [(s, _wod_score_value(s)) for s in sesiones]
+    ascendente = sesiones[0].wod_format in _WOD_LOWER_IS_BETTER if sesiones else False
+    con_resultado = [(s, v) for s, v in con_score if v is not None]
+    sin_resultado = [s for s, v in con_score if v is None]
+    con_resultado.sort(key=lambda x: x[1], reverse=not ascendente)
+    return [s for s, _ in con_resultado] + sin_resultado
 
 
 _BLOQUES_VALIDOS = {"warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"}
@@ -1215,6 +1277,131 @@ def delete_exercise_from_group_session(
         "message": f"'{req.exercise_name}' eliminado de {exitosos}/{len(resultados)} atleta(s) del grupo",
         "results": resultados,
     }
+
+
+@app.post("/groups/{group_id}/sessions/bulk-set-wod-format")
+def set_group_session_wod_format(
+    group_id: UUID,
+    req: schemas.GroupSessionWodFormatUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """El coach fija (o quita) el formato de WOD y su timer/time cap UNA sola vez para la
+    sesión de una fecha dada, aplicado a TODOS los atletas del programa — así no hay que
+    repetir la misma acción atleta por atleta cuando todo el grupo hace el mismo WOD."""
+    mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+
+    resultados = []
+    for meso in mesos:
+        sesion = db.query(models.Session).filter(
+            models.Session.mesocycle_id == meso.id,
+            models.Session.scheduled_date == req.scheduled_date,
+        ).first()
+        if not sesion:
+            resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
+            continue
+        sesion.wod_format = req.wod_format
+        sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
+        resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
+
+    db.commit()
+    exitosos = sum(1 for r in resultados if r["status"] == "actualizado")
+    return {
+        "message": f"Formato de WOD actualizado para {exitosos}/{len(resultados)} atleta(s) del grupo",
+        "results": resultados,
+    }
+
+
+@app.get("/groups/{group_id}/wod-days", response_model=List[schemas.WodDaySummary])
+def get_group_wod_days(
+    group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Fechas del grupo con un WOD prescrito (wod_format) — para que el coach elija cuál quiere
+    ver en la tabla de posiciones por WOD (GET /groups/{group_id}/wod-leaderboard)."""
+    _get_owned_group(db, group_id, current_user)
+
+    filas = (
+        db.query(
+            models.Session.scheduled_date,
+            models.Session.wod_format,
+            func.max(models.Session.wod_time_cap_seconds).label("time_cap_seconds"),
+            func.count(models.Session.id).label("participantes"),
+        )
+        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .filter(models.Mesocycle.group_id == group_id, models.Session.wod_format.isnot(None))
+        .group_by(models.Session.scheduled_date, models.Session.wod_format)
+        .order_by(models.Session.scheduled_date.desc())
+        .all()
+    )
+    return [
+        schemas.WodDaySummary(
+            scheduled_date=f.scheduled_date,
+            wod_format=f.wod_format,
+            time_cap_seconds=f.time_cap_seconds,
+            participants_count=f.participantes,
+        )
+        for f in filas
+    ]
+
+
+@app.get("/groups/{group_id}/wod-leaderboard", response_model=List[schemas.WodLeaderboardRow])
+def get_group_wod_leaderboard(
+    group_id: UUID,
+    scheduled_date: date,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Tabla de posiciones de UN WOD específico del grupo: todos los atletas que lo tenían
+    prescrito ese día, ordenados por su resultado real según el formato (ver
+    _rank_wod_sessions). Los que aún no lo completan aparecen al final, sin rank."""
+    _get_owned_group(db, group_id, current_user)
+
+    sesiones = (
+        db.query(models.Session)
+        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .options(joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user), joinedload(models.Session.sets))
+        .filter(
+            models.Mesocycle.group_id == group_id,
+            models.Session.scheduled_date == scheduled_date,
+            models.Session.wod_format.isnot(None),
+        )
+        .all()
+    )
+    if not sesiones:
+        return []
+
+    completadas = [s for s in sesiones if s.status == "completed"]
+    ordenadas = _rank_wod_sessions(completadas)
+
+    filas: list[schemas.WodLeaderboardRow] = []
+    rank = 1
+    for sesion in ordenadas:
+        tiene_score = _wod_score_value(sesion) is not None
+        filas.append(schemas.WodLeaderboardRow(
+            user_id=sesion.mesocycle.user_id,
+            full_name=sesion.mesocycle.user.full_name,
+            has_avatar=sesion.mesocycle.user.has_avatar,
+            wod_format=sesion.wod_format,
+            score_label=_format_wod_summary(sesion),
+            rank=rank if tiene_score else None,
+            completed=True,
+        ))
+        if tiene_score:
+            rank += 1
+
+    completados_ids = {s.mesocycle.user_id for s in completadas}
+    pendientes = [s for s in sesiones if s.mesocycle.user_id not in completados_ids]
+    for sesion in pendientes:
+        filas.append(schemas.WodLeaderboardRow(
+            user_id=sesion.mesocycle.user_id,
+            full_name=sesion.mesocycle.user.full_name,
+            has_avatar=sesion.mesocycle.user.has_avatar,
+            wod_format=sesion.wod_format,
+            score_label=None,
+            rank=None,
+            completed=False,
+        ))
+    return filas
 
 
 # --- ENDPOINTS PARA MESOCICLOS (solo coach: crear/editar rutinas de atletas) ---
@@ -1527,6 +1714,7 @@ def set_session_wod_format(
     ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
 
     sesion.wod_format = req.wod_format
+    sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
     db.commit()
     return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
 
@@ -1563,6 +1751,12 @@ def complete_session(
             sesion.wod_extra_reps = req.wod_extra_reps
         if req.wod_emom_completed is not None:
             sesion.wod_emom_completed = req.wod_emom_completed
+        if req.wod_calories is not None:
+            sesion.wod_calories = req.wod_calories
+        if req.wod_distance_meters is not None:
+            sesion.wod_distance_meters = req.wod_distance_meters
+        if req.wod_watts is not None:
+            sesion.wod_watts = req.wod_watts
     db.commit()
     return {"message": "Sesión marcada como completada"}
 
@@ -1769,13 +1963,21 @@ def _build_smart_mesocycle(
         if fecha_evaluada.weekday() in training_days:
             todas_las_fechas.append(fecha_evaluada.strftime("%Y-%m-%d"))
 
-    semanas_por_chunk = 2
+    # 3 semanas por chunk (antes 2): un mesociclo corto (3-4 semanas, el caso más común) queda
+    # en UNA sola llamada a Gemini en vez de dos, sin acercarse al límite de tokens de salida
+    # del modelo — ver conversación sobre por qué la generación tardaba varios minutos.
+    semanas_por_chunk = 3
     sesiones_por_semana = len(training_days)
     sesiones_por_chunk = semanas_por_chunk * sesiones_por_semana
 
     try:
         # 4. Bucle de generación por "chunks" (semanas)
-        from backend.ai_agent import generate_mesocycle_chunk
+        from backend.ai_agent import generate_mesocycle_chunk, search_knowledge_base
+
+        # Se calcula UNA sola vez para todo el mesociclo (no por chunk): discipline/context no
+        # cambian entre chunks, así que repetirla era una llamada a Gemini + consulta a la base
+        # de datos redundante en cada iteración.
+        literatura_cientifica = search_knowledge_base(f"{discipline} - {contexto_enriquecido}")
 
         for start in range(1, weeks_count + 1, semanas_por_chunk):
             end = min(start + semanas_por_chunk - 1, weeks_count)
@@ -1792,6 +1994,7 @@ def _build_smart_mesocycle(
                 end_week=end,
                 session_dates=fechas_del_chunk,
                 session_duration_minutes=session_duration_minutes,
+                literatura_cientifica=literatura_cientifica,
             )
 
             # 5. Parseo y guardado en base de datos
@@ -2235,6 +2438,26 @@ def get_plan_detail(
         has_cover_image=plan.has_cover_image,
         sessions=sesiones_preview,
     )
+
+
+@app.put("/plans/{plan_id}", response_model=schemas.PlanSummaryResponse)
+def update_plan(
+    plan_id: UUID,
+    req: schemas.PlanUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Edita nombre/descripción/disciplina/nivel/precio de un plan — funciona igual esté
+    publicado o en borrador (cambiar el precio de un plan ya publicado es normal)."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+    plan.name = req.name
+    plan.description = req.description
+    plan.discipline = req.discipline
+    plan.level = req.level
+    plan.price = req.price
+    db.commit()
+    db.refresh(plan)
+    return _plan_summary(db, plan)
 
 
 @app.put("/plans/{plan_id}/publish", response_model=schemas.PlanSummaryResponse)

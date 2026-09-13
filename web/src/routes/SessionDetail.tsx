@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { IconCheck, IconClock, IconSpark } from "@/components/icons";
 import { SetRow } from "@/components/SetRow";
+import { WodTimer } from "@/components/WodTimer";
 import {
   Badge,
   Button,
@@ -16,7 +17,7 @@ import {
   Stepper,
   Toast,
 } from "@/components/ui";
-import { longDate, relativeDay } from "@/lib/dates";
+import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
 import { useAdaptSession, useCompleteSession, useMesocycle } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
@@ -33,14 +34,16 @@ export default function SessionDetail() {
   const [minutos, setMinutos] = useState(60);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Resultado del WOD (solo se usa si la sesión tiene wod_format "for_time"/"amrap"/"emom" —
-  // "1rm" no necesita esto, el peso real ya queda en las series de SetRow).
+  // Resultado del WOD (no aplica a "1rm" — el peso real ya queda en las series de SetRow).
   const [wodSheetAbierta, setWodSheetAbierta] = useState(false);
   const [wodMin, setWodMin] = useState(0);
   const [wodSeg, setWodSeg] = useState(0);
   const [wodRondas, setWodRondas] = useState(0);
   const [wodRepsExtra, setWodRepsExtra] = useState(0);
   const [wodEmomCumplido, setWodEmomCumplido] = useState(true);
+  const [wodCalorias, setWodCalorias] = useState(0);
+  const [wodDistancia, setWodDistancia] = useState(0);
+  const [wodVatios, setWodVatios] = useState(0);
 
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
@@ -108,18 +111,45 @@ export default function SessionDetail() {
     );
   }
 
-  function abrirRegistroDeResultado() {
-    setWodMin(Math.floor((activa!.wod_time_seconds ?? 0) / 60));
-    setWodSeg((activa!.wod_time_seconds ?? 0) % 60);
+  function abrirRegistroDeResultado(segundosDelTimer?: number) {
+    const segundos = segundosDelTimer ?? activa!.wod_time_seconds ?? 0;
+    setWodMin(Math.floor(segundos / 60));
+    setWodSeg(segundos % 60);
     setWodRondas(activa!.wod_rounds ?? 0);
     setWodRepsExtra(activa!.wod_extra_reps ?? 0);
     setWodEmomCumplido(activa!.wod_emom_completed ?? true);
+    setWodCalorias(activa!.wod_calories ?? 0);
+    setWodDistancia(activa!.wod_distance_meters ?? 0);
+    setWodVatios(activa!.wod_watts ?? 0);
     setWodSheetAbierta(true);
   }
 
   // "1rm" no necesita un resultado aparte: el peso real ya se logueó por serie (SetRow).
-  const pideResultadoAparte =
-    activa.wod_format === "for_time" || activa.wod_format === "amrap" || activa.wod_format === "emom";
+  const pideResultadoAparte = activa.wod_format != null && activa.wod_format !== "1rm";
+
+  const wodCard = activa.wod_format && (
+    <Card className="mt-3">
+      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+        🔥 {WOD_FORMAT_LABELS[activa.wod_format]}
+        {activa.wod_time_cap_seconds ? ` · Time cap ${formatSeconds(activa.wod_time_cap_seconds)}` : ""}
+      </p>
+      {completada ? (
+        <p className="mt-1 text-sm font-bold">
+          {formatWodResult(
+            activa,
+            activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
+          ) ?? "Sin resultado registrado"}
+        </p>
+      ) : (
+        <WodTimer
+          format={activa.wod_format}
+          timeCapSeconds={activa.wod_time_cap_seconds}
+          onDone={(segundos) => abrirRegistroDeResultado(segundos)}
+          fallback={<p className="mt-1 text-sm font-bold">Registra tu resultado al terminar</p>}
+        />
+      )}
+    </Card>
+  );
 
   return (
     <>
@@ -152,22 +182,6 @@ export default function SessionDetail() {
       {activa.athlete_notes && (
         <Card className="mb-4 border-brand/30 bg-brand-soft/30">
           <p className="text-sm leading-relaxed">{activa.athlete_notes}</p>
-        </Card>
-      )}
-
-      {activa.wod_format && (
-        <Card className="mb-4">
-          <p className="text-xs font-semibold tracking-wide text-muted uppercase">
-            🔥 {WOD_FORMAT_LABELS[activa.wod_format]}
-          </p>
-          <p className="mt-1 text-sm font-bold">
-            {completada
-              ? (formatWodResult(
-                  activa,
-                  activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
-                ) ?? "Sin resultado registrado")
-              : "Registra tu resultado al terminar"}
-          </p>
         </Card>
       )}
 
@@ -204,8 +218,14 @@ export default function SessionDetail() {
                   </Card>
                 ))}
               </div>
+              {/* El timer/resultado del WOD va justo debajo del bloque METABÓLICO — ahí es
+                  donde el atleta realmente lo necesita, no arriba de todo antes de calentar. */}
+              {bloque.key === "metcon" && wodCard}
             </div>
           ))}
+          {/* Respaldo: si la sesión tiene wod_format pero ningún set está etiquetado como
+              "metcon" (ej. cargada a mano sin bloques), igual se muestra al final. */}
+          {activa.wod_format && !bloques.some((b) => b.key === "metcon") && wodCard}
         </div>
       )}
 
@@ -322,6 +342,20 @@ export default function SessionDetail() {
           </>
         )}
 
+        {activa.wod_format === "amrap_reps" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántas reps totales hiciste?</p>
+            <Stepper value={wodRepsExtra} onChange={setWodRepsExtra} min={0} max={2000} suffix="reps" />
+          </>
+        )}
+
+        {activa.wod_format === "tabata" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántas reps hiciste en tu peor ronda?</p>
+            <Stepper value={wodRepsExtra} onChange={setWodRepsExtra} min={0} max={100} suffix="reps" />
+          </>
+        )}
+
         {activa.wod_format === "emom" && (
           <>
             <p className="mb-4 text-sm text-muted">¿Mantuviste el ritmo todo el WOD, sin atrasarte?</p>
@@ -333,6 +367,27 @@ export default function SessionDetail() {
                 { value: "no", label: "No, me atrasé" },
               ]}
             />
+          </>
+        )}
+
+        {activa.wod_format === "calories" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántas calorías hiciste?</p>
+            <Stepper value={wodCalorias} onChange={setWodCalorias} min={0} max={5000} suffix="cal" />
+          </>
+        )}
+
+        {activa.wod_format === "distance" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántos metros hiciste?</p>
+            <Stepper value={wodDistancia} onChange={setWodDistancia} step={10} min={0} max={200_000} suffix="m" />
+          </>
+        )}
+
+        {activa.wod_format === "watts" && (
+          <>
+            <p className="mb-4 text-sm text-muted">¿Cuántos vatios promedio lograste?</p>
+            <Stepper value={wodVatios} onChange={setWodVatios} min={0} max={3000} suffix="W" />
           </>
         )}
 
@@ -351,8 +406,18 @@ export default function SessionDetail() {
               completarConResultado({ wod_time_seconds: wodMin * 60 + wodSeg });
             } else if (activa.wod_format === "amrap") {
               completarConResultado({ wod_rounds: wodRondas, wod_extra_reps: wodRepsExtra });
+            } else if (activa.wod_format === "amrap_reps") {
+              completarConResultado({ wod_extra_reps: wodRepsExtra });
+            } else if (activa.wod_format === "tabata") {
+              completarConResultado({ wod_extra_reps: wodRepsExtra });
             } else if (activa.wod_format === "emom") {
               completarConResultado({ wod_emom_completed: wodEmomCumplido });
+            } else if (activa.wod_format === "calories") {
+              completarConResultado({ wod_calories: wodCalorias });
+            } else if (activa.wod_format === "distance") {
+              completarConResultado({ wod_distance_meters: wodDistancia });
+            } else if (activa.wod_format === "watts") {
+              completarConResultado({ wod_watts: wodVatios });
             }
           }}
         >

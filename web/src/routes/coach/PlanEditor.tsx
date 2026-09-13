@@ -6,13 +6,127 @@ import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
 import { CoverUploader } from "@/components/CoverImage";
 import { IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast } from "@/components/ui";
-import { coachKeys, useAddPlanSet, useDeletePlanSet } from "@/lib/coachQueries";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
+import { coachKeys, useAddPlanSet, useDeletePlanSet, useUpdatePlan } from "@/lib/coachQueries";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock, groupSummary } from "@/lib/sessions";
-import type { SetItem } from "@/lib/types";
+import type { MesocycleFull, PlanLevel, SetItem } from "@/lib/types";
 
 type TipoCarga = "porcentaje" | "kg" | "libre";
+
+const DISCIPLINAS = ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting", "CrossFit"];
+const NIVELES: PlanLevel[] = ["Principiante", "Intermedio", "Avanzado"];
+
+/** Editar nombre/descripción/disciplina/nivel/precio — nunca el calendario (eso ya quedó fijo
+ *  desde la creación, cambiarlo pediría recalcular los días ya armados). Funciona igual esté
+ *  publicado o no: subir/bajar el precio de un plan ya publicado es normal. */
+function EditPlanSheet({
+  open,
+  onClose,
+  planId,
+  plan,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  planId: string;
+  plan: MesocycleFull;
+  onSaved: (message: string) => void;
+}) {
+  const updatePlan = useUpdatePlan(planId);
+  const [name, setName] = useState(plan.name ?? "");
+  const [description, setDescription] = useState(plan.description ?? "");
+  const [discipline, setDiscipline] = useState(plan.discipline);
+  const [level, setLevel] = useState<PlanLevel>((plan.level as PlanLevel) ?? "Intermedio");
+  const [price, setPrice] = useState(plan.price != null ? String(plan.price) : "");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit() {
+    setError(null);
+    if (!name.trim()) return setError("Dale un nombre al plan.");
+    const precioNum = Number(price);
+
+    updatePlan.mutate(
+      {
+        name: name.trim(),
+        description: description.trim(),
+        discipline,
+        level,
+        price: price && precioNum > 0 ? precioNum : null,
+      },
+      {
+        onSuccess: () => {
+          onSaved("¡Plan actualizado!");
+          onClose();
+        },
+        onError: (err) => setError(err instanceof Error ? err.message : "No se pudo guardar."),
+      },
+    );
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Editar plan">
+      <div className="space-y-4">
+        <Field label="Nombre del plan" value={name} onChange={(e) => setName(e.target.value)} />
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-muted">Descripción (para el catálogo)</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-muted">Disciplina</span>
+          <select
+            value={discipline}
+            onChange={(e) => setDiscipline(e.target.value)}
+            className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg"
+          >
+            {DISCIPLINAS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-muted">Nivel</span>
+          <select
+            value={level}
+            onChange={(e) => setLevel(e.target.value as PlanLevel)}
+            className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg"
+          >
+            {NIVELES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <Field
+          label="Precio (vacío = gratis)"
+          type="number"
+          inputMode="decimal"
+          min="0"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+
+        {error && <p className="text-sm font-medium text-danger">{error}</p>}
+        <Button full loading={updatePlan.isPending} onClick={handleSubmit}>
+          Guardar cambios
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
 
 function DayEditor({
   planId,
@@ -178,6 +292,7 @@ export default function PlanEditor() {
   const queryClient = useQueryClient();
   const { data, isPending, error, refetch } = usePlanDetail(planId);
   const [toast, setToast] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   // El backend solo manda el contenido completo (con ejercicios/series) al autor/admin — si
   // esto viniera en modo "vista previa" es que este plan no es tuyo, no hay nada que editar.
@@ -186,7 +301,22 @@ export default function PlanEditor() {
 
   return (
     <>
-      <PageHeader title={data?.name ?? "Plan"} subtitle="Contenido del plan" back="/coach/planes" />
+      <PageHeader
+        title={data?.name ?? "Plan"}
+        subtitle="Contenido del plan"
+        back="/coach/planes"
+        action={
+          full && (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="min-h-10 rounded-xl bg-surface-2 px-3 text-sm font-semibold text-fg active:bg-line"
+            >
+              ✏️ Editar
+            </button>
+          )
+        }
+      />
 
       {full && (
         <CoverUploader
@@ -229,6 +359,16 @@ export default function PlanEditor() {
           />
         ))}
       </div>
+
+      {full && (
+        <EditPlanSheet
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          planId={planId!}
+          plan={full}
+          onSaved={setToast}
+        />
+      )}
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

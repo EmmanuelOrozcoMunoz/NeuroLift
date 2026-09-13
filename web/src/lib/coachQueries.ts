@@ -12,6 +12,7 @@ import type {
   GroupBulkAddPayload,
   GroupBulkDeletePayload,
   GroupBulkUpdatePayload,
+  GroupBulkWodFormatPayload,
   GroupDetail,
   GroupMesocycleProgram,
   GroupSummary,
@@ -21,10 +22,13 @@ import type {
   PlanCreatePayload,
   PlanSetCreatePayload,
   PlanSummary,
+  PlanUpdatePayload,
   RegisterAthletePayload,
   SetCreatePayload,
   SetUpdatePayload,
   User,
+  WodDaySummary,
+  WodLeaderboardRow,
 } from "@/lib/types";
 
 export const coachKeys = {
@@ -33,6 +37,8 @@ export const coachKeys = {
   groups: ["groups"] as const,
   group: (id: string) => ["group", id] as const,
   groupMesocycles: (id: string) => ["group-mesocycles", id] as const,
+  groupWodDays: (id: string) => ["group-wod-days", id] as const,
+  groupWodLeaderboard: (id: string, date: string) => ["group-wod-leaderboard", id, date] as const,
   myPlans: ["plans", "mine"] as const,
 };
 
@@ -165,6 +171,44 @@ export function useGroupBulkDelete(groupId: string) {
   });
 }
 
+/** Fija (o quita) el formato de WOD y su timer/time cap para TODO el grupo a la vez, en una
+ *  fecha dada — evita repetir la acción atleta por atleta cuando todos hacen el mismo WOD. */
+export function useGroupBulkSetWodFormat(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupBulkWodFormatPayload) =>
+      apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-wod-format`, { method: "POST", body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
+      void queryClient.invalidateQueries({ queryKey: coachKeys.groupWodDays(groupId) });
+    },
+  });
+}
+
+/** Fechas del grupo con un WOD prescrito — para elegir cuál ver en la tabla de posiciones. */
+export function useGroupWodDays(groupId: string | undefined): UseQueryResult<WodDaySummary[]> {
+  return useQuery({
+    queryKey: coachKeys.groupWodDays(groupId ?? "none"),
+    queryFn: () => apiFetch<WodDaySummary[]>(`/groups/${groupId}/wod-days`),
+    enabled: Boolean(groupId),
+  });
+}
+
+/** Tabla de posiciones de UN WOD específico del grupo, ya ordenada por resultado real. */
+export function useGroupWodLeaderboard(
+  groupId: string | undefined,
+  scheduledDate: string | undefined,
+): UseQueryResult<WodLeaderboardRow[]> {
+  return useQuery({
+    queryKey: coachKeys.groupWodLeaderboard(groupId ?? "none", scheduledDate ?? "none"),
+    queryFn: () =>
+      apiFetch<WodLeaderboardRow[]>(
+        `/groups/${groupId}/wod-leaderboard?scheduled_date=${encodeURIComponent(scheduledDate!)}`,
+      ),
+    enabled: Boolean(groupId && scheduledDate),
+  });
+}
+
 // ------------------------------------------------------------- mesociclos
 
 export function useCreateManualMesocycle() {
@@ -249,6 +293,19 @@ export function useCreatePlan() {
   return useMutation({
     mutationFn: (body: PlanCreatePayload) => apiFetch<PlanSummary>("/plans/", { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
+  });
+}
+
+/** Edita nombre/descripción/disciplina/nivel/precio de un plan — funciona igual esté
+ *  publicado o en borrador. */
+export function useUpdatePlan(planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PlanUpdatePayload) => apiFetch<PlanSummary>(`/plans/${planId}`, { method: "PUT", body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) });
+    },
   });
 }
 

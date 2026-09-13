@@ -5,13 +5,130 @@ import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast } from "@/components/ui";
-import { useGroupBulkAdd, useGroupBulkDelete, useGroupBulkUpdate, useGroupMesocycles } from "@/lib/coachQueries";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
+import {
+  useGroupBulkAdd,
+  useGroupBulkDelete,
+  useGroupBulkSetWodFormat,
+  useGroupBulkUpdate,
+  useGroupMesocycles,
+} from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
+import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
-import type { TrainingSession } from "@/lib/types";
+import type { TrainingSession, WodFormat } from "@/lib/types";
+
+function BulkWodFormatCard({
+  groupId,
+  programName,
+  programStartDate,
+  scheduledDate,
+  currentFormat,
+  currentTimeCapSeconds,
+  onFeedback,
+}: {
+  groupId: string;
+  programName: string;
+  programStartDate: string;
+  scheduledDate: string;
+  currentFormat: WodFormat | null;
+  currentTimeCapSeconds: number | null;
+  onFeedback: (message: string) => void;
+}) {
+  const bulkSetWodFormat = useGroupBulkSetWodFormat(groupId);
+  const [seleccionado, setSeleccionado] = useState<WodFormat | "">(currentFormat ?? "");
+  const [timerMin, setTimerMin] = useState(Math.round((currentTimeCapSeconds ?? 0) / 60));
+
+  const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
+
+  function guardar(formato: WodFormat | "", minutos: number) {
+    bulkSetWodFormat.mutate(
+      {
+        ...base,
+        wod_format: formato || null,
+        time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+      },
+      { onSuccess: (r) => onFeedback(r.message) },
+    );
+  }
+
+  function elegir(valor: WodFormat) {
+    const nuevo = seleccionado === valor ? "" : valor;
+    setSeleccionado(nuevo);
+    guardar(nuevo, timerMin);
+  }
+
+  return (
+    <Card>
+      <p className="mb-2 text-sm font-semibold text-muted">🔥 Formato del WOD para TODO el grupo (opcional)</p>
+
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        ⏱ Plantillas rápidas
+      </p>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {WOD_TIMER_TEMPLATES.map((opcion) => (
+          <button
+            key={opcion.value}
+            type="button"
+            disabled={bulkSetWodFormat.isPending}
+            onClick={() => elegir(opcion.value)}
+            className={cx(
+              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+              seleccionado === opcion.value
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-line bg-surface-2 text-fg",
+            )}
+          >
+            <p className="text-sm font-bold">{opcion.label}</p>
+            <p className="text-xs text-muted">{opcion.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        Otros tipos de resultado
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {WOD_OTHER_SCORE_TYPES.map((opcion) => (
+          <button
+            key={opcion.value}
+            type="button"
+            disabled={bulkSetWodFormat.isPending}
+            onClick={() => elegir(opcion.value)}
+            className={cx(
+              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+              seleccionado === opcion.value
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-line bg-surface-2 text-fg",
+            )}
+          >
+            <p className="text-sm font-bold">{opcion.label}</p>
+            <p className="text-xs text-muted">{opcion.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-1.5 text-xs font-medium text-muted">⏱ Timer / time cap (min) — opcional</p>
+          <Stepper
+            value={timerMin}
+            onChange={(v) => {
+              setTimerMin(v);
+              guardar(seleccionado, v);
+            }}
+            min={0}
+            max={90}
+            suffix="min"
+            compact
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function BulkExerciseBlock({
   groupId,
@@ -232,6 +349,15 @@ function GroupWideTab({
         const bloques = groupByBlock(session.sets);
         return (
           <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
+            <BulkWodFormatCard
+              groupId={groupId}
+              programName={programName}
+              programStartDate={programStartDate}
+              scheduledDate={session.scheduled_date}
+              currentFormat={session.wod_format}
+              currentTimeCapSeconds={session.wod_time_cap_seconds}
+              onFeedback={onFeedback}
+            />
             {session.sets.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
             {bloques.map((bloque, indiceBloque) => (
               <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">

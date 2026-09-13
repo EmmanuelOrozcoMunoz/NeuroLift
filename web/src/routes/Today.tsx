@@ -99,8 +99,8 @@ export default function Today() {
       {!cargando && !error && (
         <>
           {deLaSemana.length > 0 && (
-            <Card className="mb-4 flex items-center justify-between">
-              <div>
+            <Card className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <div className="shrink-0">
                 <p className="text-sm text-muted">Esta semana</p>
                 <p className="text-2xl font-bold">
                   {hechasSemana}
@@ -108,17 +108,17 @@ export default function Today() {
                   <span className="ml-1.5 text-sm font-medium text-muted">sesiones</span>
                 </p>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-1.5">
                 {deLaSemana.map((item) => (
                   <span
                     key={item.session.id}
                     title={item.session.scheduled_date}
                     className={
                       item.session.status === "completed"
-                        ? "h-8 w-2.5 rounded-full bg-done"
+                        ? "h-8 w-2.5 shrink-0 rounded-full bg-done"
                         : item.session.scheduled_date === hoyIso
-                          ? "h-8 w-2.5 rounded-full bg-brand"
-                          : "h-8 w-2.5 rounded-full bg-surface-2"
+                          ? "h-8 w-2.5 shrink-0 rounded-full bg-brand"
+                          : "h-8 w-2.5 shrink-0 rounded-full bg-surface-2"
                     }
                   />
                 ))}

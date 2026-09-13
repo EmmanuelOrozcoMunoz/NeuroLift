@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Button, Field } from "@/components/ui";
+import { Button, Field, Segmented } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import type { MessageResponse } from "@/lib/types";
+
+type RegisterRole = "athlete" | "coach";
 
 export default function Register() {
   const navigate = useNavigate();
 
+  const [role, setRole] = useState<RegisterRole>("athlete");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,8 +37,8 @@ export default function Register() {
           full_name: fullName.trim(),
           email: email.trim(),
           password,
-          role: "athlete",
-          body_weight: bodyWeight && peso > 0 ? peso : null,
+          role,
+          body_weight: role === "athlete" && bodyWeight && peso > 0 ? peso : null,
         },
       });
       // El backend responde con un mensaje genérico a propósito (no revela si el correo ya
@@ -55,11 +58,23 @@ export default function Register() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
       <h1 className="mb-1 text-3xl font-bold">Crear cuenta</h1>
       <p className="mb-6 text-sm text-muted">
-        Cuenta de atleta. Si entrenas con un coach de NeuroLift, pídele que te agregue a su grupo
-        después de registrarte.
+        {role === "athlete"
+          ? "Si entrenas con un coach de NeuroLift, pídele que te agregue a su grupo después de registrarte."
+          : "Cuenta de coach: podrás crear grupos, armar mesociclos y planes para tus propios atletas."}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-muted">Quiero registrarme como</p>
+          <Segmented
+            options={[
+              { value: "athlete", label: "Atleta" },
+              { value: "coach", label: "Coach" },
+            ]}
+            value={role}
+            onChange={setRole}
+          />
+        </div>
         <Field
           label="Nombre completo"
           autoComplete="name"
@@ -87,17 +102,19 @@ export default function Register() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
-        <Field
-          label="Peso corporal (kg)"
-          type="number"
-          inputMode="decimal"
-          step="0.5"
-          min="20"
-          max="300"
-          hint="Opcional. Se usa para calcular tu Fit Level."
-          value={bodyWeight}
-          onChange={(event) => setBodyWeight(event.target.value)}
-        />
+        {role === "athlete" && (
+          <Field
+            label="Peso corporal (kg)"
+            type="number"
+            inputMode="decimal"
+            step="0.5"
+            min="20"
+            max="300"
+            hint="Opcional. Se usa para calcular tu Fit Level."
+            value={bodyWeight}
+            onChange={(event) => setBodyWeight(event.target.value)}
+          />
+        )}
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
 

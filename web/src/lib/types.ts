@@ -45,7 +45,16 @@ export interface SetItem {
 export type SessionStatus = "pending" | "completed" | string;
 
 /** Formatos estándar de WOD que el coach puede prescribir para una sesión. */
-export type WodFormat = "for_time" | "amrap" | "emom" | "1rm";
+export type WodFormat =
+  | "for_time"
+  | "amrap"
+  | "amrap_reps"
+  | "emom"
+  | "tabata"
+  | "1rm"
+  | "calories"
+  | "distance"
+  | "watts";
 
 export interface TrainingSession {
   id: string;
@@ -61,16 +70,23 @@ export interface TrainingSession {
   /** El coach lo prescribe (PUT /sessions/{id}/wod-format); el atleta reporta el resultado al
    *  completar la sesión. null = esta sesión no tiene un WOD con formato de puntaje formal. */
   wod_format: WodFormat | null;
+  /** Timer que fijó el coach: cap duro para "for_time", duración de la ventana para
+   *  amrap/amrap_reps/calories/distance/watts. null si no aplica o no se fijó. */
+  wod_time_cap_seconds: number | null;
   wod_time_seconds: number | null;
   wod_rounds: number | null;
   wod_extra_reps: number | null;
   wod_emom_completed: boolean | null;
+  wod_calories: number | null;
+  wod_distance_meters: number | null;
+  wod_watts: number | null;
   sets: SetItem[];
 }
 
 /** Body de PUT /sessions/{id}/wod-format. */
 export interface WodFormatPayload {
   wod_format: WodFormat | null;
+  time_cap_seconds?: number | null;
 }
 
 /** Body opcional de POST /sessions/{id}/complete — solo aplica si la sesión tenía wod_format. */
@@ -79,6 +95,9 @@ export interface SessionCompletePayload {
   wod_rounds?: number | null;
   wod_extra_reps?: number | null;
   wod_emom_completed?: boolean | null;
+  wod_calories?: number | null;
+  wod_distance_meters?: number | null;
+  wod_watts?: number | null;
 }
 
 /** GET /users/{id}/recent-activity — una sesión ya completada, con lo REALMENTE hecho. */
@@ -97,14 +116,18 @@ export interface RecentSessionSummary {
   mesocycle_name: string | null;
   discipline: string;
   wod_format: WodFormat | null;
+  wod_time_cap_seconds: number | null;
   wod_time_seconds: number | null;
   wod_rounds: number | null;
   wod_extra_reps: number | null;
   wod_emom_completed: boolean | null;
+  wod_calories: number | null;
+  wod_distance_meters: number | null;
+  wod_watts: number | null;
   exercises: RecentSessionExercise[];
 }
 
-/** GET /users/{id}/mesocycles/ — el backend devuelve el modelo ORM crudo (sin response_model). */
+/** GET /users/{id}/mesocycles/ — response_model=MesocycleSummaryResponse en el backend. */
 export interface MesocycleSummary {
   id: string;
   user_id: string;
@@ -129,6 +152,8 @@ export interface MesocycleFull {
   end_date: string | null;
   description: string | null;
   level: string | null;
+  /** Solo relevante en planes (is_template) — null en mesociclos normales. */
+  price: number | null;
   is_template: boolean;
   /** true -> el cliente puede pedir GET /plans/{id}/cover (solo relevante si is_template) */
   has_cover_image: boolean;
@@ -219,6 +244,34 @@ export interface AthleteActivity {
   /** Ya viene formateado del backend, ej. "Por tiempo: 12:34" — null si no tiene ningún WOD
    *  con resultado registrado todavía. */
   last_wod_summary: string | null;
+}
+
+/** GET /groups/{id}/wod-days — una fecha del grupo con un WOD prescrito. */
+export interface WodDaySummary {
+  scheduled_date: string;
+  wod_format: WodFormat;
+  time_cap_seconds: number | null;
+  participants_count: number;
+}
+
+/** GET /groups/{id}/wod-leaderboard — una fila por atleta, ya ordenadas por resultado. */
+export interface WodLeaderboardRow {
+  user_id: string;
+  full_name: string;
+  has_avatar: boolean;
+  wod_format: WodFormat;
+  score_label: string | null;
+  rank: number | null;
+  completed: boolean;
+}
+
+/** Body de POST /groups/{id}/sessions/bulk-set-wod-format. */
+export interface GroupBulkWodFormatPayload {
+  program_name: string;
+  program_start_date: string;
+  scheduled_date: string;
+  wod_format: WodFormat | null;
+  time_cap_seconds: number | null;
 }
 
 // ============================================================ panel de coach
@@ -390,6 +443,16 @@ export interface PlanCreatePayload {
   price: number | null;
   weeks_count: number;
   training_days: Weekday[];
+}
+
+/** PUT /plans/{id} — igual a PlanCreatePayload sin el calendario (weeks_count/training_days),
+ *  que ya quedó fijo desde la creación. */
+export interface PlanUpdatePayload {
+  name: string;
+  description: string;
+  discipline: string;
+  level: PlanLevel;
+  price: number | null;
 }
 
 export interface PlanSetCreatePayload {

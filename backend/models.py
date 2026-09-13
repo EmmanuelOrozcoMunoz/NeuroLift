@@ -133,17 +133,25 @@ class Session(Base):
     day_offset = Column(Integer, nullable=True)
 
     # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
-    # El coach prescribe el formato al programar la sesión; el atleta reporta su resultado real
-    # al completarla (ver PUT /sessions/{id}/wod-format y POST /sessions/{id}/complete).
-    # "for_time": tiempo total (wod_time_seconds). "amrap": rondas completas + reps sueltas del
-    # intento final (wod_rounds/wod_extra_reps). "emom"/"e2mom": si mantuvo el ritmo todo el
-    # tiempo (wod_emom_completed). "1rm": no necesita campos propios — el peso máximo ya queda
-    # en Set.actual_weight de esa sesión.
+    # El coach prescribe el formato (y opcionalmente un time cap/duración) al programar la
+    # sesión; el atleta reporta su resultado real al completarla (ver PUT /sessions/{id}/wod-format
+    # y POST /sessions/{id}/complete). "for_time": tiempo total (wod_time_seconds), con time cap
+    # opcional. "amrap": rondas completas + reps sueltas del intento final (wod_rounds/
+    # wod_extra_reps). "amrap_reps": AMRAP puntuado solo en reps totales, sin rondas visibles
+    # (wod_extra_reps). "emom"/"e2mom": si mantuvo el ritmo todo el tiempo (wod_emom_completed).
+    # "1rm": no necesita campos propios — el peso máximo ya queda en Set.actual_weight de esa
+    # sesión. "calories"/"distance"/"watts": total logrado en el tiempo prescrito.
     wod_format = Column(String(20), nullable=True)
+    # Timer que fija el coach al prescribir: cap duro para "for_time", duración de la ventana
+    # para amrap/amrap_reps/calories/distance/watts. No aplica a emom/1rm.
+    wod_time_cap_seconds = Column(Integer, nullable=True)
     wod_time_seconds = Column(Integer, nullable=True)
     wod_rounds = Column(Integer, nullable=True)
     wod_extra_reps = Column(Integer, nullable=True)
     wod_emom_completed = Column(Boolean, nullable=True)
+    wod_calories = Column(Float, nullable=True)
+    wod_distance_meters = Column(Float, nullable=True)
+    wod_watts = Column(Float, nullable=True)
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
     sets = relationship("Set", back_populates="session", cascade="all, delete-orphan")

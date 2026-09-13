@@ -6,12 +6,13 @@ import { Button, Card, EmptyState, Field, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
-import { WOD_FORMAT_OPTIONS } from "@/lib/wod";
+import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
 
-/** El coach marca (o quita) el formato de WOD de esta sesión — el atleta lo ve al completarla
- *  y reporta el resultado que corresponda (tiempo, rondas+reps, o si cumplió el ritmo). */
+/** El coach marca (o quita) el formato de WOD de esta sesión, y opcionalmente un timer (cap
+ *  duro para "Por tiempo", duración de la ventana para los demás formatos que lo admiten) — el
+ *  atleta lo ve al completarla y reporta el resultado que corresponda. */
 function WodFormatCard({
   mesocycleId,
   session,
@@ -23,21 +24,36 @@ function WodFormatCard({
 }) {
   const setWodFormat = useSetWodFormat(mesocycleId);
   const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
+  const [timerMin, setTimerMin] = useState(Math.round((session.wod_time_cap_seconds ?? 0) / 60));
+
+  function guardar(formato: WodFormat | "", minutos: number) {
+    setWodFormat.mutate(
+      {
+        sessionId: session.id,
+        body: {
+          wod_format: formato || null,
+          time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+        },
+      },
+      { onSuccess: onSaved },
+    );
+  }
 
   function elegir(valor: WodFormat) {
     const nuevo = seleccionado === valor ? "" : valor;
     setSeleccionado(nuevo);
-    setWodFormat.mutate(
-      { sessionId: session.id, body: { wod_format: nuevo || null } },
-      { onSuccess: onSaved },
-    );
+    guardar(nuevo, timerMin);
   }
 
   return (
     <Card>
       <p className="mb-2 text-sm font-semibold text-muted">🔥 Formato del WOD (opcional)</p>
-      <div className="grid grid-cols-2 gap-2">
-        {WOD_FORMAT_OPTIONS.map((opcion) => (
+
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        ⏱ Plantillas rápidas
+      </p>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {WOD_TIMER_TEMPLATES.map((opcion) => (
           <button
             key={opcion.value}
             type="button"
@@ -55,6 +71,48 @@ function WodFormatCard({
           </button>
         ))}
       </div>
+
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        Otros tipos de resultado
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {WOD_OTHER_SCORE_TYPES.map((opcion) => (
+          <button
+            key={opcion.value}
+            type="button"
+            disabled={setWodFormat.isPending}
+            onClick={() => elegir(opcion.value)}
+            className={cx(
+              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+              seleccionado === opcion.value
+                ? "border-brand bg-brand-soft text-brand"
+                : "border-line bg-surface-2 text-fg",
+            )}
+          >
+            <p className="text-sm font-bold">{opcion.label}</p>
+            <p className="text-xs text-muted">{opcion.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-1.5 text-xs font-medium text-muted">
+            ⏱ Timer / time cap (min) — opcional
+          </p>
+          <Stepper
+            value={timerMin}
+            onChange={(v) => {
+              setTimerMin(v);
+              guardar(seleccionado, v);
+            }}
+            min={0}
+            max={90}
+            suffix="min"
+            compact
+          />
+        </div>
+      )}
     </Card>
   );
 }

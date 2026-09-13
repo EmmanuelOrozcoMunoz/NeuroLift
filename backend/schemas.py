@@ -80,6 +80,26 @@ class MesocycleResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class MesocycleSummaryResponse(BaseModel):
+    """GET /users/{id}/mesocycles/ — exactamente los campos que ya consume el frontend
+    (ver web/src/lib/types.ts:MesocycleSummary). Antes este endpoint devolvía el modelo ORM
+    crudo sin response_model; con esto queda con la misma lista blanca que el resto de la API."""
+    id: UUID
+    user_id: Optional[UUID] = None
+    group_id: Optional[UUID] = None
+    name: str | None = None
+    discipline: str
+    start_date: date
+    end_date: Optional[date] = None
+    is_active: bool
+    created_at: Optional[datetime] = None
+    description: Optional[str] = None
+    level: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 # --- ESQUEMAS PARA SESIONES Y SERIES (CORREGIDOS) ---
 class SessionCreate(SanitizedModel):
     mesocycle_id: UUID
@@ -148,10 +168,14 @@ class SessionResponse(BaseModel):
     day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
     # --- resultado del WOD/metcon, ver models.py:Session ---
     wod_format: Optional[str] = None
+    wod_time_cap_seconds: Optional[int] = None
     wod_time_seconds: Optional[int] = None
     wod_rounds: Optional[int] = None
     wod_extra_reps: Optional[int] = None
     wod_emom_completed: Optional[bool] = None
+    wod_calories: Optional[float] = None
+    wod_distance_meters: Optional[float] = None
+    wod_watts: Optional[float] = None
     sets: List[SetResponse] = [] # ¡Aquí anidamos los sets!
 
     class Config:
@@ -159,12 +183,15 @@ class SessionResponse(BaseModel):
 
 
 # Formatos estándar de WOD de CrossFit que el coach puede prescribir para una sesión.
-FormatoWod = Literal["for_time", "amrap", "emom", "1rm"]
+FormatoWod = Literal["for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts"]
 
 
 class WodFormatUpdate(SanitizedModel):
-    """El coach marca (o quita, mandando null) qué formato de WOD tiene esta sesión."""
+    """El coach marca (o quita, mandando null) qué formato de WOD tiene esta sesión, y
+    opcionalmente el timer: cap duro para "for_time", duración de la ventana para
+    amrap/amrap_reps/calories/distance/watts. No aplica a emom/1rm."""
     wod_format: FormatoWod | None = None
+    time_cap_seconds: int | None = Field(None, ge=1, le=36_000)
 
 
 class SessionCompleteRequest(SanitizedModel):
@@ -174,6 +201,9 @@ class SessionCompleteRequest(SanitizedModel):
     wod_rounds: int | None = Field(None, ge=0, le=500)
     wod_extra_reps: int | None = Field(None, ge=0, le=2000)
     wod_emom_completed: bool | None = None
+    wod_calories: float | None = Field(None, ge=0, le=5000)
+    wod_distance_meters: float | None = Field(None, ge=0, le=200_000)
+    wod_watts: float | None = Field(None, ge=0, le=3000)
 
 
 class RecentSessionExercise(BaseModel):
@@ -193,10 +223,14 @@ class RecentSessionSummary(BaseModel):
     mesocycle_name: str | None = None
     discipline: str
     wod_format: Optional[str] = None
+    wod_time_cap_seconds: Optional[int] = None
     wod_time_seconds: Optional[int] = None
     wod_rounds: Optional[int] = None
     wod_extra_reps: Optional[int] = None
     wod_emom_completed: Optional[bool] = None
+    wod_calories: Optional[float] = None
+    wod_distance_meters: Optional[float] = None
+    wod_watts: Optional[float] = None
     exercises: List[RecentSessionExercise] = []
 
 class MesocycleFullResponse(BaseModel):
@@ -208,6 +242,7 @@ class MesocycleFullResponse(BaseModel):
     end_date: Optional[date] = None
     description: Optional[str] = None
     level: Optional[str] = None
+    price: Optional[float] = None  # solo relevante en planes (is_template) — None en mesociclos normales
     is_template: bool = False
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     is_preview: bool = False  # ver PlanPreviewResponse: esta es SIEMPRE la versión completa
@@ -390,6 +425,17 @@ class GroupSessionExerciseDelete(SanitizedModel):
     exercise_name: str = Field(..., min_length=1, max_length=100)
 
 
+class GroupSessionWodFormatUpdate(SanitizedModel):
+    """El coach fija el formato de WOD (y su timer/time cap) UNA sola vez para la sesión de una
+    fecha dada, aplicado a TODOS los atletas del programa a la vez — evita repetir la misma
+    acción atleta por atleta cuando todo el grupo hace el mismo WOD."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+    scheduled_date: date
+    wod_format: FormatoWod | None = None
+    time_cap_seconds: int | None = Field(None, ge=1, le=36_000)
+
+
 # --- ESQUEMAS PARA EL PANEL DE ADMINISTRACIÓN ---
 class UserRoleUpdate(SanitizedModel):
     """Solo un admin puede cambiar el rol de un usuario (incluyendo promover a otro admin)."""
@@ -411,6 +457,30 @@ class AthleteActivityResponse(BaseModel):
     # último WOD con resultado registrado — el detalle completo (ejercicio por ejercicio, con
     # los pesos reales) vive en GET /users/{id}/recent-activity, no aquí, para no saturar la fila.
     last_wod_summary: Optional[str] = None
+
+
+# --- TABLA DE POSICIONES POR WOD (panel del coach) ---
+class WodDaySummary(BaseModel):
+    """Una fecha del grupo en la que hay un WOD prescrito (wod_format) — para que el coach
+    elija cuál quiere ver en la tabla de posiciones por WOD."""
+    scheduled_date: date
+    wod_format: str
+    time_cap_seconds: Optional[int] = None
+    participants_count: int = 0
+
+
+class WodLeaderboardRow(BaseModel):
+    """Una fila de la tabla de posiciones de UN WOD específico: todos los atletas del grupo que
+    lo tenían prescrito ese día, ordenados por su resultado según el formato (menor tiempo,
+    más rondas/reps, más peso/calorías/distancia/vatios — ver _rank_wod_sessions). Los que
+    todavía no lo completan aparecen al final, sin rank."""
+    user_id: UUID
+    full_name: str
+    has_avatar: bool = False
+    wod_format: str
+    score_label: Optional[str] = None
+    rank: Optional[int] = None
+    completed: bool = False
 
 
 class AdminOverview(BaseModel):
@@ -480,6 +550,19 @@ class PlanCreate(SanitizedModel):
 
 class PlanPublishUpdate(SanitizedModel):
     is_published: bool
+
+
+class PlanUpdate(SanitizedModel):
+    """Edita los datos generales de un plan (nombre/descripción/disciplina/nivel/precio) — NO
+    el calendario (weeks_count/training_days), que ya define los días que existen y cambiarlo
+    requeriría recalcular sesiones ya creadas. Funciona igual esté publicado o en borrador:
+    subir/bajar el precio de un plan ya publicado es una operación normal, no algo que deba
+    bloquearse."""
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=2000)
+    discipline: str = Field(..., min_length=1, max_length=50)
+    level: NivelPlan = "Intermedio"
+    price: float | None = Field(None, ge=0, le=100_000_000)
 
 
 class PlanSetCreate(SanitizedModel):
