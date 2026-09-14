@@ -110,13 +110,33 @@ Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyC
     } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
+# Reintenta varias veces en vez de matar una sola vez y seguir a ciegas: un hijo de
+# uvicorn --reload puede tardar un instante en morir, o (si sigue vivo) el próximo backend
+# ni siquiera logra levantar en el puerto y queda un proceso viejo respondiendo con el .env
+# de ANTES (CORS desactualizado) sin que nada lo avise. Se verifica de verdad que el puerto
+# haya quedado libre antes de continuar.
 foreach ($port in $BackendPort, $FrontendPort) {
-    $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    foreach ($c in $conns) {
-        Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+    $intentos = 0
+    do {
+        $conns = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+        foreach ($c in $conns) {
+            Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+            # taskkill /T mata también al árbol de hijos (por si Stop-Process solo alcanzó al padre)
+            & taskkill /F /T /PID $c.OwningProcess 2>$null | Out-Null
+        }
+        if ($conns.Count -gt 0) {
+            Start-Sleep -Seconds 1
+            $intentos++
+        }
+    } while ($conns.Count -gt 0 -and $intentos -lt 8)
+
+    $siguenVivos = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+    if ($siguenVivos.Count -gt 0) {
+        Write-Host "   AVISO: el puerto $port sigue ocupado (PID $($siguenVivos[0].OwningProcess)) tras $intentos intentos - ciérralo manualmente desde el Administrador de tareas y vuelve a correr el script." -ForegroundColor Red
+        exit 1
     }
 }
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 1
 
 Write-Host "2) Abriendo túneles de Cloudflare (todavía sin backend/frontend corriendo, es normal)..." -ForegroundColor Cyan
 Write-Host "   Esperando a que Cloudflare asigne las URLs (reintenta solo si hace falta)..." -ForegroundColor DarkGray
