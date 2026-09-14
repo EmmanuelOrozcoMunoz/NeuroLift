@@ -8,7 +8,8 @@ __pycache__/
 
 # Variables de entorno (¡Muy importante para la API de Gemini y la base de datos!)
 .env
-
+.env.development
+.env.example
 # Archivos de VS Code
 .vscode/
 
