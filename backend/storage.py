@@ -16,6 +16,7 @@ import uuid
 import requests
 from dotenv import load_dotenv
 from fastapi import HTTPException
+from fastapi.responses import RedirectResponse
 
 load_dotenv()
 
@@ -121,3 +122,16 @@ def create_signed_url(bucket: str, key: str, expires_in: int = 60) -> str:
     if not signed_path:
         raise HTTPException(status_code=404, detail="No hay imagen.")
     return f"{_STORAGE_URL}{signed_path}"
+
+
+def redirect_to_image(bucket: str, filename: str | None) -> RedirectResponse:
+    """Redirige a una URL firmada de corta duración — los buckets son PRIVADOS, así que esta es
+    la única forma de leer un objeto. Se llama DESPUÉS de que el endpoint ya comprobó que quien
+    pregunta tiene permiso de ver esta imagen en particular; la firma en sí no vuelve a chequear
+    nada de eso. El navegador sigue la redirección solo, sin reenviar el header Authorization (va
+    a otro origen) — no hace falta, la firma ya autoriza. Compartido por avatares, portadas de
+    grupo y portadas de plan (ver backend/routers/users.py, groups.py, plans.py)."""
+    if not filename:
+        raise HTTPException(status_code=404, detail="No hay imagen.")
+    url = create_signed_url(bucket, filename)
+    return RedirectResponse(url, status_code=307)
