@@ -6,6 +6,7 @@ import {
   IconBack,
   IconDumbbell,
   IconOffline,
+  IconShield,
   IconStore,
   IconToday,
   IconTrophy,
@@ -28,6 +29,12 @@ const COACH_NAV = [
   { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
   { to: "/coach/planes", label: "Planes", icon: IconStore },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
+];
+
+const ADMIN_NAV = [
+  { to: "/admin", label: "Resumen", icon: IconShield },
+  { to: "/admin/usuarios", label: "Usuarios", icon: IconUsers },
+  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
 ];
 
 function useOnline(): boolean {
@@ -88,7 +95,7 @@ export function PageHeader({
 export function AppShell() {
   const online = useOnline();
   const user = useCurrentUser();
-  const navItems = user.role === "coach" ? COACH_NAV : ATHLETE_NAV;
+  const navItems = user.role === "coach" ? COACH_NAV : user.role === "admin" ? ADMIN_NAV : ATHLETE_NAV;
 
   return (
     <div className="mx-auto min-h-dvh max-w-md px-4">
@@ -110,7 +117,7 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end={to === "/"}
+              end={to === "/" || to === "/admin"}
               className={({ isActive }) =>
                 cx(
                   "flex grow flex-col items-center gap-1 pt-2.5 pb-1.5 text-[11px] font-semibold",

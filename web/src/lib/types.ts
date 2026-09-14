@@ -465,3 +465,23 @@ export interface PlanSetCreatePayload {
   reference_exercise: string | null;
   block?: string | null;
 }
+
+// ------------------------------------------------------------------- admin
+
+/** GET /admin/overview */
+export interface AdminOverview {
+  total_users: number;
+  total_coaches: number;
+  total_athletes: number;
+  total_admins: number;
+  total_groups: number;
+  total_mesocycles: number;
+  total_sessions: number;
+  sessions_completed: number;
+  sessions_pending: number;
+}
+
+/** PUT /admin/users/{id}/role */
+export interface UserRoleUpdatePayload {
+  role: Role;
+}

@@ -6,6 +6,7 @@ import { CoverThumbnail } from "@/components/CoverImage";
 import { IconChevronRight } from "@/components/icons";
 import { Button, EmptyState, ErrorState, Field, LoadingList, Sheet } from "@/components/ui";
 import { useAthletes, useCreateGroup, useGroups } from "@/lib/coachQueries";
+import { useCurrentUser } from "@/lib/auth";
 
 function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const athletes = useAthletes();
@@ -85,22 +86,30 @@ function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 export default function Groups() {
+  const user = useCurrentUser();
+  const isAdmin = user.role === "admin";
   const { data, isPending, error, refetch } = useGroups();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <>
       <PageHeader
-        title="Mis grupos"
-        subtitle="Programa mesociclos para varios atletas a la vez"
+        title={isAdmin ? "Todos los grupos" : "Mis grupos"}
+        subtitle={
+          isAdmin
+            ? "Grupos de todos los coaches de la app"
+            : "Programa mesociclos para varios atletas a la vez"
+        }
         action={
-          <button
-            type="button"
-            onClick={() => setSheetOpen(true)}
-            className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white active:bg-brand/85"
-          >
-            + Nuevo
-          </button>
+          !isAdmin && (
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white active:bg-brand/85"
+            >
+              + Nuevo
+            </button>
+          )
         }
       />
 
@@ -109,8 +118,10 @@ export default function Groups() {
 
       {!isPending && !error && (data?.length ?? 0) === 0 && (
         <EmptyState
-          title="Todavía no tienes grupos"
-          action={<Button onClick={() => setSheetOpen(true)}>Crear el primero</Button>}
+          title={isAdmin ? "Todavía no hay grupos en la app" : "Todavía no tienes grupos"}
+          action={
+            !isAdmin && <Button onClick={() => setSheetOpen(true)}>Crear el primero</Button>
+          }
         />
       )}
 
@@ -124,7 +135,10 @@ export default function Groups() {
             <CoverThumbnail coverPath={`/groups/${group.id}/cover`} hasImage={group.has_cover_image} />
             <div className="min-w-0 grow">
               <p className="truncate font-bold">{group.name}</p>
-              <p className="text-sm text-muted">{group.member_count} atleta(s)</p>
+              <p className="text-sm text-muted">
+                {group.member_count} atleta(s)
+                {isAdmin && group.coach_name && ` · coach: ${group.coach_name}`}
+              </p>
             </div>
             <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />
           </Link>

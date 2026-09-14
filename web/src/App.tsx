@@ -3,9 +3,11 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, Spinner } from "@/components/ui";
+import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import type { Role } from "@/lib/types";
+import AdminOverview from "@/routes/admin/Overview";
+import AdminUsers from "@/routes/admin/Users";
 import AthleteDetail from "@/routes/coach/AthleteDetail";
 import Athletes from "@/routes/coach/Athletes";
 import GroupDetail from "@/routes/coach/GroupDetail";
@@ -39,40 +41,31 @@ function FullScreenLoader() {
   );
 }
 
-/** Cualquier usuario autenticado con rol soportado (atleta o coach) llega hasta el shell.
- *  Admin sigue operando solo desde el panel de escritorio: se le muestra el aviso, sin la
- *  barra de navegación (no tiene rutas propias aquí todavía). */
+/** Cualquier usuario autenticado (atleta, coach o admin) llega hasta el shell. */
 function RequireAppAccess({ children }: { children: ReactNode }) {
-  const { user, loading, logout } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <FullScreenLoader />;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
-  if (user.role !== "athlete" && user.role !== "coach") {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 px-6 text-center">
-        <h1 className="text-2xl font-bold">Esta app es para atletas y coaches</h1>
-        <p className="text-muted">
-          Tu cuenta es de administrador. Esas funciones viven en el panel de escritorio de
-          NeuroLift.
-        </p>
-        <Button variant="secondary" onClick={() => void logout()}>
-          Cerrar sesión
-        </Button>
-      </div>
-    );
-  }
-
   return <>{children}</>;
 }
 
-/** Dentro del shell, separa el árbol de rutas de atleta del de coach: si el rol no coincide,
- *  manda al home del rol correcto en vez de mostrar un 404 o la pantalla equivocada. */
-function RoleGate({ role, children }: { role: Role; children: ReactNode }) {
+function homeForRole(role: Role): string {
+  if (role === "coach") return "/coach/atletas";
+  if (role === "admin") return "/admin";
+  return "/";
+}
+
+/** Dentro del shell, separa el árbol de rutas de atleta/coach/admin: si el rol no coincide
+ *  con ninguno de los aceptados, manda al home del rol correcto en vez de mostrar un 404 o
+ *  la pantalla equivocada. */
+function RoleGate({ role, children }: { role: Role | Role[]; children: ReactNode }) {
   const user = useCurrentUser();
-  if (user.role === role) return <>{children}</>;
-  return <Navigate to={user.role === "coach" ? "/coach/atletas" : "/"} replace />;
+  const allowed = Array.isArray(role) ? role : [role];
+  if (allowed.includes(user.role)) return <>{children}</>;
+  return <Navigate to={homeForRole(user.role)} replace />;
 }
 
 function RedirectIfLogged({ children }: { children: ReactNode }) {
@@ -82,11 +75,11 @@ function RedirectIfLogged({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** "/" no tiene un componente único: es el home de atleta, pero para un coach logueado debe
- *  mandar de una vez a su propio home en vez de mostrarle la pantalla de atleta un instante. */
+/** "/" no tiene un componente único: es el home de atleta, pero un coach o admin logueado
+ *  debe mandar de una vez a su propio home en vez de mostrarle la pantalla de atleta un instante. */
 function RootRoute() {
   const user = useCurrentUser();
-  if (user.role === "coach") return <Navigate to="/coach/atletas" replace />;
+  if (user.role !== "athlete") return <Navigate to={homeForRole(user.role)} replace />;
   return <Today />;
 }
 
@@ -206,7 +199,7 @@ export default function App() {
         <Route
           path="/coach/grupos"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={["coach", "admin"]}>
               <Groups />
             </RoleGate>
           }
@@ -214,7 +207,7 @@ export default function App() {
         <Route
           path="/coach/grupos/:groupId"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={["coach", "admin"]}>
               <GroupDetail />
             </RoleGate>
           }
@@ -222,7 +215,7 @@ export default function App() {
         <Route
           path="/coach/grupos/:groupId/programas/:programName/:startDate"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={["coach", "admin"]}>
               <GroupProgramDetail />
             </RoleGate>
           }
@@ -264,6 +257,24 @@ export default function App() {
           element={
             <RoleGate role="coach">
               <CoachProfile />
+            </RoleGate>
+          }
+        />
+
+        {/* ----------------------------------------------------------- admin */}
+        <Route
+          path="/admin"
+          element={
+            <RoleGate role="admin">
+              <AdminOverview />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/admin/usuarios"
+          element={
+            <RoleGate role="admin">
+              <AdminUsers />
             </RoleGate>
           }
         />
