@@ -74,6 +74,19 @@ class GroupSessionExerciseAdd(SanitizedModel):
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    # Pesos del WOD por categoría/género (bloque "metcon") — si se manda cualquiera de estos,
+    # cada atleta recibe el que le corresponde según su categoría (rx/scaled) y sexo (ver
+    # backend/routers/groups.py:_resolve_group_weight). Si ninguno viene, se usa
+    # prescribed_weight para todos, igual que antes.
+    prescribed_weight_rx_male: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_rx_female: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_scaled_male: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_scaled_female: float | None = Field(None, ge=0, le=1000)
+    # Carga en % de 1RM (bloques de fuerza/weightlifting) — cada atleta recibe su propio peso
+    # calculado con SUS marcas ya registradas (ver backend/routers/shared.py:
+    # resolve_weight_from_percentage). `reference_exercise` vacío usa el mismo ejercicio.
+    prescribed_percentage: float | None = Field(None, ge=1, le=150)
+    reference_exercise: str | None = Field(None, min_length=1, max_length=100)
     block: Bloque | None = None
 
 
@@ -90,6 +103,12 @@ class GroupSessionExerciseUpdate(SanitizedModel):
     prescribed_reps: int = Field(..., ge=1, le=100)
     rpe: float | None = Field(None, ge=0, le=10)
     prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_rx_male: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_rx_female: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_scaled_male: float | None = Field(None, ge=0, le=1000)
+    prescribed_weight_scaled_female: float | None = Field(None, ge=0, le=1000)
+    prescribed_percentage: float | None = Field(None, ge=1, le=150)
+    reference_exercise: str | None = Field(None, min_length=1, max_length=100)
     block: Bloque | None = None
 
 

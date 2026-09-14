@@ -218,10 +218,15 @@ export interface PlanSummary {
 
 export type FitCategory = "halterofilia" | "gimnasia" | "metcon";
 
+export type WodCategory = "rx" | "scaled";
+
 export interface FitnessLevel {
   body_weight: number | null;
   sex: "male" | "female" | null;
   age: number | null;
+  /** Con qué categoría compite el atleta en los WODs — resuelve qué peso (de los 4 que el
+   *  coach prescribe por género/categoría) le corresponde en el bloque metabólico. */
+  category: WodCategory | null;
   values: Record<string, number>;
   category_scores: Partial<Record<FitCategory, number>>;
   category_levels: Partial<Record<FitCategory, string>>;
@@ -383,6 +388,10 @@ export interface SetCreatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  /** Carga en % de 1RM en vez de kg fijos — si viene, el backend la calcula con las marcas
+   *  YA registradas del atleta. `reference_exercise` vacío usa el mismo ejercicio. */
+  prescribed_percentage?: number | null;
+  reference_exercise?: string | null;
   block?: string | null;
 }
 
@@ -391,6 +400,8 @@ export interface SetUpdatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  prescribed_percentage?: number | null;
+  reference_exercise?: string | null;
   block?: string | null;
 }
 
@@ -403,6 +414,17 @@ export interface GroupBulkAddPayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  /** Pesos del WOD por categoría/género (bloque metcon) — opcionales. Si se manda cualquiera
+   *  de estos, cada atleta recibe el que le corresponde según su categoría y sexo; si ninguno
+   *  viene, se usa `prescribed_weight` para todos (mismo comportamiento de siempre). */
+  prescribed_weight_rx_male?: number | null;
+  prescribed_weight_rx_female?: number | null;
+  prescribed_weight_scaled_male?: number | null;
+  prescribed_weight_scaled_female?: number | null;
+  /** Carga en % de 1RM (bloques de fuerza/weightlifting) — cada atleta recibe su propio peso
+   *  calculado con SUS marcas ya registradas. `reference_exercise` vacío usa el mismo ejercicio. */
+  prescribed_percentage?: number | null;
+  reference_exercise?: string | null;
   block?: string | null;
 }
 
@@ -416,6 +438,12 @@ export interface GroupBulkUpdatePayload {
   prescribed_reps: number;
   rpe: number | null;
   prescribed_weight: number | null;
+  prescribed_weight_rx_male?: number | null;
+  prescribed_weight_rx_female?: number | null;
+  prescribed_weight_scaled_male?: number | null;
+  prescribed_weight_scaled_female?: number | null;
+  prescribed_percentage?: number | null;
+  reference_exercise?: string | null;
   block?: string | null;
 }
 

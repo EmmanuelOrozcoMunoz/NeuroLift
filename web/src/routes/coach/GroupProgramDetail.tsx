@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast, cx } from "@/components/ui";
 import {
   useGroupBulkAdd,
   useGroupBulkDelete,
@@ -153,8 +153,16 @@ function BulkExerciseBlock({
   const [series, setSeries] = useState(group.sets.length);
   const [reps, setReps] = useState(first.prescribed_reps);
   const [rpe, setRpe] = useState(first.rpe ?? 0);
+  const [tipoCarga, setTipoCarga] = useState<"kg" | "porcentaje">(first.prescribed_percentage ? "porcentaje" : "kg");
   const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
+  const [porcentaje, setPorcentaje] = useState(first.prescribed_percentage ?? 75);
+  const [referencia, setReferencia] = useState(first.reference_exercise ?? "");
+  const [wRxMale, setWRxMale] = useState(0);
+  const [wRxFemale, setWRxFemale] = useState(0);
+  const [wScaledMale, setWScaledMale] = useState(0);
+  const [wScaledFemale, setWScaledFemale] = useState(0);
   const [block, setBlock] = useState(first.block ?? "");
+  const esMetcon = block === "metcon";
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
 
@@ -193,11 +201,67 @@ function BulkExerciseBlock({
           <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
           <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
         </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Peso (kg)</span>
-          <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-        </div>
       </div>
+
+      {!esMetcon && (
+        <div className="mt-3 border-t border-line pt-3">
+          <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
+          <Segmented<"kg" | "porcentaje">
+            value={tipoCarga}
+            onChange={setTipoCarga}
+            options={[
+              { value: "kg", label: "Kg fijos" },
+              { value: "porcentaje", label: "% de 1RM" },
+            ]}
+          />
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">
+              {tipoCarga === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
+            </span>
+            {tipoCarga === "porcentaje" ? (
+              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+            ) : (
+              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+            )}
+          </div>
+          {tipoCarga === "porcentaje" && (
+            <Field
+              label="1RM de referencia (opcional)"
+              placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+              className="mt-2"
+            />
+          )}
+          <p className="mt-2 text-xs text-muted">
+            Cada atleta recibe su propio peso, calculado con sus marcas ya registradas.
+          </p>
+        </div>
+      )}
+
+      {esMetcon && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD (kg) — por categoría y género</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
+              <Stepper value={wRxMale} onChange={setWRxMale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
+              <Stepper value={wRxFemale} onChange={setWRxFemale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
+              <Stepper value={wScaledMale} onChange={setWScaledMale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
+              <Stepper value={wScaledFemale} onChange={setWScaledFemale} step={2.5} min={0} max={1000} compact />
+            </div>
+          </div>
+        </div>
+      )}
 
       <Button
         variant="secondary"
@@ -213,7 +277,14 @@ function BulkExerciseBlock({
               prescribed_sets: series,
               prescribed_reps: reps,
               rpe: rpe > 0 ? rpe : null,
-              prescribed_weight: weight > 0 ? weight : null,
+              prescribed_weight: !esMetcon && tipoCarga === "kg" && weight > 0 ? weight : null,
+              prescribed_percentage: !esMetcon && tipoCarga === "porcentaje" ? porcentaje : null,
+              reference_exercise:
+                !esMetcon && tipoCarga === "porcentaje" && referencia.trim() ? referencia.trim() : null,
+              prescribed_weight_rx_male: esMetcon && wRxMale > 0 ? wRxMale : null,
+              prescribed_weight_rx_female: esMetcon && wRxFemale > 0 ? wRxFemale : null,
+              prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
+              prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
               block: block || null,
             },
             { onSuccess: (r) => onFeedback(r.message) },
@@ -244,9 +315,17 @@ function BulkAddForm({
   const [series, setSeries] = useState(3);
   const [reps, setReps] = useState(8);
   const [rpe, setRpe] = useState(7);
+  const [tipoCarga, setTipoCarga] = useState<"kg" | "porcentaje">("kg");
   const [weight, setWeight] = useState(0);
+  const [porcentaje, setPorcentaje] = useState(75);
+  const [referencia, setReferencia] = useState("");
+  const [wRxMale, setWRxMale] = useState(0);
+  const [wRxFemale, setWRxFemale] = useState(0);
+  const [wScaledMale, setWScaledMale] = useState(0);
+  const [wScaledFemale, setWScaledFemale] = useState(0);
   const [block, setBlock] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const esMetcon = block === "metcon";
 
   return (
     <Card className="border-dashed">
@@ -266,11 +345,67 @@ function BulkAddForm({
           <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
           <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
         </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Peso (kg)</span>
-          <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-        </div>
       </div>
+
+      {!esMetcon && (
+        <div className="mt-3 border-t border-line pt-3">
+          <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
+          <Segmented<"kg" | "porcentaje">
+            value={tipoCarga}
+            onChange={setTipoCarga}
+            options={[
+              { value: "kg", label: "Kg fijos" },
+              { value: "porcentaje", label: "% de 1RM" },
+            ]}
+          />
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">
+              {tipoCarga === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
+            </span>
+            {tipoCarga === "porcentaje" ? (
+              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+            ) : (
+              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+            )}
+          </div>
+          {tipoCarga === "porcentaje" && (
+            <Field
+              label="1RM de referencia (opcional)"
+              placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+              className="mt-2"
+            />
+          )}
+          <p className="mt-2 text-xs text-muted">
+            Cada atleta recibe su propio peso, calculado con sus marcas ya registradas.
+          </p>
+        </div>
+      )}
+
+      {esMetcon && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD (kg) — por categoría y género</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
+              <Stepper value={wRxMale} onChange={setWRxMale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
+              <Stepper value={wRxFemale} onChange={setWRxFemale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
+              <Stepper value={wScaledMale} onChange={setWScaledMale} step={2.5} min={0} max={1000} compact />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
+              <Stepper value={wScaledFemale} onChange={setWScaledFemale} step={2.5} min={0} max={1000} compact />
+            </div>
+          </div>
+        </div>
+      )}
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button
         full
@@ -288,7 +423,14 @@ function BulkAddForm({
               prescribed_sets: series,
               prescribed_reps: reps,
               rpe: rpe > 0 ? rpe : null,
-              prescribed_weight: weight > 0 ? weight : null,
+              prescribed_weight: !esMetcon && tipoCarga === "kg" && weight > 0 ? weight : null,
+              prescribed_percentage: !esMetcon && tipoCarga === "porcentaje" ? porcentaje : null,
+              reference_exercise:
+                !esMetcon && tipoCarga === "porcentaje" && referencia.trim() ? referencia.trim() : null,
+              prescribed_weight_rx_male: esMetcon && wRxMale > 0 ? wRxMale : null,
+              prescribed_weight_rx_female: esMetcon && wRxFemale > 0 ? wRxFemale : null,
+              prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
+              prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
               block: block || null,
             },
             { onSuccess: (r) => { onFeedback(r.message); setName(""); } },

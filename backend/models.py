@@ -17,6 +17,10 @@ class User(Base):
     body_weight = Column(Float, nullable=True)
     sex = Column(String(10), nullable=True)   # "male" | "female" — usado para el Fit Level
     age = Column(Integer, nullable=True)      # autorreportada, igual que body_weight
+    # "rx" | "scaled" — con qué categoría compite este atleta en los WODs. Junto con `sex`,
+    # resuelve cuál de los 4 pesos (Rx H/M, Scaled H/M) que el coach prescribe para todo el
+    # grupo le corresponde a este atleta en particular (ver backend/routers/groups.py).
+    category = Column(String(10), nullable=True)
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.

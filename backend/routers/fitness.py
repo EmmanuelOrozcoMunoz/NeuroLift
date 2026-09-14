@@ -34,6 +34,8 @@ def update_fitness_benchmarks(
         usuario.sex = datos.pop("sex")
     if "age" in datos:
         usuario.age = datos.pop("age")
+    if "category" in datos:
+        usuario.category = datos.pop("category")
 
     for metric_key, value in datos.items():
         if metric_key not in fitness_scoring.METRICS:
@@ -91,6 +93,7 @@ def _build_fitness_level_response(db: Session, usuario: models.User) -> schemas.
         body_weight=usuario.body_weight,
         sex=usuario.sex,
         age=usuario.age,
+        category=usuario.category,
         values=valores,
         category_scores=resultado["category_scores"],
         category_levels=resultado["category_levels"],

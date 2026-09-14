@@ -2,13 +2,17 @@ import { useState } from "react";
 
 import { BlockSelect } from "@/components/BlockSelect";
 import { IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, Field, Stepper, cx } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Segmented, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
+
+/** Cómo se prescribe la carga: kg fijos, % de 1RM (el backend lo calcula con las marcas ya
+ *  registradas del atleta), o sin carga (peso en 0/null). */
+type TipoCarga = "kg" | "porcentaje" | "libre";
 
 /** El coach marca (o quita) el formato de WOD de esta sesión, y opcionalmente un timer (cap
  *  duro para "Por tiempo", duración de la ventana para los demás formatos que lo admiten) — el
@@ -137,7 +141,12 @@ function ExerciseBlock({
   const [series, setSeries] = useState(group.sets.length);
   const [reps, setReps] = useState(first.prescribed_reps);
   const [rpe, setRpe] = useState(first.rpe ?? 0);
+  const [tipo, setTipo] = useState<TipoCarga>(
+    first.prescribed_percentage ? "porcentaje" : first.prescribed_weight ? "kg" : "libre",
+  );
   const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
+  const [porcentaje, setPorcentaje] = useState(first.prescribed_percentage ?? 75);
+  const [referencia, setReferencia] = useState(first.reference_exercise ?? "");
   const [block, setBlock] = useState(first.block ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -150,7 +159,9 @@ function ExerciseBlock({
       exercise_name: name.trim() || group.name,
       prescribed_reps: reps,
       rpe: rpe > 0 ? rpe : null,
-      prescribed_weight: weight > 0 ? weight : null,
+      prescribed_weight: tipo === "kg" && weight > 0 ? weight : null,
+      prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
+      reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
       block: block || null,
     };
 
@@ -211,10 +222,40 @@ function ExerciseBlock({
           <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
           <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
         </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Peso (kg)</span>
-          <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-        </div>
+      </div>
+
+      <div className="mt-3 border-t border-line pt-3">
+        <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
+        <Segmented<TipoCarga>
+          value={tipo}
+          onChange={setTipo}
+          options={[
+            { value: "kg", label: "Kg fijos" },
+            { value: "porcentaje", label: "% de 1RM" },
+            { value: "libre", label: "Sin carga" },
+          ]}
+        />
+        {tipo !== "libre" && (
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">
+              {tipo === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
+            </span>
+            {tipo === "porcentaje" ? (
+              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+            ) : (
+              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+            )}
+          </div>
+        )}
+        {tipo === "porcentaje" && (
+          <Field
+            label="1RM de referencia (opcional)"
+            placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            className="mt-2"
+          />
+        )}
       </div>
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
@@ -240,7 +281,10 @@ function AddExerciseForm({
   const [series, setSeries] = useState(3);
   const [reps, setReps] = useState(10);
   const [rpe, setRpe] = useState(7);
+  const [tipo, setTipo] = useState<TipoCarga>("kg");
   const [weight, setWeight] = useState(0);
+  const [porcentaje, setPorcentaje] = useState(75);
+  const [referencia, setReferencia] = useState("");
   const [block, setBlock] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -251,7 +295,9 @@ function AddExerciseForm({
       exercise_name: name.trim(),
       prescribed_reps: reps,
       rpe: rpe > 0 ? rpe : null,
-      prescribed_weight: weight > 0 ? weight : null,
+      prescribed_weight: tipo === "kg" && weight > 0 ? weight : null,
+      prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
+      reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
       block: block || null,
     };
     try {
@@ -284,11 +330,42 @@ function AddExerciseForm({
           <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
           <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
         </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Peso (kg)</span>
-          <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-        </div>
       </div>
+
+      <div className="mt-3 border-t border-line pt-3">
+        <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
+        <Segmented<TipoCarga>
+          value={tipo}
+          onChange={setTipo}
+          options={[
+            { value: "kg", label: "Kg fijos" },
+            { value: "porcentaje", label: "% de 1RM" },
+            { value: "libre", label: "Sin carga" },
+          ]}
+        />
+        {tipo !== "libre" && (
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">
+              {tipo === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
+            </span>
+            {tipo === "porcentaje" ? (
+              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+            ) : (
+              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+            )}
+          </div>
+        )}
+        {tipo === "porcentaje" && (
+          <Field
+            label="1RM de referencia (opcional)"
+            placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            className="mt-2"
+          />
+        )}
+      </div>
+
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button full className="mt-3" loading={addSet.isPending} onClick={() => void handleAdd()}>
         Añadir a la sesión

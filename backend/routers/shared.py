@@ -74,3 +74,28 @@ def upsert_personal_record_by_name(db: Session, user_id: UUID, exercise_name: st
         existente.max_weight_kg = max_weight_kg
     else:
         db.add(models.PersonalRecord(user_id=user_id, exercise_name=exercise_name, max_weight_kg=max_weight_kg))
+
+
+def get_athlete_prs(db: Session, user_id: UUID) -> dict[str, float]:
+    """Marcas (1RM) de un atleta, con la llave normalizada (minúsculas, recortada) para poder
+    buscarlas por nombre sin importar mayúsculas — ver resolve_weight_from_percentage. Usado por
+    sets.py, groups.py y plans.py: cualquier flujo que prescriba carga en % de 1RM."""
+    return {
+        pr.exercise_name.strip().lower(): pr.max_weight_kg
+        for pr in db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
+    }
+
+
+def resolve_weight_from_percentage(
+    porcentaje: float | None, peso_fijo: float | None, referencia: str, prs: dict[str, float]
+) -> float | None:
+    """Convierte un % de 1RM a kg usando las marcas del atleta (ver get_athlete_prs), redondeando
+    a múltiplos de 2.5kg. Si no viene porcentaje, se respeta el peso fijo tal cual; si viene
+    porcentaje pero no hay marca de referencia, queda sin peso (el atleta o su coach lo ajusta a
+    mano) — quien llama es responsable de avisar que esa carga quedó pendiente."""
+    if porcentaje is None:
+        return peso_fijo
+    pr = prs.get(referencia.strip().lower())
+    if not pr:
+        return None
+    return round((pr * porcentaje / 100) / 2.5) * 2.5

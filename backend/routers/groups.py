@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.shared import AVATAR_CONTENT_TYPES, get_or_create_exercise, get_owned_group
+from backend.routers.shared import (
+    AVATAR_CONTENT_TYPES,
+    get_athlete_prs,
+    get_or_create_exercise,
+    get_owned_group,
+    resolve_weight_from_percentage,
+)
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -287,6 +293,33 @@ def _get_group_program_mesocycles(
     return mesos
 
 
+def _resolve_group_weight(db: Session, req, athlete: models.User, nombre_ejercicio: str) -> float | None:
+    """Resuelve el peso de ESTE atleta en particular, en orden:
+    1. Pesos por categoría/género (bloque metcon) — si el coach llenó alguna de las 4 variantes,
+       usa la que corresponde a la categoría (rx/scaled, default "rx") y sexo (default "male")
+       de este atleta.
+    2. % de 1RM (bloques de fuerza/weightlifting) — si viene `prescribed_percentage`, se calcula
+       con las marcas YA registradas de este atleta (ver resolve_weight_from_percentage).
+    3. `prescribed_weight` fijo, igual que siempre, si no vino ninguna de las anteriores."""
+    variantes = {
+        ("rx", "male"): req.prescribed_weight_rx_male,
+        ("rx", "female"): req.prescribed_weight_rx_female,
+        ("scaled", "male"): req.prescribed_weight_scaled_male,
+        ("scaled", "female"): req.prescribed_weight_scaled_female,
+    }
+    if any(v is not None for v in variantes.values()):
+        clave = (athlete.category or "rx", athlete.sex or "male")
+        peso = variantes.get(clave)
+        return peso if peso is not None else req.prescribed_weight
+
+    if req.prescribed_percentage is not None:
+        prs = get_athlete_prs(db, athlete.id)
+        referencia = req.reference_exercise or nombre_ejercicio
+        return resolve_weight_from_percentage(req.prescribed_percentage, req.prescribed_weight, referencia, prs)
+
+    return req.prescribed_weight
+
+
 @router.post("/{group_id}/sessions/bulk-add-exercise")
 def add_exercise_to_group_session(
     group_id: UUID,
@@ -311,6 +344,7 @@ def add_exercise_to_group_session(
             continue
 
         series_actuales = db.query(models.Set).filter(models.Set.session_id == sesion.id).count()
+        peso = _resolve_group_weight(db, req, meso.user, req.exercise_name)
         for i in range(req.prescribed_sets):
             db.add(models.Set(
                 session_id=sesion.id,
@@ -318,7 +352,9 @@ def add_exercise_to_group_session(
                 set_order=series_actuales + i + 1,
                 prescribed_reps=req.prescribed_reps,
                 rpe=req.rpe,
-                prescribed_weight=req.prescribed_weight,
+                prescribed_weight=peso,
+                prescribed_percentage=req.prescribed_percentage,
+                reference_exercise=req.reference_exercise,
                 block=req.block,
             ))
         resultados.append({"full_name": meso.user.full_name, "status": "añadido"})
@@ -365,13 +401,16 @@ def update_exercise_in_group_session(
             resultados.append({"full_name": meso.user.full_name, "status": "no tenía ese ejercicio en esa fecha"})
             continue
 
+        peso = _resolve_group_weight(db, req, meso.user, req.new_exercise_name)
         num_original = len(sets_existentes)
         limite = min(num_original, req.prescribed_sets)
         for i in range(limite):
             sets_existentes[i].exercise_id = nuevo_ejercicio.id
             sets_existentes[i].prescribed_reps = req.prescribed_reps
             sets_existentes[i].rpe = req.rpe
-            sets_existentes[i].prescribed_weight = req.prescribed_weight
+            sets_existentes[i].prescribed_weight = peso
+            sets_existentes[i].prescribed_percentage = req.prescribed_percentage
+            sets_existentes[i].reference_exercise = req.reference_exercise
             if req.block is not None:
                 sets_existentes[i].block = req.block
 
@@ -387,7 +426,9 @@ def update_exercise_in_group_session(
                     set_order=i + 1,
                     prescribed_reps=req.prescribed_reps,
                     rpe=req.rpe,
-                    prescribed_weight=req.prescribed_weight,
+                    prescribed_weight=peso,
+                    prescribed_percentage=req.prescribed_percentage,
+                    reference_exercise=req.reference_exercise,
                     block=bloque_nuevas,
                 ))
 

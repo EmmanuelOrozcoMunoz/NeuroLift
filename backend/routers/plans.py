@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.shared import AVATAR_CONTENT_TYPES, get_or_create_exercise
+from backend.routers.shared import (
+    AVATAR_CONTENT_TYPES,
+    get_athlete_prs,
+    get_or_create_exercise,
+    resolve_weight_from_percentage,
+)
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -346,18 +351,6 @@ def delete_set_from_plan(
     return {"message": "Serie eliminada del plan"}
 
 
-def _resolver_peso(porcentaje: float | None, peso_fijo: float | None, referencia: str, prs: dict) -> float | None:
-    """Convierte un % de 1RM a kg usando las marcas del atleta, redondeando a múltiplos de 2.5kg.
-    Si el plan traía un peso fijo se respeta; si no hay marca de referencia, queda sin peso
-    (el atleta o su coach lo ajusta a mano)."""
-    if porcentaje is None:
-        return peso_fijo
-    pr = prs.get(referencia.strip().lower())
-    if not pr:
-        return None
-    return round((pr * porcentaje / 100) / 2.5) * 2.5
-
-
 @router.post("/{plan_id}/acquire")
 def acquire_plan(
     plan_id: UUID,
@@ -375,10 +368,7 @@ def acquire_plan(
     if not plan.is_published:
         raise HTTPException(status_code=400, detail="Este plan todavía no está disponible")
 
-    prs = {
-        pr.exercise_name.strip().lower(): pr.max_weight_kg
-        for pr in db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == current_user.id).all()
-    }
+    prs = get_athlete_prs(db, current_user.id)
 
     nuevo_meso = models.Mesocycle(
         user_id=current_user.id,
@@ -413,7 +403,7 @@ def acquire_plan(
 
         for set_plan in sorted(sesion_plan.sets, key=lambda x: x.set_order):
             referencia = set_plan.reference_exercise or (set_plan.exercise.name if set_plan.exercise else "")
-            peso = _resolver_peso(set_plan.prescribed_percentage, set_plan.prescribed_weight, referencia, prs)
+            peso = resolve_weight_from_percentage(set_plan.prescribed_percentage, set_plan.prescribed_weight, referencia, prs)
             if set_plan.prescribed_percentage and peso is None and referencia:
                 sin_marca.add(referencia)
 

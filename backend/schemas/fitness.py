@@ -11,6 +11,9 @@ class FitnessBenchmarkUpdate(SanitizedModel):
     body_weight: float | None = Field(None, ge=20, le=300)
     sex: Literal["male", "female"] | None = None
     age: int | None = Field(None, ge=10, le=100)
+    # Con qué categoría compite en los WODs — resuelve, junto con `sex`, cuál de los 4 pesos
+    # (Rx H/M, Scaled H/M) que el coach prescribe para el grupo le corresponde a este atleta.
+    category: Literal["rx", "scaled"] | None = None
     # Halterofilia (1RM en kg)
     snatch_kg: float | None = Field(None, ge=0, le=400)
     clean_jerk_kg: float | None = Field(None, ge=0, le=400)
@@ -32,6 +35,7 @@ class FitnessLevelResponse(BaseModel):
     body_weight: float | None = None
     sex: str | None = None
     age: int | None = None
+    category: str | None = None
     values: dict[str, float] = {}
     category_scores: dict[str, float] = {}
     category_levels: dict[str, str] = {}

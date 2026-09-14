@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/AppShell";
 import { Button, Card, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { useFitnessLevel, useSaveBenchmarks } from "@/lib/queries";
-import type { FitCategory } from "@/lib/types";
+import type { FitCategory, WodCategory } from "@/lib/types";
 
 const CAT_LABEL: Record<FitCategory, string> = {
   halterofilia: "🏋️ Halterofilia",
@@ -37,6 +37,7 @@ export default function FitLevel() {
   const [bodyWeight, setBodyWeight] = useState(0);
   const [sex, setSex] = useState<"male" | "female" | "">("");
   const [age, setAge] = useState(0);
+  const [category, setCategory] = useState<WodCategory | "">("");
 
   const [snatch, setSnatch] = useState(0);
   const [cleanJerk, setCleanJerk] = useState(0);
@@ -59,6 +60,7 @@ export default function FitLevel() {
     setBodyWeight(data.body_weight ?? 0);
     setSex(data.sex ?? "");
     setAge(data.age ?? 0);
+    setCategory(data.category ?? "");
     setSnatch(data.values.snatch_kg ?? 0);
     setCleanJerk(data.values.clean_jerk_kg ?? 0);
     setBackSquat(data.values.back_squat_kg ?? 0);
@@ -96,6 +98,7 @@ export default function FitLevel() {
     if (bodyWeight > 0) payload.body_weight = bodyWeight;
     if (sex) payload.sex = sex;
     if (age > 0) payload.age = age;
+    if (category) payload.category = category;
     if (snatch > 0) payload.snatch_kg = snatch;
     if (cleanJerk > 0) payload.clean_jerk_kg = cleanJerk;
     if (backSquat > 0) payload.back_squat_kg = backSquat;
@@ -204,6 +207,20 @@ export default function FitLevel() {
                     { value: "", label: "—" },
                     { value: "male", label: "Hombre" },
                     { value: "female", label: "Mujer" },
+                  ]}
+                />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-muted">
+                  Categoría (WODs)
+                </span>
+                <Segmented<WodCategory | "">
+                  value={category}
+                  onChange={setCategory}
+                  options={[
+                    { value: "", label: "—" },
+                    { value: "rx", label: "RX" },
+                    { value: "scaled", label: "Scaled" },
                   ]}
                 />
               </div>

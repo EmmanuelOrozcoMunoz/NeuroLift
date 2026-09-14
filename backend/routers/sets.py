@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models, schemas
 from backend.core.security import ensure_owner_or_coach, get_current_user, require_coach
 from backend.database import get_db
+from backend.routers.shared import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(tags=["sets"])
 
@@ -27,9 +28,22 @@ def update_set(
         raise HTTPException(status_code=404, detail="Serie (Set) no encontrada")
     ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
 
+    # Nombre de referencia para resolver el % de 1RM: el que se está escribiendo ahora, o si no
+    # cambia, el que ya tenía el ejercicio (se calcula ANTES de tocar exercise_id).
+    nombre_para_referencia = set_update.exercise_name or (db_set.exercise.name if db_set.exercise else "")
+
     db_set.prescribed_reps = set_update.prescribed_reps
     db_set.rpe = set_update.rpe
-    db_set.prescribed_weight = set_update.prescribed_weight
+    db_set.prescribed_percentage = set_update.prescribed_percentage
+    db_set.reference_exercise = set_update.reference_exercise
+    if set_update.prescribed_percentage is not None:
+        prs = get_athlete_prs(db, db_set.session.mesocycle.user_id)
+        referencia = set_update.reference_exercise or nombre_para_referencia
+        db_set.prescribed_weight = resolve_weight_from_percentage(
+            set_update.prescribed_percentage, set_update.prescribed_weight, referencia, prs
+        )
+    else:
+        db_set.prescribed_weight = set_update.prescribed_weight
     if set_update.block is not None:
         db_set.block = set_update.block
 
@@ -72,13 +86,22 @@ def agregar_serie(
     series_actuales = db.query(models.Set).filter(models.Set.session_id == session_id).all()
     siguiente_orden = len(series_actuales) + 1
 
+    if req.prescribed_percentage is not None:
+        prs = get_athlete_prs(db, sesion.mesocycle.user_id)
+        referencia = req.reference_exercise or req.exercise_name
+        peso = resolve_weight_from_percentage(req.prescribed_percentage, req.prescribed_weight, referencia, prs)
+    else:
+        peso = req.prescribed_weight
+
     nuevo_set = models.Set(
         session_id=session_id,
         exercise_id=ejercicio.id,
         set_order=siguiente_orden,
         prescribed_reps=req.prescribed_reps,
         rpe=req.rpe,
-        prescribed_weight=req.prescribed_weight,
+        prescribed_weight=peso,
+        prescribed_percentage=req.prescribed_percentage,
+        reference_exercise=req.reference_exercise,
         block=req.block,
     )
     db.add(nuevo_set)
