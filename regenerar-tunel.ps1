@@ -11,11 +11,21 @@
   Si Windows se queja de la política de ejecución de scripts, corre en vez esto:
     powershell -ExecutionPolicy Bypass -File .\regenerar-tunel.ps1
 
+  Puertos por defecto: 8000 (backend) y 5173 (frontend) — los mismos de siempre. Si vas a
+  correr este mismo repo en más de una carpeta a la vez (Dev/QA/PRD como worktrees de git,
+  cada uno en su propia carpeta), cada uno necesita puertos DISTINTOS para no pisarse:
+    .\regenerar-tunel.ps1 -BackendPort 8001 -FrontendPort 5174
+
 .NOTA
   Los links de trycloudflare.com son gratuitos y no requieren cuenta, pero son ALEATORIOS
   cada vez que se relanza el túnel — es justo lo que este script hace, así que después de
   correrlo tendrás links NUEVOS. Compártele al celular los que imprima al final.
 #>
+
+param(
+    [int]$BackendPort = 8000,
+    [int]$FrontendPort = 5173
+)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = $PSScriptRoot
@@ -76,22 +86,31 @@ function Start-QuickTunnel {
     return $null
 }
 
-Write-Host "1) Deteniendo túneles y servidores anteriores..." -ForegroundColor Cyan
-Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Write-Host "1) Deteniendo túneles y servidores anteriores de ESTA carpeta..." -ForegroundColor Cyan
+
+# Cloudflared no tiene una carpeta de trabajo propia del repo, así que se identifica por el
+# puerto que túnel — así, si tienes Dev/QA/PRD corriendo en paralelo (cada uno en su propia
+# carpeta vía git worktree, con -BackendPort/-FrontendPort distintos), correr esto en una
+# carpeta nunca mata el túnel de las otras.
+Get-CimInstance Win32_Process -Filter "name='cloudflared.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*localhost:$BackendPort*" -or $_.CommandLine -like "*localhost:$FrontendPort*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 # Matar solo por el PID que tiene el puerto en este instante NO basta: uvicorn --reload separa
 # un proceso "padre" (vigila archivos) de un "hijo" (el que de verdad sirve peticiones, vía
 # multiprocessing en Windows). Si solo se mata al hijo, el padre queda vivo sin nada escuchando
 # y en la siguiente corrida vuelve a competir por el puerto — o peor, un hijo viejo con el
 # .env de ANTES queda huérfano reteniendo el puerto con la config vieja (CORS desactualizado).
-# Por eso aquí se matan por NOMBRE DE COMANDO: cualquier proceso de este repo con "uvicorn" en
-# su línea de comando, y cualquier worker "multiprocessing.spawn" (que en este proyecto solo
-# lo genera el --reload de uvicorn).
+# Se filtra por la ruta del ejecutable de ESTE repo (cada worktree de Dev/QA/PRD tiene su
+# propio venv), para no tocar el uvicorn de otra carpeta corriendo en paralelo.
 Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like "*uvicorn*" -or $_.CommandLine -like "*multiprocessing.spawn*" } |
+    Where-Object {
+        $_.ExecutablePath -like "$repoRoot*" -and
+        ($_.CommandLine -like "*uvicorn*" -or $_.CommandLine -like "*multiprocessing.spawn*")
+    } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
-foreach ($port in 8000, 5173) {
+foreach ($port in $BackendPort, $FrontendPort) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($c in $conns) {
         Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
@@ -101,8 +120,8 @@ Start-Sleep -Seconds 2
 
 Write-Host "2) Abriendo túneles de Cloudflare (todavía sin backend/frontend corriendo, es normal)..." -ForegroundColor Cyan
 Write-Host "   Esperando a que Cloudflare asigne las URLs (reintenta solo si hace falta)..." -ForegroundColor DarkGray
-$backendUrl = Start-QuickTunnel -LocalUrl "http://localhost:8000" -LogPath $backendLog -Label "Backend"
-$frontendUrl = Start-QuickTunnel -LocalUrl "http://localhost:5173" -LogPath $frontendLog -Label "Frontend"
+$backendUrl = Start-QuickTunnel -LocalUrl "http://localhost:$BackendPort" -LogPath $backendLog -Label "Backend"
+$frontendUrl = Start-QuickTunnel -LocalUrl "http://localhost:$FrontendPort" -LogPath $frontendLog -Label "Frontend"
 
 if (-not $backendUrl -or -not $frontendUrl) {
     Write-Host "No se pudo levantar el tunel tras varios intentos (Cloudflare puede estar saturado en este momento). Revisa los logs en $logsDir o intenta de nuevo en un minuto." -ForegroundColor Red
@@ -138,10 +157,10 @@ Set-Content -Path $envPath -Value $newLines
 
 Write-Host "4) Levantando backend y frontend con la configuración nueva..." -ForegroundColor Cyan
 Start-Process -WindowStyle Hidden -FilePath "$repoRoot\venv\Scripts\python.exe" `
-    -ArgumentList "-m", "uvicorn", "backend.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000" `
+    -ArgumentList "-m", "uvicorn", "backend.main:app", "--reload", "--host", "0.0.0.0", "--port", "$BackendPort" `
     -WorkingDirectory $repoRoot
 Start-Process -WindowStyle Hidden -FilePath "node" `
-    -ArgumentList "node_modules/vite/bin/vite.js", "--port", "5173", "--host" `
+    -ArgumentList "node_modules/vite/bin/vite.js", "--port", "$FrontendPort", "--host" `
     -WorkingDirectory (Join-Path $repoRoot "web")
 
 Start-Sleep -Seconds 5
@@ -162,9 +181,9 @@ try {
 
 # Si por lo que sea quedó más de un proceso escuchando el mismo puerto, uno de los dos tiene
 # el .env viejo (típicamente el CORS desactualizado) — mejor avisar que fallar en silencio.
-$backendOwners = @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)
+$backendOwners = @(Get-NetTCPConnection -LocalPort $BackendPort -State Listen -ErrorAction SilentlyContinue)
 if ($backendOwners.Count -gt 1) {
-    Write-Host "   AVISO: hay $($backendOwners.Count) procesos escuchando en el puerto 8000 - corre el script de nuevo." -ForegroundColor Red
+    Write-Host "   AVISO: hay $($backendOwners.Count) procesos escuchando en el puerto $BackendPort - corre el script de nuevo." -ForegroundColor Red
 }
 
 Write-Host ""
