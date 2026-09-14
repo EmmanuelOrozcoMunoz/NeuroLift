@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   IconBack,
   IconDumbbell,
+  IconList,
   IconOffline,
   IconShield,
   IconStore,
@@ -35,6 +36,7 @@ const ADMIN_NAV = [
   { to: "/admin", label: "Resumen", icon: IconShield },
   { to: "/admin/usuarios", label: "Usuarios", icon: IconUsers },
   { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
+  { to: "/admin/logs", label: "Logs", icon: IconList },
 ];
 
 function useOnline(): boolean {

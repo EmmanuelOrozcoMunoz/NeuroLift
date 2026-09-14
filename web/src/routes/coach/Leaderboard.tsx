@@ -104,7 +104,10 @@ function WodDayRow({ day, onSelect }: { day: WodDaySummary; onSelect: () => void
       className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-4 text-left active:bg-surface-2"
     >
       <div className="min-w-0 grow">
-        <p className="font-bold">{shortDate(day.scheduled_date)}</p>
+        <p className="truncate font-bold">
+          {shortDate(day.scheduled_date)}
+          {day.wod_name && <span className="text-brand"> · {day.wod_name}</span>}
+        </p>
         <p className="text-sm text-muted">
           {WOD_FORMAT_LABELS[day.wod_format]} · {day.participants_count} atleta(s)
         </p>
@@ -120,10 +123,10 @@ function WodDayRow({ day, onSelect }: { day: WodDaySummary; onSelect: () => void
 function PorWodTab() {
   const groups = useGroups();
   const [groupId, setGroupId] = useState<string | null>(null);
-  const [scheduledDate, setScheduledDate] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<WodDaySummary | null>(null);
 
   const wodDays = useGroupWodDays(groupId ?? undefined);
-  const wodLeaderboard = useGroupWodLeaderboard(groupId ?? undefined, scheduledDate ?? undefined);
+  const wodLeaderboard = useGroupWodLeaderboard(groupId ?? undefined, selectedDay?.scheduled_date);
 
   if (!groupId) {
     if (groups.isPending) return <LoadingList rows={3} />;
@@ -156,7 +159,7 @@ function PorWodTab() {
     );
   }
 
-  if (!scheduledDate) {
+  if (!selectedDay) {
     return (
       <div className="space-y-2">
         <button
@@ -179,7 +182,7 @@ function PorWodTab() {
           <WodDayRow
             key={`${day.scheduled_date}-${day.wod_format}`}
             day={day}
-            onSelect={() => setScheduledDate(day.scheduled_date)}
+            onSelect={() => setSelectedDay(day)}
           />
         ))}
       </div>
@@ -190,11 +193,15 @@ function PorWodTab() {
     <div className="space-y-2">
       <button
         type="button"
-        onClick={() => setScheduledDate(null)}
+        onClick={() => setSelectedDay(null)}
         className="mb-1 text-sm font-semibold text-brand"
       >
         ← Cambiar fecha
       </button>
+      <p className="mb-2 text-sm text-muted">
+        {shortDate(selectedDay.scheduled_date)}
+        {selectedDay.wod_name && <span className="font-semibold text-brand"> · {selectedDay.wod_name}</span>}
+      </p>
       {wodLeaderboard.isPending && <LoadingList rows={3} />}
       {!wodLeaderboard.isPending && wodLeaderboard.error && (
         <ErrorState error={wodLeaderboard.error} onRetry={() => void wodLeaderboard.refetch()} />

@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends, File, HTTPException, Request, UploadFile, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, func, case
+from sqlalchemy import text, func, case, and_
 from typing import List
 from uuid import UUID
 from datetime import timedelta, datetime, date
@@ -27,6 +27,26 @@ load_dotenv()
 # ==========================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 security_logger = logging.getLogger("neurolift.security")
+
+
+class _AuditLogHandler(logging.Handler):
+    """Espejo de security_logger en la tabla audit_logs (ver backend/models.py): antes estos
+    eventos solo vivían en la consola del proceso y se perdían al reiniciar. Una conexión
+    propia (no Depends(get_db)) porque un logger no vive dentro del ciclo de vida de un
+    request. Nunca debe romper el flujo que disparó el log si la escritura falla."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        db = SessionLocal()
+        try:
+            db.add(models.AuditLog(level=record.levelname, message=record.getMessage()))
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+
+
+security_logger.addHandler(_AuditLogHandler())
 
 
 def _client_ip(request: Request) -> str:
@@ -1320,14 +1340,20 @@ def get_group_wod_days(
     ver en la tabla de posiciones por WOD (GET /groups/{group_id}/wod-leaderboard)."""
     _get_owned_group(db, group_id, current_user)
 
+    # El "nombre" del WOD no se guarda aparte: ya vive como el nombre del ejercicio del bloque
+    # metabólico (ej. "Helen (3 rondas de...)") — lo tomamos de ahí para no duplicar lo que el
+    # coach ya escribió al armar la sesión (ver bloque "metcon" en backend/schemas.py:Bloque).
     filas = (
         db.query(
             models.Session.scheduled_date,
             models.Session.wod_format,
+            func.max(models.Exercise.name).label("wod_name"),
             func.max(models.Session.wod_time_cap_seconds).label("time_cap_seconds"),
-            func.count(models.Session.id).label("participantes"),
+            func.count(func.distinct(models.Session.id)).label("participantes"),
         )
         .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .outerjoin(models.Set, and_(models.Set.session_id == models.Session.id, models.Set.block == "metcon"))
+        .outerjoin(models.Exercise, models.Exercise.id == models.Set.exercise_id)
         .filter(models.Mesocycle.group_id == group_id, models.Session.wod_format.isnot(None))
         .group_by(models.Session.scheduled_date, models.Session.wod_format)
         .order_by(models.Session.scheduled_date.desc())
@@ -1337,6 +1363,7 @@ def get_group_wod_days(
         schemas.WodDaySummary(
             scheduled_date=f.scheduled_date,
             wod_format=f.wod_format,
+            wod_name=f.wod_name,
             time_cap_seconds=f.time_cap_seconds,
             participants_count=f.participantes,
         )
@@ -1359,7 +1386,10 @@ def get_group_wod_leaderboard(
     sesiones = (
         db.query(models.Session)
         .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
-        .options(joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user), joinedload(models.Session.sets))
+        .options(
+            joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user),
+            joinedload(models.Session.sets).joinedload(models.Set.exercise),
+        )
         .filter(
             models.Mesocycle.group_id == group_id,
             models.Session.scheduled_date == scheduled_date,
@@ -1369,6 +1399,13 @@ def get_group_wod_leaderboard(
     )
     if not sesiones:
         return []
+
+    # El "nombre" del WOD ya vive como el nombre del ejercicio del bloque metabólico — se toma
+    # de la primera sesión que tenga uno, es el mismo para todo el grupo ese día.
+    wod_name = next(
+        (s.exercise.name for sesion in sesiones for s in sesion.sets if s.block == "metcon" and s.exercise),
+        None,
+    )
 
     completadas = [s for s in sesiones if s.status == "completed"]
     ordenadas = _rank_wod_sessions(completadas)
@@ -1382,6 +1419,7 @@ def get_group_wod_leaderboard(
             full_name=sesion.mesocycle.user.full_name,
             has_avatar=sesion.mesocycle.user.has_avatar,
             wod_format=sesion.wod_format,
+            wod_name=wod_name,
             score_label=_format_wod_summary(sesion),
             rank=rank if tiene_score else None,
             completed=True,
@@ -1397,6 +1435,7 @@ def get_group_wod_leaderboard(
             full_name=sesion.mesocycle.user.full_name,
             has_avatar=sesion.mesocycle.user.has_avatar,
             wod_format=sesion.wod_format,
+            wod_name=wod_name,
             score_label=None,
             rank=None,
             completed=False,
@@ -2214,6 +2253,22 @@ def revoke_user_sessions(
         current_user.email, usuario.email,
     )
     return {"message": f"Todas las sesiones de {usuario.full_name} fueron revocadas."}
+
+
+@app.get("/admin/logs", response_model=List[schemas.AuditLogResponse])
+def get_audit_logs(
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Historial de eventos de seguridad (logins fallidos, cambios de rol, revocaciones...),
+    más reciente primero. Espejo persistente de lo que security_logger ya imprime en consola."""
+    return (
+        db.query(models.AuditLog)
+        .order_by(models.AuditLog.created_at.desc())
+        .limit(min(limit, 500))
+        .all()
+    )
 
 
 # ==========================================

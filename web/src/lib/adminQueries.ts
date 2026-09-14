@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
-import type { AdminOverview, MessageResponse, User, UserRoleUpdatePayload } from "@/lib/types";
+import type { AdminOverview, AuditLog, MessageResponse, User, UserRoleUpdatePayload } from "@/lib/types";
 
 export const adminKeys = {
   overview: ["admin", "overview"] as const,
   users: ["admin", "users"] as const,
+  logs: ["admin", "logs"] as const,
 };
 
 /** Vista completa de la app: conteos globales sin importar de qué coach o atleta sean. */
@@ -39,5 +40,14 @@ export function useRevokeUserSessions() {
   return useMutation({
     mutationFn: (userId: string) =>
       apiFetch<MessageResponse>(`/admin/users/${userId}/revoke-sessions`, { method: "POST" }),
+  });
+}
+
+/** Historial de eventos de seguridad (logins fallidos, cambios de rol, revocaciones...),
+ *  más reciente primero. */
+export function useAuditLogs(): UseQueryResult<AuditLog[]> {
+  return useQuery({
+    queryKey: adminKeys.logs,
+    queryFn: () => apiFetch<AuditLog[]>("/admin/logs"),
   });
 }

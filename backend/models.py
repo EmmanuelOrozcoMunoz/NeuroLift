@@ -223,3 +223,16 @@ class FitnessBenchmark(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "metric_key", name="uq_fitness_benchmark_user_metric"),
     )
+
+
+class AuditLog(Base):
+    """Espejo persistente de lo que ya emite `security_logger` en main.py (logins fallidos,
+    401/403, cambios de rol, revocaciones) — antes solo vivía en la consola del proceso y
+    desaparecía al reiniciar. Un `logging.Handler` (ver main.py) escribe aquí en cada evento;
+    esta tabla no reemplaza el logging a consola, lo complementa para que quede consultable
+    desde el panel de admin."""
+    __tablename__ = "audit_logs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    level = Column(String(10), nullable=False)
+    message = Column(Text, nullable=False)

@@ -465,6 +465,9 @@ class WodDaySummary(BaseModel):
     elija cuál quiere ver en la tabla de posiciones por WOD."""
     scheduled_date: date
     wod_format: str
+    # No se guarda aparte: es el nombre del ejercicio del bloque metabólico (ver main.py:
+    # get_group_wod_days) — mismo texto que el coach ya escribió al armar la sesión.
+    wod_name: Optional[str] = None
     time_cap_seconds: Optional[int] = None
     participants_count: int = 0
 
@@ -478,6 +481,7 @@ class WodLeaderboardRow(BaseModel):
     full_name: str
     has_avatar: bool = False
     wod_format: str
+    wod_name: Optional[str] = None  # ver WodDaySummary.wod_name
     score_label: Optional[str] = None
     rank: Optional[int] = None
     completed: bool = False
@@ -493,6 +497,16 @@ class AdminOverview(BaseModel):
     total_sessions: int
     sessions_completed: int
     sessions_pending: int
+
+
+class AuditLogResponse(BaseModel):
+    id: UUID
+    created_at: Optional[datetime]
+    level: str
+    message: str
+
+    class Config:
+        from_attributes = True
 
 
 # --- ESQUEMAS PARA EL CALCULADOR DE "FIT LEVEL" (halterofilia / gimnasia / metcon) ---

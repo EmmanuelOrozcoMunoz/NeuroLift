@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import type { Role } from "@/lib/types";
+import AdminLogs from "@/routes/admin/Logs";
 import AdminOverview from "@/routes/admin/Overview";
 import AdminUsers from "@/routes/admin/Users";
 import AthleteDetail from "@/routes/coach/AthleteDetail";
@@ -275,6 +276,14 @@ export default function App() {
           element={
             <RoleGate role="admin">
               <AdminUsers />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/admin/logs"
+          element={
+            <RoleGate role="admin">
+              <AdminLogs />
             </RoleGate>
           }
         />

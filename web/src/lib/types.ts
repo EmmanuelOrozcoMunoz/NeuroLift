@@ -246,10 +246,12 @@ export interface AthleteActivity {
   last_wod_summary: string | null;
 }
 
-/** GET /groups/{id}/wod-days — una fecha del grupo con un WOD prescrito. */
+/** GET /groups/{id}/wod-days — una fecha del grupo con un WOD prescrito. `wod_name` no se
+ *  guarda aparte: es el nombre del ejercicio del bloque metabólico de esa sesión. */
 export interface WodDaySummary {
   scheduled_date: string;
   wod_format: WodFormat;
+  wod_name: string | null;
   time_cap_seconds: number | null;
   participants_count: number;
 }
@@ -260,6 +262,7 @@ export interface WodLeaderboardRow {
   full_name: string;
   has_avatar: boolean;
   wod_format: WodFormat;
+  wod_name: string | null;
   score_label: string | null;
   rank: number | null;
   completed: boolean;
@@ -484,4 +487,12 @@ export interface AdminOverview {
 /** PUT /admin/users/{id}/role */
 export interface UserRoleUpdatePayload {
   role: Role;
+}
+
+/** GET /admin/logs */
+export interface AuditLog {
+  id: string;
+  created_at: string | null;
+  level: string;
+  message: string;
 }
