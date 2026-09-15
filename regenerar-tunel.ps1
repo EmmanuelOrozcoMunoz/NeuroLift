@@ -120,9 +120,22 @@ foreach ($port in $BackendPort, $FrontendPort) {
     do {
         $conns = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
         foreach ($c in $conns) {
-            Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+            $ownerPid = $c.OwningProcess
+            Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
             # taskkill /T mata también al árbol de hijos (por si Stop-Process solo alcanzó al padre)
-            & taskkill /F /T /PID $c.OwningProcess 2>$null | Out-Null
+            & taskkill /F /T /PID $ownerPid 2>$null | Out-Null
+
+            # uvicorn --reload en Windows separa un "padre" de un hijo real (nacido por
+            # multiprocessing) que es quien de verdad tiene el socket — pero Windows a veces
+            # sigue atribuyéndole el puerto al PID del padre aunque ya esté muerto (entrada
+            # "fantasma" en la tabla TCP). Ese hijo real se identifica por llevar su propio
+            # "parent_pid=<pid>" en el commandline, así que se busca y mata por ahí también.
+            Get-CimInstance Win32_Process -Filter "name='python.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.CommandLine -match "parent_pid=$ownerPid\D" } |
+                ForEach-Object {
+                    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                    & taskkill /F /T /PID $_.ProcessId 2>$null | Out-Null
+                }
         }
         if ($conns.Count -gt 0) {
             Start-Sleep -Seconds 1

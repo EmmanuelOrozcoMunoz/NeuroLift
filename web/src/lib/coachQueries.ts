@@ -254,6 +254,20 @@ export function useGenerateAIMesocycleForGroup(groupId: string) {
   });
 }
 
+export function useDeleteMesocycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mesocycleId: string) =>
+      apiFetch<MessageResponse>(`/mesocycles/${mesocycleId}`, { method: "DELETE" }),
+    onSuccess: (_data, mesocycleId) => {
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      // Por si el mesociclo eliminado pertenecía a un programa de grupo, no solo al atleta.
+      void queryClient.invalidateQueries({ queryKey: ["group-mesocycles"] });
+      queryClient.removeQueries({ queryKey: queryKeys.mesocycle(mesocycleId) });
+    },
+  });
+}
+
 // -------------------------------------------------- edición de series (coach)
 
 export function useAddSet(mesocycleId: string) {

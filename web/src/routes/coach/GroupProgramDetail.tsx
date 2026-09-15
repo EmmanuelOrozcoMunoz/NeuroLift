@@ -465,15 +465,18 @@ function GroupWideTab({
   programName,
   programStartDate,
   referenceMesocycleId,
+  discipline,
   onFeedback,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   referenceMesocycleId: string;
+  discipline: string;
   onFeedback: (message: string) => void;
 }) {
   const { data, isPending, error, refetch } = useMesocycle(referenceMesocycleId);
+  const esCrossfit = discipline.toLowerCase() === "crossfit";
 
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -491,15 +494,17 @@ function GroupWideTab({
         const bloques = groupByBlock(session.sets);
         return (
           <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-            <BulkWodFormatCard
-              groupId={groupId}
-              programName={programName}
-              programStartDate={programStartDate}
-              scheduledDate={session.scheduled_date}
-              currentFormat={session.wod_format}
-              currentTimeCapSeconds={session.wod_time_cap_seconds}
-              onFeedback={onFeedback}
-            />
+            {esCrossfit && (
+              <BulkWodFormatCard
+                groupId={groupId}
+                programName={programName}
+                programStartDate={programStartDate}
+                scheduledDate={session.scheduled_date}
+                currentFormat={session.wod_format}
+                currentTimeCapSeconds={session.wod_time_cap_seconds}
+                onFeedback={onFeedback}
+              />
+            )}
             {session.sets.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
             {bloques.map((bloque, indiceBloque) => (
               <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
@@ -533,7 +538,15 @@ function GroupWideTab({
   );
 }
 
-function AthleteTab({ mesocycleId, onFeedback }: { mesocycleId: string; onFeedback: (m: string) => void }) {
+function AthleteTab({
+  mesocycleId,
+  discipline,
+  onFeedback,
+}: {
+  mesocycleId: string;
+  discipline: string;
+  onFeedback: (m: string) => void;
+}) {
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -544,7 +557,12 @@ function AthleteTab({ mesocycleId, onFeedback }: { mesocycleId: string; onFeedba
     <div className="space-y-3">
       {sessions.map((session: TrainingSession) => (
         <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-          <SessionSetsEditor mesocycleId={mesocycleId} session={session} onFeedback={onFeedback} />
+          <SessionSetsEditor
+            mesocycleId={mesocycleId}
+            discipline={discipline}
+            session={session}
+            onFeedback={onFeedback}
+          />
         </DateAccordion>
       ))}
     </div>
@@ -626,10 +644,17 @@ export default function GroupProgramDetail() {
           programName={program.name}
           programStartDate={program.start_date}
           referenceMesocycleId={referenceId}
+          discipline={program.discipline}
           onFeedback={setToast}
         />
       )}
-      {selectedAthlete && <AthleteTab mesocycleId={selectedAthlete.mesocycle_id} onFeedback={setToast} />}
+      {selectedAthlete && (
+        <AthleteTab
+          mesocycleId={selectedAthlete.mesocycle_id}
+          discipline={program.discipline}
+          onFeedback={setToast}
+        />
+      )}
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>
