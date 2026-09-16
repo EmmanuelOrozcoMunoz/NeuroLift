@@ -8,6 +8,7 @@ __pycache__/
 
 # Variables de entorno (¡Muy importante para la API de Gemini y la base de datos!)
 .env
+web/.env.development
 
 # Archivos de VS Code
 .vscode/
@@ -15,3 +16,7 @@ __pycache__/
 # Videos de prueba o temporales
 uploads/
 videos/
+
+# Logs de regenerar-tunel.ps1/probar-local.ps1 — distintos en cada ambiente (Dev/QA/PRD) y en
+# cada corrida; trackearlos solo generaba conflictos de merge en archivos que no son código.
+.tunnels/
