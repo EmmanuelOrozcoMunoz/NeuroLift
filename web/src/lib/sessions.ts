@@ -114,8 +114,13 @@ export function sessionProgress(session: TrainingSession): { logged: number; tot
   };
 }
 
-/** Texto de la carga prescrita, tal como debe leerlo el atleta. */
+/** Texto de la carga prescrita, tal como debe leerlo el atleta. Cuando el coach prescribió un
+ *  % de 1RM, el backend ya resolvió el peso en kg (para que el atleta no tenga que calcularlo),
+ *  pero el atleta también quiere ver el % que le corresponde, no solo el kg resultante. */
 export function loadLabel(set: SetItem): string {
+  if (set.prescribed_weight && set.prescribed_percentage) {
+    return `${formatKg(set.prescribed_weight)} kg (${Math.round(set.prescribed_percentage)}%)`;
+  }
   if (set.prescribed_weight) return `${formatKg(set.prescribed_weight)} kg`;
   if (set.prescribed_percentage) {
     const reference = set.reference_exercise ?? set.exercise?.name;

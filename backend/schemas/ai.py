@@ -1,10 +1,28 @@
 from datetime import date
-from typing import List
+from typing import Dict, List
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from backend.sanitize import clean_text
 from backend.schemas.common import Dia, SanitizedModel
+
+# Longitud máxima de la guía de un solo día — es una instrucción corta para la IA, no una nota
+# larga (para eso ya está el campo "context" general del mesociclo).
+_MAX_DAY_FOCUS_LENGTH = 300
+
+
+def _clean_day_focus(value: Dict[int, str] | None) -> Dict[int, str] | None:
+    """Sanea cada texto (SanitizedModel solo sanea los campos string de primer nivel, no los
+    valores de un dict anidado) y descarta los días que quedaron vacíos tras limpiarlos."""
+    if not value:
+        return None
+    limpio = {
+        dia: texto_limpio
+        for dia, texto in value.items()
+        if (texto_limpio := clean_text(texto, max_length=_MAX_DAY_FOCUS_LENGTH))
+    }
+    return limpio or None
 
 
 class AIGenerateRequest(SanitizedModel):
@@ -25,6 +43,15 @@ class AIGenerateSmart(SanitizedModel):
     training_days: List[Dia]
     context: str = Field("", max_length=2000)
     session_duration_minutes: int | None = Field(None, ge=15, le=180)
+    # Guía opcional por día de la semana (0=Lunes..6=Domingo) de lo que se quiere que la IA
+    # prescriba ESE día en particular (ej. {0: "Sentadilla y accesorios de pierna"}) — se aplica
+    # a TODAS las fechas de ese día del mesociclo, no solo la primera semana.
+    day_focus: Dict[Dia, str] | None = None
+
+    @field_validator("day_focus")
+    @classmethod
+    def _sanear_day_focus(cls, value: Dict[int, str] | None) -> Dict[int, str] | None:
+        return _clean_day_focus(value)
 
 
 class AIGenerateSmartGroup(SanitizedModel):
@@ -37,3 +64,9 @@ class AIGenerateSmartGroup(SanitizedModel):
     training_days: List[Dia]
     context: str = Field("", max_length=2000)
     session_duration_minutes: int | None = Field(None, ge=15, le=180)
+    day_focus: Dict[Dia, str] | None = None
+
+    @field_validator("day_focus")
+    @classmethod
+    def _sanear_day_focus(cls, value: Dict[int, str] | None) -> Dict[int, str] | None:
+        return _clean_day_focus(value)

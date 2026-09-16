@@ -47,7 +47,12 @@ export default function CoachSessionEditor() {
         back={`/coach/mesociclos/${mesocycleId}`}
       />
 
-      <SessionSetsEditor mesocycleId={mesocycleId!} session={session} onFeedback={setToast} />
+      <SessionSetsEditor
+        mesocycleId={mesocycleId!}
+        discipline={data?.discipline ?? ""}
+        session={session}
+        onFeedback={setToast}
+      />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

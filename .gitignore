@@ -18,6 +18,6 @@ __pycache__/
 uploads/
 videos/
 
-# Logs de regenerar-tunel.ps1/probar-local.ps1 — distintos en cada ambiente y en cada corrida;
-# trackearlos solo generaba conflictos de merge en archivos que no son código.
+# Logs de regenerar-tunel.ps1/probar-local.ps1 — distintos en cada ambiente (Dev/QA/PRD) y en
+# cada corrida; trackearlos solo generaba conflictos de merge en archivos que no son código.
 .tunnels/

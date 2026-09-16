@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
@@ -7,6 +7,7 @@ import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast, cx } from "@/components/ui";
 import {
+  useDeleteGroupProgram,
   useGroupBulkAdd,
   useGroupBulkDelete,
   useGroupBulkSetWodFormat,
@@ -465,15 +466,18 @@ function GroupWideTab({
   programName,
   programStartDate,
   referenceMesocycleId,
+  discipline,
   onFeedback,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   referenceMesocycleId: string;
+  discipline: string;
   onFeedback: (message: string) => void;
 }) {
   const { data, isPending, error, refetch } = useMesocycle(referenceMesocycleId);
+  const esCrossfit = discipline.toLowerCase() === "crossfit";
 
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -491,15 +495,17 @@ function GroupWideTab({
         const bloques = groupByBlock(session.sets);
         return (
           <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-            <BulkWodFormatCard
-              groupId={groupId}
-              programName={programName}
-              programStartDate={programStartDate}
-              scheduledDate={session.scheduled_date}
-              currentFormat={session.wod_format}
-              currentTimeCapSeconds={session.wod_time_cap_seconds}
-              onFeedback={onFeedback}
-            />
+            {esCrossfit && (
+              <BulkWodFormatCard
+                groupId={groupId}
+                programName={programName}
+                programStartDate={programStartDate}
+                scheduledDate={session.scheduled_date}
+                currentFormat={session.wod_format}
+                currentTimeCapSeconds={session.wod_time_cap_seconds}
+                onFeedback={onFeedback}
+              />
+            )}
             {session.sets.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
             {bloques.map((bloque, indiceBloque) => (
               <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
@@ -533,7 +539,15 @@ function GroupWideTab({
   );
 }
 
-function AthleteTab({ mesocycleId, onFeedback }: { mesocycleId: string; onFeedback: (m: string) => void }) {
+function AthleteTab({
+  mesocycleId,
+  discipline,
+  onFeedback,
+}: {
+  mesocycleId: string;
+  discipline: string;
+  onFeedback: (m: string) => void;
+}) {
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -544,7 +558,12 @@ function AthleteTab({ mesocycleId, onFeedback }: { mesocycleId: string; onFeedba
     <div className="space-y-3">
       {sessions.map((session: TrainingSession) => (
         <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-          <SessionSetsEditor mesocycleId={mesocycleId} session={session} onFeedback={onFeedback} />
+          <SessionSetsEditor
+            mesocycleId={mesocycleId}
+            discipline={discipline}
+            session={session}
+            onFeedback={onFeedback}
+          />
         </DateAccordion>
       ))}
     </div>
@@ -557,8 +576,10 @@ export default function GroupProgramDetail() {
     programName: string;
     startDate: string;
   }>();
+  const navigate = useNavigate();
   const decodedName = decodeURIComponent(programName ?? "");
   const programs = useGroupMesocycles(groupId);
+  const deleteProgram = useDeleteGroupProgram(groupId!);
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("grupo");
 
@@ -592,9 +613,39 @@ export default function GroupProgramDetail() {
   const referenceId = program.athletes[0]?.mesocycle_id;
   const selectedAthlete = program.athletes.find((a) => a.user_id === tab);
 
+  function handleDeleteProgram() {
+    const confirmado = window.confirm(
+      `¿Eliminar el programa "${program!.name}" para ${program!.athletes.length} atleta(s)? Se borrarán todas sus sesiones y series registradas. Esta acción no se puede deshacer.`,
+    );
+    if (!confirmado) return;
+
+    deleteProgram.mutate(
+      { program_name: program!.name, program_start_date: program!.start_date },
+      {
+        onSuccess: () => navigate(`/coach/grupos/${groupId}`),
+        onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar el programa."),
+      },
+    );
+  }
+
   return (
     <>
-      <PageHeader title={program.name} subtitle={program.discipline} back={`/coach/grupos/${groupId}`} />
+      <PageHeader
+        title={program.name}
+        subtitle={program.discipline}
+        back={`/coach/grupos/${groupId}`}
+        action={
+          <button
+            type="button"
+            aria-label="Eliminar programa"
+            onClick={handleDeleteProgram}
+            disabled={deleteProgram.isPending}
+            className="rounded-lg p-2 text-danger active:bg-danger/10 disabled:opacity-40"
+          >
+            <IconTrash className="h-5 w-5" />
+          </button>
+        }
+      />
 
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
         <button
@@ -626,10 +677,17 @@ export default function GroupProgramDetail() {
           programName={program.name}
           programStartDate={program.start_date}
           referenceMesocycleId={referenceId}
+          discipline={program.discipline}
           onFeedback={setToast}
         />
       )}
-      {selectedAthlete && <AthleteTab mesocycleId={selectedAthlete.mesocycle_id} onFeedback={setToast} />}
+      {selectedAthlete && (
+        <AthleteTab
+          mesocycleId={selectedAthlete.mesocycle_id}
+          discipline={program.discipline}
+          onFeedback={setToast}
+        />
+      )}
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

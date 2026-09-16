@@ -113,6 +113,24 @@ def _build_manual_mesocycle(
     return {"mesocycle_id": str(nuevo_meso.id), "total_sessions": sesiones_creadas}
 
 
+@router.delete("/{mesocycle_id}")
+def delete_mesocycle(
+    mesocycle_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Elimina un mesociclo (y en cascada sus sesiones, series y feedback) — el atleta pierde
+    todo el historial de ese bloque. Las plantillas de planes se borran desde /plans, no aquí."""
+    meso = db.query(models.Mesocycle).filter(
+        models.Mesocycle.id == mesocycle_id, models.Mesocycle.is_template == False
+    ).first()
+    if not meso:
+        raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+    ensure_owner_or_coach(db, meso.user_id, current_user)
+
+    db.delete(meso)
+    db.commit()
+    return {"message": "Mesociclo eliminado correctamente"}
+
+
 @router.post("/manual")
 def create_manual_mesocycle(
     req: schemas.MesocycleManualCreate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)

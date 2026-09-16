@@ -379,22 +379,27 @@ function AddExerciseForm({
  *  dentro de un programa de grupo. */
 export function SessionSetsEditor({
   mesocycleId,
+  discipline,
   session,
   onFeedback,
 }: {
   mesocycleId: string;
+  discipline: string;
   session: TrainingSession;
   onFeedback: (message: string) => void;
 }) {
   const bloques = groupByBlock(session.sets);
+  const esCrossfit = discipline.toLowerCase() === "crossfit";
 
   return (
     <div className="space-y-4">
-      <WodFormatCard
-        mesocycleId={mesocycleId}
-        session={session}
-        onSaved={() => onFeedback("Formato de WOD actualizado.")}
-      />
+      {esCrossfit && (
+        <WodFormatCard
+          mesocycleId={mesocycleId}
+          session={session}
+          onSaved={() => onFeedback("Formato de WOD actualizado.")}
+        />
+      )}
       {session.sets.length === 0 && <EmptyState title="Esta sesión todavía no tiene ejercicios" />}
       {bloques.map((bloque, indiceBloque) => (
         <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">

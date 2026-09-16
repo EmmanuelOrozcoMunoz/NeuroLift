@@ -15,6 +15,7 @@ import type {
   GroupBulkWodFormatPayload,
   GroupDetail,
   GroupMesocycleProgram,
+  GroupProgramDeletePayload,
   GroupSummary,
   ManualMesocycleGroupPayload,
   ManualMesocyclePayload,
@@ -162,6 +163,17 @@ export function useGroupBulkUpdate(groupId: string) {
   });
 }
 
+/** Elimina el programa completo (el mesociclo de CADA atleta del grupo para ese nombre+fecha),
+ *  con sus sesiones y series — no solo un ejercicio suelto (ver useGroupBulkDelete). */
+export function useDeleteGroupProgram(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupProgramDeletePayload) =>
+      apiFetch<MessageResponse>(`/groups/${groupId}/mesocycles`, { method: "DELETE", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) }),
+  });
+}
+
 export function useGroupBulkDelete(groupId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -251,6 +263,20 @@ export function useGenerateAIMesocycleForGroup(groupId: string) {
     mutationFn: (body: AIGenerateSmartGroupPayload) =>
       apiFetch<BulkResponse>("/ai/generate-smart-mesocycle/group", { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) }),
+  });
+}
+
+export function useDeleteMesocycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mesocycleId: string) =>
+      apiFetch<MessageResponse>(`/mesocycles/${mesocycleId}`, { method: "DELETE" }),
+    onSuccess: (_data, mesocycleId) => {
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      // Por si el mesociclo eliminado pertenecía a un programa de grupo, no solo al atleta.
+      void queryClient.invalidateQueries({ queryKey: ["group-mesocycles"] });
+      queryClient.removeQueries({ queryKey: queryKeys.mesocycle(mesocycleId) });
+    },
   });
 }
 

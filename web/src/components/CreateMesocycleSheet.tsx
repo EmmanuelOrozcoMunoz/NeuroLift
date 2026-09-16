@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { Button, Field, Segmented, Sheet, Stepper } from "@/components/ui";
-import { WeekdayPicker } from "@/components/WeekdayPicker";
+import { WEEKDAY_NAMES, WeekdayPicker } from "@/components/WeekdayPicker";
 import {
   useCreateManualMesocycle,
   useCreateManualMesocycleForGroup,
@@ -35,6 +35,7 @@ export function CreateMesocycleSheet({
   const [weeks, setWeeks] = useState(4);
   const [days, setDays] = useState<Weekday[]>([0, 2, 4]);
   const [context, setContext] = useState("");
+  const [dayFocus, setDayFocus] = useState<Partial<Record<Weekday, string>>>({});
   const [sessionMinutes, setSessionMinutes] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,7 @@ export function CreateMesocycleSheet({
   function reset() {
     setName("Bloque de Fuerza 1");
     setContext("");
+    setDayFocus({});
     setSessionMinutes(0);
     setError(null);
   }
@@ -80,10 +82,19 @@ export function CreateMesocycleSheet({
         );
       }
     } else {
+      // Solo los días que siguen seleccionados Y con texto — si el coach desmarca un día después
+      // de escribirle algo, ese texto no debe colarse igual en la petición.
+      const dayFocusPayload = Object.fromEntries(
+        days
+          .filter((d) => dayFocus[d]?.trim())
+          .map((d) => [d, dayFocus[d]!.trim()]),
+      );
+
       const aiBase = {
         ...base,
         context: context.trim() || "Progreso lineal y mejora técnica general.",
         session_duration_minutes: sessionMinutes > 0 ? sessionMinutes : null,
+        ...(Object.keys(dayFocusPayload).length > 0 ? { day_focus: dayFocusPayload } : {}),
       };
       if (target.type === "athlete") {
         generateAI.mutate(
@@ -167,6 +178,25 @@ export function CreateMesocycleSheet({
               </span>
               <Stepper value={sessionMinutes} onChange={setSessionMinutes} step={5} min={0} max={180} />
             </div>
+
+            {days.length > 0 && (
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-muted">
+                  Qué prescribir cada día (opcional)
+                </span>
+                <div className="space-y-2">
+                  {days.map((day) => (
+                    <Field
+                      key={day}
+                      label={WEEKDAY_NAMES[day]}
+                      value={dayFocus[day] ?? ""}
+                      onChange={(e) => setDayFocus((prev) => ({ ...prev, [day]: e.target.value }))}
+                      placeholder="Ej. Sentadilla y accesorios de pierna"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 

@@ -1,8 +1,11 @@
-import { useParams } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { IconTrash } from "@/components/icons";
 import { SessionCard } from "@/components/SessionCard";
-import { Badge, EmptyState, ErrorState, LoadingList, SectionTitle } from "@/components/ui";
+import { Badge, EmptyState, ErrorState, LoadingList, SectionTitle, Toast } from "@/components/ui";
+import { useDeleteMesocycle } from "@/lib/coachQueries";
 import { daysFromToday, parseApiDate } from "@/lib/dates";
 import { useMesocycle } from "@/lib/queries";
 import { sortSessions } from "@/lib/sessions";
@@ -19,7 +22,23 @@ function weekNumber(startDate: string, sessionDate: string): number {
  *  sesión), pero cada tarjeta abre el EDITOR de series, no el registro de entrenamiento. */
 export default function CoachMesocycleEditor() {
   const { mesocycleId } = useParams<{ mesocycleId: string }>();
+  const navigate = useNavigate();
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
+  const deleteMesocycle = useDeleteMesocycle();
+  const [toast, setToast] = useState<string | null>(null);
+
+  function handleDelete() {
+    if (!mesocycleId) return;
+    const confirmado = window.confirm(
+      `¿Eliminar "${data?.name ?? "este mesociclo"}"? Se borrarán todas sus sesiones y series registradas. Esta acción no se puede deshacer.`,
+    );
+    if (!confirmado) return;
+
+    deleteMesocycle.mutate(mesocycleId, {
+      onSuccess: () => navigate(data?.user_id ? `/coach/atletas/${data.user_id}` : "/coach/atletas"),
+      onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar el mesociclo."),
+    });
+  }
 
   // Las sesiones "adaptadas al tiempo" son cosa del atleta; el coach solo edita las originales.
   const originales = sortSessions((data?.sessions ?? []).filter((s) => !s.parent_session_id));
@@ -53,6 +72,19 @@ export default function CoachMesocycleEditor() {
         title={data?.name ?? "Mesociclo"}
         subtitle={data ? `${data.discipline} · ${originales.length} sesiones` : undefined}
         back
+        action={
+          data && (
+            <button
+              type="button"
+              aria-label="Eliminar mesociclo"
+              onClick={handleDelete}
+              disabled={deleteMesocycle.isPending}
+              className="rounded-lg p-2 text-danger active:bg-danger/10 disabled:opacity-40"
+            >
+              <IconTrash className="h-5 w-5" />
+            </button>
+          )
+        }
       />
 
       {isPending && <LoadingList rows={4} />}
@@ -79,6 +111,8 @@ export default function CoachMesocycleEditor() {
           </div>
         </section>
       ))}
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>
   );
 }
