@@ -110,7 +110,15 @@ class Mesocycle(Base):
     user = relationship("User", back_populates="mesocycles", foreign_keys=[user_id])
     created_by_coach = relationship("User", foreign_keys=[created_by_coach_id])
     group = relationship("Group")
-    sessions = relationship("Session", back_populates="mesocycle", cascade="all, delete-orphan")
+    # passive_deletes=True: al borrar un mesociclo/plan, deja que la base de datos borre las
+    # sesiones en cascada ella misma (ya tiene ON DELETE CASCADE) en vez de que SQLAlchemy traiga
+    # cada sesión a memoria y la borre una por una — con Supabase (remoto, no localhost), un plan
+    # con varias semanas podía significar cientos de idas y vueltas de red para un solo borrado.
+    # passive_deletes=True: al borrar un mesociclo/plan, deja que la base de datos borre las
+    # sesiones en cascada ella misma (ya tiene ON DELETE CASCADE) en vez de que SQLAlchemy traiga
+    # cada sesión a memoria y la borre una por una — con Supabase (remoto, no localhost), un plan
+    # con varias semanas podía significar cientos de idas y vueltas de red para un solo borrado.
+    sessions = relationship("Session", back_populates="mesocycle", cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def has_cover_image(self) -> bool:
@@ -158,7 +166,11 @@ class Session(Base):
     wod_watts = Column(Float, nullable=True)
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
-    sets = relationship("Set", back_populates="session", cascade="all, delete-orphan")
+    # Mismo motivo que Mesocycle.sessions: deja que la base de datos borre las series en cascada
+    # (ya tiene ON DELETE CASCADE) en vez de traerlas todas a memoria para borrarlas una por una.
+    # Mismo motivo que Mesocycle.sessions: deja que la base de datos borre las series en cascada
+    # (ya tiene ON DELETE CASCADE) en vez de traerlas todas a memoria para borrarlas una por una.
+    sets = relationship("Set", back_populates="session", cascade="all, delete-orphan", passive_deletes=True)
 
 class Exercise(Base):
     __tablename__ = "exercises"
