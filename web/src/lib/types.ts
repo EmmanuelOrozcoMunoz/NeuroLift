@@ -370,6 +370,8 @@ export interface AIGenerateSmartPayload {
   training_days: Weekday[];
   context: string;
   session_duration_minutes: number | null;
+  /** Guía opcional por día de la semana (0=Lunes..6=Domingo) de lo que prescribir ESE día. */
+  day_focus?: Partial<Record<Weekday, string>>;
 }
 
 export interface AIGenerateSmartGroupPayload {
@@ -381,6 +383,7 @@ export interface AIGenerateSmartGroupPayload {
   training_days: Weekday[];
   context: string;
   session_duration_minutes: number | null;
+  day_focus?: Partial<Record<Weekday, string>>;
 }
 
 export interface SetCreatePayload {
@@ -445,6 +448,11 @@ export interface GroupBulkUpdatePayload {
   prescribed_percentage?: number | null;
   reference_exercise?: string | null;
   block?: string | null;
+}
+
+export interface GroupProgramDeletePayload {
+  program_name: string;
+  program_start_date: string;
 }
 
 export interface GroupBulkDeletePayload {

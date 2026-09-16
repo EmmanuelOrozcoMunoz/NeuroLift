@@ -11,6 +11,18 @@ const DAYS: { value: Weekday; label: string }[] = [
   { value: 6, label: "D" },
 ];
 
+/** Nombre completo de cada día (0=Lunes..6=Domingo) — para mostrarlo junto a un campo de texto,
+ *  donde la letra sola de DAYS no basta. */
+export const WEEKDAY_NAMES: Record<Weekday, string> = {
+  0: "Lunes",
+  1: "Martes",
+  2: "Miércoles",
+  3: "Jueves",
+  4: "Viernes",
+  5: "Sábado",
+  6: "Domingo",
+};
+
 export function WeekdayPicker({
   value,
   onChange,

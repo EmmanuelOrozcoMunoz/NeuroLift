@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
@@ -7,6 +7,7 @@ import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast, cx } from "@/components/ui";
 import {
+  useDeleteGroupProgram,
   useGroupBulkAdd,
   useGroupBulkDelete,
   useGroupBulkSetWodFormat,
@@ -575,8 +576,10 @@ export default function GroupProgramDetail() {
     programName: string;
     startDate: string;
   }>();
+  const navigate = useNavigate();
   const decodedName = decodeURIComponent(programName ?? "");
   const programs = useGroupMesocycles(groupId);
+  const deleteProgram = useDeleteGroupProgram(groupId!);
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("grupo");
 
@@ -610,9 +613,39 @@ export default function GroupProgramDetail() {
   const referenceId = program.athletes[0]?.mesocycle_id;
   const selectedAthlete = program.athletes.find((a) => a.user_id === tab);
 
+  function handleDeleteProgram() {
+    const confirmado = window.confirm(
+      `¿Eliminar el programa "${program!.name}" para ${program!.athletes.length} atleta(s)? Se borrarán todas sus sesiones y series registradas. Esta acción no se puede deshacer.`,
+    );
+    if (!confirmado) return;
+
+    deleteProgram.mutate(
+      { program_name: program!.name, program_start_date: program!.start_date },
+      {
+        onSuccess: () => navigate(`/coach/grupos/${groupId}`),
+        onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar el programa."),
+      },
+    );
+  }
+
   return (
     <>
-      <PageHeader title={program.name} subtitle={program.discipline} back={`/coach/grupos/${groupId}`} />
+      <PageHeader
+        title={program.name}
+        subtitle={program.discipline}
+        back={`/coach/grupos/${groupId}`}
+        action={
+          <button
+            type="button"
+            aria-label="Eliminar programa"
+            onClick={handleDeleteProgram}
+            disabled={deleteProgram.isPending}
+            className="rounded-lg p-2 text-danger active:bg-danger/10 disabled:opacity-40"
+          >
+            <IconTrash className="h-5 w-5" />
+          </button>
+        }
+      />
 
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
         <button

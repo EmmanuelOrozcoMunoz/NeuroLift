@@ -168,15 +168,12 @@ def generate_mesocycle_chunk(
     session_dates: list[str],
     session_duration_minutes: int | None = None,
     literatura_cientifica: str = "",
+    day_focus_text: str = "",
 ) -> dict:
     """`literatura_cientifica` se calcula UNA sola vez por mesociclo (search_knowledge_base) y se
     pasa ya lista a cada chunk — discipline/experience_notes no cambian entre chunks del mismo
     mesociclo, así que repetir la búsqueda vectorial en cada uno era una llamada a Gemini +
     consulta a la base de datos completamente redundante."""
-    api_key = os.getenv("GEMINI_API_KEY").strip()
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={api_key}"
-
     # Convertimos la lista de fechas en un texto legible para Gemini
     fechas_str = ", ".join(session_dates)
 
@@ -189,6 +186,15 @@ def generate_mesocycle_chunk(
     volumen si el tiempo es corto.
     """
 
+    regla_enfoque_dia = ""
+    if day_focus_text:
+        regla_enfoque_dia = f"""
+    REGLA DE ENFOQUE POR FECHA (OBLIGATORIA): el coach pidió un enfoque específico para estas
+    fechas exactas (ya son las mismas fechas de la REGLA CRÍTICA DE CALENDARIO, no hace falta que
+    calcules nada) — para la sesión de cada una de estas fechas, prioriza lo que se pide:
+    {day_focus_text}
+    """
+
     prompt = f"""
     Eres el Head Coach de IA de NeuroLift. Estamos construyendo un mesociclo grande por partes.
     Genera SOLO desde la SEMANA {start_week} hasta la SEMANA {end_week} para este atleta.
@@ -199,6 +205,7 @@ def generate_mesocycle_chunk(
 
     Aplica sobrecarga progresiva en estas semanas específicas.
     {regla_duracion}
+    {regla_enfoque_dia}
     Basate estrictamente en los siguientes principios extraídos de nuestra base de datos si son relevantes:
     {literatura_cientifica}
 
@@ -206,7 +213,24 @@ def generate_mesocycle_chunk(
     Disciplina: {discipline}
     Contexto y Marcas Actuales: {experience_notes}
 
-    REGLA DE INTENSIDAD: Si el atleta tiene marcas de 1RM registradas, DEBES calcular los pesos exactos en kilogramos para sus series según la intensidad que programes, e incluir el peso exacto dentro del campo 'athlete_notes' de cada sesión o en las repeticiones.
+    REGLA DE INTENSIDAD (OBLIGATORIA, no la ignores): Para CUALQUIER ejercicio que tenga una marca
+    de 1RM registrada que aplique (el mismo movimiento, o uno claramente derivado — p. ej. la marca
+    de Back Squat aplica a Front Squat), TIENES PROHIBIDO calcular el kg tú mismo y ponerlo en
+    "prescribed_weight". En vez de eso, DEBES dejar "prescribed_weight" en null y usar
+    "prescribed_percentage" + "reference_exercise".
+
+    Ejemplo EXACTO de lo que se espera si la marca es "Back Squat: 100kg" y quieres prescribir 75%
+    de esa marca para un Back Squat:
+        "prescribed_weight": null,
+        "prescribed_percentage": 75,
+        "reference_exercise": "Back Squat"
+    Esto es INCORRECTO (no lo hagas): "prescribed_weight": 75.0, "prescribed_percentage": null.
+
+    "reference_exercise" debe ser el nombre EXACTO del ejercicio tal como aparece en "Marcas
+    Actuales" arriba. El sistema calculará el kg real a partir de esa marca — así el peso se
+    mantiene correcto aunque el atleta actualice su 1RM después (un kg fijo que calcules tú no se
+    actualizaría solo). Usa "prescribed_weight" (un kg fijo, tu mejor estimación) ÚNICAMENTE cuando
+    el ejercicio no tenga ninguna marca de 1RM relacionada para referenciar.
 
     {_INSTRUCCION_BLOQUES}
 
@@ -227,7 +251,9 @@ def generate_mesocycle_chunk(
                                 "prescribed_sets": int,
                                 "prescribed_reps": int,
                                 "rpe_target": int,
-                                "prescribed_weight": float | null
+                                "prescribed_weight": float | null,
+                                "prescribed_percentage": float | null,
+                                "reference_exercise": "string | null"
                             }}
                         ]
                     }}
@@ -237,11 +263,11 @@ def generate_mesocycle_chunk(
     }}
     """
 
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    headers = {'Content-Type': 'application/json'}
-
     try:
-        data = _post_to_gemini(url, payload, headers)
+        # gemini-3.6-flash primero (sigue mejor la REGLA DE INTENSIDAD que 3.5-flash-lite, que
+        # tendía a ignorarla y calcular el kg fijo de todos modos); cae a 3.5-flash-lite si está
+        # saturado. Antes esta función llamaba directo a 3.5-flash-lite sin fallback ni modo JSON.
+        data = _generate_json_with_fallback(prompt)
         raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
 
         # Limpieza de seguridad

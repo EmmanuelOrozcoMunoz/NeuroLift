@@ -30,8 +30,11 @@ foreach ($port in $BackendPort, $FrontendPort) {
         foreach ($c in $conns) {
             $ownerPid = $c.OwningProcess
             Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
-            # taskkill /T mata también al árbol de hijos (por si Stop-Process solo alcanzó al padre)
-            & taskkill /F /T /PID $ownerPid 2>$null | Out-Null
+            # taskkill /T mata también al árbol de hijos (por si Stop-Process solo alcanzó al padre).
+            # try/catch porque, con $ErrorActionPreference = "Stop", el stderr de taskkill (p. ej.
+            # "no se encontró el proceso" cuando ya está muerto) se vuelve un error terminante y
+            # abortaría todo el script en vez de simplemente seguir con el siguiente PID.
+            try { & taskkill /F /T /PID $ownerPid 2>$null | Out-Null } catch {}
 
             # uvicorn --reload en Windows separa un "padre" de un hijo real (nacido por
             # multiprocessing) que es quien de verdad tiene el socket — pero Windows a veces
@@ -42,7 +45,7 @@ foreach ($port in $BackendPort, $FrontendPort) {
                 Where-Object { $_.CommandLine -match "parent_pid=$ownerPid\D" } |
                 ForEach-Object {
                     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-                    & taskkill /F /T /PID $_.ProcessId 2>$null | Out-Null
+                    try { & taskkill /F /T /PID $_.ProcessId 2>$null | Out-Null } catch {}
                 }
         }
         if ($conns.Count -gt 0) {

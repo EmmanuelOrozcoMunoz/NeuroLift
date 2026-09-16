@@ -15,6 +15,7 @@ import type {
   GroupBulkWodFormatPayload,
   GroupDetail,
   GroupMesocycleProgram,
+  GroupProgramDeletePayload,
   GroupSummary,
   ManualMesocycleGroupPayload,
   ManualMesocyclePayload,
@@ -159,6 +160,17 @@ export function useGroupBulkUpdate(groupId: string) {
     mutationFn: (body: GroupBulkUpdatePayload) =>
       apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-update-exercise`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
+  });
+}
+
+/** Elimina el programa completo (el mesociclo de CADA atleta del grupo para ese nombre+fecha),
+ *  con sus sesiones y series — no solo un ejercicio suelto (ver useGroupBulkDelete). */
+export function useDeleteGroupProgram(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupProgramDeletePayload) =>
+      apiFetch<MessageResponse>(`/groups/${groupId}/mesocycles`, { method: "DELETE", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) }),
   });
 }
 

@@ -121,6 +121,13 @@ class GroupSessionExerciseDelete(SanitizedModel):
     exercise_name: str = Field(..., min_length=1, max_length=100)
 
 
+class GroupProgramDelete(SanitizedModel):
+    """Elimina el programa completo: el mesociclo (con todas sus sesiones y series) de CADA
+    atleta del grupo que lo tenga asignado."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+
+
 class GroupSessionWodFormatUpdate(SanitizedModel):
     """El coach fija el formato de WOD (y su timer/time cap) UNA sola vez para la sesión de una
     fecha dada, aplicado a TODOS los atletas del programa a la vez — evita repetir la misma

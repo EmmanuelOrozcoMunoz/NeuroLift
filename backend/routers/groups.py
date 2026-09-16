@@ -293,6 +293,23 @@ def _get_group_program_mesocycles(
     return mesos
 
 
+@router.delete("/{group_id}/mesocycles")
+def delete_group_program(
+    group_id: UUID,
+    req: schemas.GroupProgramDelete,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Elimina el programa completo: el mesociclo (y en cascada sus sesiones/series) de CADA
+    atleta del grupo que lo tenga asignado."""
+    mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    total = len(mesos)
+    for meso in mesos:
+        db.delete(meso)
+    db.commit()
+    return {"message": f"Programa '{req.program_name}' eliminado para {total} atleta(s)."}
+
+
 def _resolve_group_weight(db: Session, req, athlete: models.User, nombre_ejercicio: str) -> float | None:
     """Resuelve el peso de ESTE atleta en particular, en orden:
     1. Pesos por categoría/género (bloque metcon) — si el coach llenó alguna de las 4 variantes,
