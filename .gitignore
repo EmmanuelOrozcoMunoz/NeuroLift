@@ -9,10 +9,15 @@ __pycache__/
 # Variables de entorno (¡Muy importante para la API de Gemini y la base de datos!)
 .env
 .env.development
-.env.example
+# .env.example NO va aquí: es la plantilla sin secretos, se sube a propósito.
+
 # Archivos de VS Code
 .vscode/
 
 # Videos de prueba o temporales
 uploads/
 videos/
+
+# Logs de regenerar-tunel.ps1/probar-local.ps1 — distintos en cada ambiente y en cada corrida;
+# trackearlos solo generaba conflictos de merge en archivos que no son código.
+.tunnels/
