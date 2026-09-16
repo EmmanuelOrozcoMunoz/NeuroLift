@@ -1,12 +1,12 @@
 <#
 .SINOPSIS
   Levanta el backend y el frontend de ESTE ambiente apuntando solo a localhost, sin crear
-  ningún túnel de Cloudflare. Úsalo cuando quieras probar en tu propia PC (o en el navegador
+  ningun tunel de Cloudflare. Usalo cuando quieras probar en tu propia PC (o en el navegador
   del celular conectado a la MISMA red WiFi, usando la IP local en vez de "localhost") sin
-  depender de que trycloudflare.com esté disponible.
+  depender de que trycloudflare.com este disponible.
 
 .USO
-  Desde la raíz del repo, en una terminal de PowerShell:
+  Desde la raiz del repo, en una terminal de PowerShell:
     .\probar-local.ps1
 
   Si vas a correr Dev/QA/PRD en paralelo (cada worktree en su carpeta), usa puertos distintos:
@@ -24,7 +24,7 @@ $repoRoot = $PSScriptRoot
 Write-Host "1) Deteniendo procesos anteriores de ESTA carpeta (puertos $BackendPort / $FrontendPort)..." -ForegroundColor Cyan
 & (Join-Path $repoRoot "detener-tunel.ps1") -BackendPort $BackendPort -FrontendPort $FrontendPort
 
-Write-Host "2) Apuntando el frontend a localhost (sin túnel)..." -ForegroundColor Cyan
+Write-Host "2) Apuntando el frontend a localhost (sin tunel)..." -ForegroundColor Cyan
 $envDevPath = Join-Path $repoRoot "web\.env.development"
 $envDevContent = Get-Content $envDevPath -Raw
 $envDevContent = $envDevContent -replace "(?m)^VITE_API_URL=\S+", "VITE_API_URL=http://localhost:$BackendPort"
@@ -37,7 +37,7 @@ $localOrigin = "http://localhost:$FrontendPort"
 $newLines = @()
 foreach ($line in $envLines) {
     if ($line -like "CORS_ORIGINS=*") {
-        # Se quitan entradas viejas de trycloudflare.com (de una corrida anterior con túnel) —
+        # Se quitan entradas viejas de trycloudflare.com (de una corrida anterior con tunel):
         # para pruebas locales no hacen falta y solo ensucian la lista.
         $origins = @($line.Substring(13) -split "," | Where-Object { $_ -and ($_ -notlike "*trycloudflare.com*") })
         if ($origins -notcontains $localOrigin) { $origins += $localOrigin }
@@ -63,6 +63,6 @@ Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host " Abre esto en tu navegador:"
 Write-Host " http://localhost:$FrontendPort" -ForegroundColor Green
 Write-Host ""
-Write-Host " (Si quieres probarlo desde el celular SIN túnel, debe estar en la MISMA WiFi que"
-Write-Host " esta PC — usa la IP local de esta máquina en vez de 'localhost', ej. http://192.168.1.4:$FrontendPort)"
+Write-Host " (Si quieres probarlo desde el celular SIN tunel, debe estar en la MISMA WiFi que"
+Write-Host " esta PC. Usa la IP local de esta maquina en vez de 'localhost', ej. http://192.168.1.4:$FrontendPort)"
 Write-Host "===========================================" -ForegroundColor Cyan
