@@ -13,6 +13,7 @@ import type {
   RecentSessionSummary,
   SessionCompletePayload,
   TrainingSession,
+  User,
   WodFormatPayload,
 } from "@/lib/types";
 
@@ -196,6 +197,13 @@ export function useUpsertPersonalRecord(userId: string) {
       // Las marcas alimentan el Fit Level de halterofilia
       void queryClient.invalidateQueries({ queryKey: queryKeys.fitness(userId) });
     },
+  });
+}
+
+export function useUpdateMyPreferences() {
+  return useMutation({
+    mutationFn: (weight_unit: "kg" | "lb") =>
+      apiFetch<User>("/users/me/preferences", { method: "PUT", body: { weight_unit } }),
   });
 }
 

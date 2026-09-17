@@ -21,6 +21,11 @@ class User(Base):
     # resuelve cuál de los 4 pesos (Rx H/M, Scaled H/M) que el coach prescribe para todo el
     # grupo le corresponde a este atleta en particular (ver backend/routers/groups.py).
     category = Column(String(10), nullable=True)
+    # "kg" | "lb" — unidad en la que ESTE usuario prefiere escribir y leer cualquier peso en la
+    # app (sus propias series, sus PRs, o -si es coach- lo que prescribe). null se trata como
+    # "kg". El valor que se GUARDA siempre es en kg (los % de 1RM y el redondeo a 2.5kg no
+    # cambian); esto solo afecta cómo se muestra/captura en el frontend.
+    weight_unit = Column(String(10), nullable=True)
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.

@@ -1,6 +1,7 @@
 import { BLOCK_KEYS, blockLabel } from "@/lib/blocks";
-import { formatKg, parseApiDate } from "@/lib/dates";
-import type { SetItem, TrainingSession } from "@/lib/types";
+import { parseApiDate } from "@/lib/dates";
+import { formatWeight } from "@/lib/units";
+import type { SetItem, TrainingSession, WeightUnit } from "@/lib/types";
 
 /** Series de un mismo ejercicio, en el orden en que el coach las prescribió. */
 export interface ExerciseGroup {
@@ -117,11 +118,11 @@ export function sessionProgress(session: TrainingSession): { logged: number; tot
 /** Texto de la carga prescrita, tal como debe leerlo el atleta. Cuando el coach prescribió un
  *  % de 1RM, el backend ya resolvió el peso en kg (para que el atleta no tenga que calcularlo),
  *  pero el atleta también quiere ver el % que le corresponde, no solo el kg resultante. */
-export function loadLabel(set: SetItem): string {
+export function loadLabel(set: SetItem, unit: WeightUnit): string {
   if (set.prescribed_weight && set.prescribed_percentage) {
-    return `${formatKg(set.prescribed_weight)} kg (${Math.round(set.prescribed_percentage)}%)`;
+    return `${formatWeight(set.prescribed_weight, unit)} (${Math.round(set.prescribed_percentage)}%)`;
   }
-  if (set.prescribed_weight) return `${formatKg(set.prescribed_weight)} kg`;
+  if (set.prescribed_weight) return formatWeight(set.prescribed_weight, unit);
   if (set.prescribed_percentage) {
     const reference = set.reference_exercise ?? set.exercise?.name;
     return `${Math.round(set.prescribed_percentage)}% de tu 1RM de ${reference}`;
@@ -130,10 +131,10 @@ export function loadLabel(set: SetItem): string {
 }
 
 /** "4 x 5 @ 135 kg" — resumen compacto de un bloque de ejercicio. */
-export function groupSummary(group: ExerciseGroup): string {
+export function groupSummary(group: ExerciseGroup, unit: WeightUnit): string {
   const first = group.sets[0];
   if (!first) return "";
   const reps = new Set(group.sets.map((set) => set.prescribed_reps));
   const repsLabel = reps.size === 1 ? String(first.prescribed_reps) : [...reps].join("/");
-  return `${group.sets.length} x ${repsLabel} @ ${loadLabel(first)}`;
+  return `${group.sets.length} x ${repsLabel} @ ${loadLabel(first, unit)}`;
 }

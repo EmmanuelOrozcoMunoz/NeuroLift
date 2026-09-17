@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/AppShell";
+import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { Button, Card, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { useFitnessLevel, useSaveBenchmarks } from "@/lib/queries";
+import { kgTo, toKg, useWeightUnit, WeightStepper } from "@/lib/units";
 import type { FitCategory, WodCategory } from "@/lib/types";
 
 const CAT_LABEL: Record<FitCategory, string> = {
@@ -30,6 +32,7 @@ export default function FitLevel() {
   const user = useCurrentUser();
   const { data, isPending, error, refetch } = useFitnessLevel(user.id);
   const save = useSaveBenchmarks(user.id);
+  const unit = useWeightUnit();
 
   const [toast, setToast] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -134,6 +137,8 @@ export default function FitLevel() {
         como medición competitiva. Llena solo las marcas que ya tengas.
       </p>
 
+      <FitLevelCriteria />
+
       {faltaPerfil && (
         <Card className="mb-4 border-warn/30 bg-warn/10">
           <p className="text-sm text-warn">
@@ -190,13 +195,13 @@ export default function FitLevel() {
             <p className="mb-2 text-sm font-semibold text-muted">Perfil</p>
             <div className="space-y-3">
               <Field
-                label="Peso corporal (kg)"
+                label={`Peso corporal (${unit})`}
                 type="number"
                 inputMode="decimal"
-                step="0.5"
+                step={unit === "lb" ? "1" : "0.5"}
                 min="0"
-                value={bodyWeight || ""}
-                onChange={(e) => setBodyWeight(Number(e.target.value) || 0)}
+                value={bodyWeight ? kgTo(bodyWeight, unit) : ""}
+                onChange={(e) => setBodyWeight(toKg(Number(e.target.value) || 0, unit))}
               />
               <div>
                 <span className="mb-1.5 block text-sm font-medium text-muted">Sexo</span>
@@ -237,12 +242,24 @@ export default function FitLevel() {
           </section>
 
           <section>
-            <p className="mb-2 text-sm font-semibold text-muted">🏋️ Halterofilia (1RM en kg)</p>
+            <p className="mb-2 text-sm font-semibold text-muted">🏋️ Halterofilia (1RM en {unit})</p>
             <div className="grid grid-cols-2 gap-3">
-              <NumberStepper label="Snatch" value={snatch} onChange={setSnatch} step={1} suffix="kg" />
-              <NumberStepper label="Clean & Jerk" value={cleanJerk} onChange={setCleanJerk} step={1} suffix="kg" />
-              <NumberStepper label="Back Squat" value={backSquat} onChange={setBackSquat} step={1} suffix="kg" />
-              <NumberStepper label="Deadlift" value={deadlift} onChange={setDeadlift} step={1} suffix="kg" />
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Snatch</span>
+                <WeightStepper valueKg={snatch} onChangeKg={setSnatch} compact />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Clean & Jerk</span>
+                <WeightStepper valueKg={cleanJerk} onChangeKg={setCleanJerk} compact />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Back Squat</span>
+                <WeightStepper valueKg={backSquat} onChangeKg={setBackSquat} compact />
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Deadlift</span>
+                <WeightStepper valueKg={deadlift} onChangeKg={setDeadlift} compact />
+              </div>
             </div>
           </section>
 

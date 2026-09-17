@@ -6,6 +6,7 @@ import { Button, Card, EmptyState, Field, Segmented, Stepper, cx } from "@/compo
 import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
+import { useWeightUnit, WeightStepper } from "@/lib/units";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
@@ -135,6 +136,7 @@ function ExerciseBlock({
   const updateSet = useUpdateSet(mesocycleId);
   const addSet = useAddSet(mesocycleId);
   const deleteSet = useDeleteSet(mesocycleId);
+  const unit = useWeightUnit();
 
   const first = group.sets[0];
   const [name, setName] = useState(group.name);
@@ -230,21 +232,21 @@ function ExerciseBlock({
           value={tipo}
           onChange={setTipo}
           options={[
-            { value: "kg", label: "Kg fijos" },
+            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
             { value: "porcentaje", label: "% de 1RM" },
             { value: "libre", label: "Sin carga" },
           ]}
         />
-        {tipo !== "libre" && (
+        {tipo === "porcentaje" && (
           <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">
-              {tipo === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
-            </span>
-            {tipo === "porcentaje" ? (
-              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-            ) : (
-              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-            )}
+            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
+            <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+          </div>
+        )}
+        {tipo === "kg" && (
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
+            <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
           </div>
         )}
         {tipo === "porcentaje" && (
@@ -277,6 +279,7 @@ function AddExerciseForm({
   onAdded: () => void;
 }) {
   const addSet = useAddSet(mesocycleId);
+  const unit = useWeightUnit();
   const [name, setName] = useState("");
   const [series, setSeries] = useState(3);
   const [reps, setReps] = useState(10);
@@ -338,21 +341,21 @@ function AddExerciseForm({
           value={tipo}
           onChange={setTipo}
           options={[
-            { value: "kg", label: "Kg fijos" },
+            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
             { value: "porcentaje", label: "% de 1RM" },
             { value: "libre", label: "Sin carga" },
           ]}
         />
-        {tipo !== "libre" && (
+        {tipo === "porcentaje" && (
           <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">
-              {tipo === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
-            </span>
-            {tipo === "porcentaje" ? (
-              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-            ) : (
-              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
-            )}
+            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
+            <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+          </div>
+        )}
+        {tipo === "kg" && (
+          <div className="mt-2">
+            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
+            <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
           </div>
         )}
         {tipo === "porcentaje" && (

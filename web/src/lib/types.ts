@@ -4,6 +4,8 @@
 
 export type Role = "athlete" | "coach" | "admin";
 
+export type WeightUnit = "kg" | "lb";
+
 export interface User {
   id: string;
   full_name: string;
@@ -13,6 +15,8 @@ export interface User {
   /** true -> el cliente puede pedir GET /users/{id}/avatar */
   has_avatar: boolean;
   created_at: string | null;
+  /** En qué unidad ESTE usuario prefiere ver/escribir cualquier peso. null = "kg". */
+  weight_unit: WeightUnit | null;
 }
 
 export interface LoginResponse {

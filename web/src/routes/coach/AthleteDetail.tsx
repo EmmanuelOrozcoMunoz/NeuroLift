@@ -3,13 +3,22 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { IconChevronRight } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
-import { formatKg, shortDate } from "@/lib/dates";
-import { usePersonalRecords, useUpsertPersonalRecord, useMesocycles, useRecentActivity } from "@/lib/queries";
+import { shortDate } from "@/lib/dates";
+import { COMMON_PR_EXERCISES } from "@/lib/exercises";
+import { formatWeight, kgTo, toKg, useWeightUnit } from "@/lib/units";
+import {
+  usePersonalRecords,
+  useUpsertPersonalRecord,
+  useMesocycles,
+  useRecentActivity,
+  useFitnessLevel,
+} from "@/lib/queries";
 import { formatWodResult } from "@/lib/wod";
 import type { GroupDetail } from "@/lib/types";
 
@@ -30,25 +39,28 @@ export default function AthleteDetail() {
   );
 
   const mesocycles = useMesocycles(athleteId ?? "");
+  const fitLevel = useFitnessLevel(athleteId ?? "");
   const prs = usePersonalRecords(athleteId ?? "");
   const upsertPr = useUpsertPersonalRecord(athleteId ?? "");
   const recent = useRecentActivity(athleteId ?? "");
+  const unit = useWeightUnit();
 
-  const [exercise, setExercise] = useState("");
+  const [exercise, setExercise] = useState<string>(COMMON_PR_EXERCISES[0]);
   const [weight, setWeight] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function handleSubmitPr(event: React.FormEvent) {
     event.preventDefault();
-    const kg = Number(weight);
-    if (!exercise.trim() || !(kg > 0)) return;
+    const entered = Number(weight);
+    if (!exercise.trim() || !(entered > 0)) return;
+    const kg = toKg(entered, unit);
     upsertPr.mutate(
       { exercise_name: exercise.trim(), max_weight_kg: kg },
       {
         onSuccess: (response) => {
           setToast(response.message ?? "¡Marca guardada!");
-          setExercise("");
+          setExercise(COMMON_PR_EXERCISES[0]);
           setWeight("");
         },
       },
@@ -71,25 +83,32 @@ export default function AthleteDetail() {
             {prs.data!.map((pr) => (
               <div key={pr.id} className="rounded-xl bg-surface-2 p-2.5">
                 <p className="truncate text-xs font-semibold text-muted">{pr.exercise_name}</p>
-                <p className="text-base font-bold">{pr.max_weight_kg} kg</p>
+                <p className="text-base font-bold">{formatWeight(pr.max_weight_kg, unit)}</p>
               </div>
             ))}
           </div>
         )}
 
         <form onSubmit={handleSubmitPr} className="flex items-end gap-2">
+          <label className="block grow">
+            <span className="mb-1.5 block text-sm font-medium text-muted">Ejercicio</span>
+            <select
+              value={exercise}
+              onChange={(e) => setExercise(e.target.value)}
+              className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg"
+            >
+              {COMMON_PR_EXERCISES.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
           <Field
-            label="Ejercicio"
-            placeholder="Back Squat"
-            value={exercise}
-            onChange={(e) => setExercise(e.target.value)}
-            className="grow"
-          />
-          <Field
-            label="kg"
+            label={unit}
             type="number"
             inputMode="decimal"
-            step="2.5"
+            step={unit === "lb" ? "5" : "2.5"}
             min="0"
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
@@ -100,6 +119,40 @@ export default function AthleteDetail() {
           </Button>
         </form>
       </Card>
+
+      <Card className="mb-4">
+        <p className="mb-3 font-bold">🎯 Fit Level</p>
+        {fitLevel.isPending && <LoadingList rows={1} />}
+        {!fitLevel.isPending && fitLevel.data?.overall_level ? (
+          <>
+            <p className="text-sm font-semibold text-muted">Nivel general</p>
+            <p className="mt-0.5 text-2xl font-bold">
+              {fitLevel.data.overall_level}{" "}
+              <span className="text-base font-semibold text-muted">{fitLevel.data.overall_score}/4</span>
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {(
+                [
+                  ["halterofilia", "🏋️ Halterofilia"],
+                  ["gimnasia", "🤸 Gimnasia"],
+                  ["metcon", "🔥 Metcon"],
+                ] as const
+              ).map(([cat, label]) => (
+                <div key={cat} className="rounded-xl bg-surface-2 p-2.5 text-center">
+                  <p className="text-xs text-muted">{label}</p>
+                  <p className="mt-0.5 font-bold">{fitLevel.data!.category_levels[cat] ?? "—"}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          !fitLevel.isPending && (
+            <p className="text-sm text-muted">Todavía no tiene marcas para calcular su Fit Level.</p>
+          )
+        )}
+      </Card>
+
+      <FitLevelCriteria />
 
       <Card className="mb-4">
         <p className="mb-3 font-bold">📋 Actividad reciente</p>
@@ -116,6 +169,7 @@ export default function AthleteDetail() {
               const resultado = formatWodResult(
                 sesion,
                 sesion.exercises.flatMap((e) => e.actual_weight),
+                unit,
               );
               return (
                 <div key={sesion.session_id} className="rounded-xl bg-surface-2 p-3">
@@ -131,7 +185,7 @@ export default function AthleteDetail() {
                         <p key={`${ej.exercise_name}-${index}`} className="text-xs text-muted">
                           <span className="font-medium text-fg">{ej.exercise_name}</span>
                           {ej.actual_weight.length > 0 &&
-                            ` — ${ej.actual_weight.map(formatKg).join(", ")} kg`}
+                            ` — ${ej.actual_weight.map((w) => Math.round(kgTo(w, unit) * 10) / 10).join(", ")} ${unit}`}
                           {ej.actual_reps.length > 0 && ` (${ej.actual_reps.join(", ")} reps)`}
                         </p>
                       ))}
