@@ -1,53 +1,11 @@
-"""Helpers usados por más de un router — si algo aquí solo lo necesitara un dominio, viviría
-en ese router en vez de aquí."""
+"""Helpers alrededor de las marcas (1RM) de un atleta: sincronía con Fit Level, y resolución
+de carga prescrita como % de 1RM a kg reales."""
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend import models
-
-# Extensiones de imagen aceptadas para avatares/portadas (usuario, grupo, plan) — mismo
-# saneo en los tres (magic-number, re-render sin metadatos, ver backend/avatars.py).
-AVATAR_CONTENT_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-
-
-def get_owned_group(db: Session, group_id: UUID, current_user: models.User) -> models.Group:
-    """Usado por groups.py, y también por mesocycles.py/ai.py al programar un mesociclo para
-    un grupo completo (necesitan validar la misma pertenencia antes de tocarlo)."""
-    grupo = db.query(models.Group).filter(models.Group.id == group_id).first()
-    if not grupo:
-        raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    if current_user.role != "admin" and grupo.coach_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este grupo no te pertenece")
-    return grupo
-
-
-def get_or_create_exercise(db: Session, name: str) -> models.Exercise:
-    """Usado por groups.py (bulk add/update de ejercicios), sessions.py (adaptar sesión),
-    ai.py (generación) y plans.py (armar un plan) — cualquier flujo que reciba un nombre de
-    ejercicio en texto libre y necesite su fila real."""
-    ejercicio = db.query(models.Exercise).filter(models.Exercise.name == name).first()
-    if not ejercicio:
-        ejercicio = models.Exercise(name=name, category="Custom")
-        db.add(ejercicio)
-        db.flush()
-    return ejercicio
-
-
-_BLOQUES_VALIDOS = {"warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"}
-
-
-def clean_ai_block(value) -> str | None:
-    """Normaliza el bloque que devuelve la IA: minúsculas, recortado, y descartado si no es uno
-    de los valores válidos (ver schemas.Bloque) — mejor guardar None que un string inventado.
-    Usado por sessions.py (adaptar sesión) y ai.py (generación)."""
-    if not isinstance(value, str):
-        return None
-    limpio = value.strip().lower()
-    return limpio if limpio in _BLOQUES_VALIDOS else None
-
 
 # Los 4 levantamientos de halterofilia del calculador de Fit Level son, ni más ni menos, un
 # 1RM — lo mismo que ya representa una fila de PersonalRecord. Estos mapeos mantienen ambas

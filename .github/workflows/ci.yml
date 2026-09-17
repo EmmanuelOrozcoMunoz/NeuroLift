@@ -19,6 +19,33 @@ jobs:
   backend:
     name: Backend (import check)
     runs-on: ubuntu-latest
+    # main.py llama a models.Base.metadata.create_all(bind=engine) al nivel de módulo — es
+    # decir, "import backend.main" necesita una base de datos POSTGRES REAL y alcanzable, no
+    # solo una URL con formato válido. Se usa un Postgres descartable del propio job (no la
+    # base de datos real de ningún ambiente) — knowledge_base no es un modelo de SQLAlchemy
+    # (vive fuera de Base.metadata, se maneja con SQL crudo), así que no hace falta pgvector.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    # core/config.py y storage.py exigen estas variables al momento de IMPORTAR (antes de
+    # arrancar nada) — no son secretos reales, solo valores de relleno para que el import no
+    # truene en CI (no se conecta de verdad a Supabase con esto, solo al Postgres de arriba).
+    env:
+      JWT_SECRET_KEY: ci-dummy-secret-not-real
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-key-not-real
     steps:
       - uses: actions/checkout@v4
 

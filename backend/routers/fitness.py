@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend import fitness_scoring, models, schemas
 from backend.core.security import ensure_owner_or_coach, get_current_user
 from backend.database import get_db
-from backend.routers.shared import FIT_LEVEL_LIFT_TO_PR_NAME, upsert_personal_record_by_name
+from backend.routers.pr_helpers import FIT_LEVEL_LIFT_TO_PR_NAME, upsert_personal_record_by_name
 
 router = APIRouter(tags=["fitness"])
 

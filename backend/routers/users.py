@@ -19,7 +19,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.shared import AVATAR_CONTENT_TYPES, PR_NAME_TO_FIT_LEVEL_LIFT
+from backend.routers.pr_helpers import PR_NAME_TO_FIT_LEVEL_LIFT
 from backend.wod_scoring import format_wod_summary
 
 # Mezcla rutas /users/* y /coach/* (el leaderboard general es "del coach", no "de un usuario"),
@@ -206,7 +206,7 @@ async def upload_my_avatar(
 
     nombre_anterior = current_user.avatar_filename
     nuevo_nombre = storage.upload_object(
-        storage.AVATAR_BUCKET, clean_bytes, extension, AVATAR_CONTENT_TYPES[extension]
+        storage.AVATAR_BUCKET, clean_bytes, extension, avatars.AVATAR_CONTENT_TYPES[extension]
     )
 
     current_user.avatar_filename = nuevo_nombre

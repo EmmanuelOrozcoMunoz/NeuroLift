@@ -9,13 +9,9 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.shared import (
-    AVATAR_CONTENT_TYPES,
-    get_athlete_prs,
-    get_or_create_exercise,
-    get_owned_group,
-    resolve_weight_from_percentage,
-)
+from backend.routers.exercise_helpers import get_or_create_exercise
+from backend.routers.group_helpers import get_owned_group
+from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -77,7 +73,7 @@ async def upload_group_cover(
 
     nombre_anterior = grupo.cover_image_filename
     nuevo_nombre = storage.upload_object(
-        storage.GROUP_COVER_BUCKET, clean_bytes, extension, AVATAR_CONTENT_TYPES[extension]
+        storage.GROUP_COVER_BUCKET, clean_bytes, extension, avatars.AVATAR_CONTENT_TYPES[extension]
     )
     grupo.cover_image_filename = nuevo_nombre
     db.commit()

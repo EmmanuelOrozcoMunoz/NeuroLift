@@ -8,12 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.shared import (
-    AVATAR_CONTENT_TYPES,
-    get_athlete_prs,
-    get_or_create_exercise,
-    resolve_weight_from_percentage,
-)
+from backend.routers.exercise_helpers import get_or_create_exercise
+from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -120,7 +116,7 @@ async def upload_plan_cover(
 
     nombre_anterior = plan.cover_image_filename
     nuevo_nombre = storage.upload_object(
-        storage.PLAN_COVER_BUCKET, clean_bytes, extension, AVATAR_CONTENT_TYPES[extension]
+        storage.PLAN_COVER_BUCKET, clean_bytes, extension, avatars.AVATAR_CONTENT_TYPES[extension]
     )
     plan.cover_image_filename = nuevo_nombre
     db.commit()
