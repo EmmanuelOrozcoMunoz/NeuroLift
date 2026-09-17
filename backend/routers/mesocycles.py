@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models, schemas
 from backend.core.security import _coach_athlete_ids, ensure_owner_or_coach, get_current_user, require_coach
 from backend.database import get_db
-from backend.routers.shared import get_owned_group
+from backend.routers.group_helpers import get_owned_group
 
 router = APIRouter(prefix="/mesocycles", tags=["mesocycles"])
 
