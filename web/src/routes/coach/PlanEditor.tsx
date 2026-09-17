@@ -10,6 +10,7 @@ import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sh
 import { coachKeys, useAddPlanSet, useDeletePlanSet, useUpdatePlan } from "@/lib/coachQueries";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock, groupSummary } from "@/lib/sessions";
+import { useWeightUnit, WeightStepper } from "@/lib/units";
 import type { MesocycleFull, PlanLevel, SetItem } from "@/lib/types";
 
 type TipoCarga = "porcentaje" | "kg" | "libre";
@@ -144,6 +145,7 @@ function DayEditor({
   const addSet = useAddPlanSet(planId);
   const deleteSet = useDeletePlanSet(planId);
   const bloques = groupByBlock(sets);
+  const unit = useWeightUnit();
 
   const [name, setName] = useState("");
   const [series, setSeries] = useState(3);
@@ -205,7 +207,7 @@ function DayEditor({
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
-                      <p className="truncate text-xs text-muted">{groupSummary(group)}</p>
+                      <p className="truncate text-xs text-muted">{groupSummary(group, unit)}</p>
                     </div>
                     <button
                       type="button"
@@ -249,23 +251,21 @@ function DayEditor({
           onChange={setTipo}
           options={[
             { value: "porcentaje", label: "% de 1RM" },
-            { value: "kg", label: "Kg fijos" },
+            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
             { value: "libre", label: "Sin carga" },
           ]}
         />
 
-        {tipo !== "libre" && (
+        {tipo === "porcentaje" && (
           <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">
-              {tipo === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
-            </span>
-            <Stepper
-              value={valor}
-              onChange={setValor}
-              step={tipo === "porcentaje" ? 5 : 2.5}
-              min={0}
-              max={tipo === "porcentaje" ? 150 : 1000}
-            />
+            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
+            <Stepper value={valor} onChange={setValor} step={5} min={0} max={150} />
+          </div>
+        )}
+        {tipo === "kg" && (
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
+            <WeightStepper valueKg={valor} onChangeKg={setValor} />
           </div>
         )}
 

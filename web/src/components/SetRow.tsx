@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import { IconCheck } from "@/components/icons";
 import { Spinner, Stepper, cx } from "@/components/ui";
-import { formatKg } from "@/lib/dates";
 import { useLogSet } from "@/lib/queries";
 import { isSetLogged, loadLabel } from "@/lib/sessions";
+import { formatWeight, useWeightUnit, WeightStepper } from "@/lib/units";
 import type { SetItem } from "@/lib/types";
 
 /**
@@ -25,6 +25,7 @@ export function SetRow({
 }) {
   const logSet = useLogSet();
   const logged = isSetLogged(set);
+  const unit = useWeightUnit();
 
   const [editing, setEditing] = useState(false);
   const [reps, setReps] = useState(set.actual_reps ?? set.prescribed_reps ?? 0);
@@ -56,7 +57,7 @@ export function SetRow({
         <span className="text-sm font-semibold text-muted">Serie {index}</span>
         <span className="grow text-right text-sm font-bold tabular-nums">
           {set.actual_reps} reps
-          {set.actual_weight ? ` · ${formatKg(set.actual_weight)} kg` : ""}
+          {set.actual_weight ? ` · ${formatWeight(set.actual_weight, unit)}` : ""}
         </span>
       </button>
     );
@@ -67,17 +68,15 @@ export function SetRow({
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">Serie {index}</span>
         <span className="truncate text-xs text-muted">
-          Objetivo: {set.prescribed_reps} reps @ {loadLabel(set)}
+          Objetivo: {set.prescribed_reps} reps @ {loadLabel(set, unit)}
           {set.rpe ? ` · RPE ${set.rpe}` : ""}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="grow">
+        <div className="grid min-w-0 grow grid-cols-2 gap-2">
           <Stepper value={reps} onChange={setReps} min={0} max={200} suffix="reps" compact />
-        </div>
-        <div className="grow">
-          <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} suffix="kg" compact />
+          <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
         </div>
         <button
           type="button"

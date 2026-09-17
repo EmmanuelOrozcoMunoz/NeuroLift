@@ -20,6 +20,7 @@ import {
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
 import { useAdaptSession, useCompleteSession, useMesocycle } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
+import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
 import type { SessionCompletePayload } from "@/lib/types";
 
@@ -28,6 +29,7 @@ type Vista = "normal" | "adaptada";
 export default function SessionDetail() {
   const { mesocycleId, sessionId } = useParams<{ mesocycleId: string; sessionId: string }>();
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
+  const unit = useWeightUnit();
 
   const [vista, setVista] = useState<Vista>("normal");
   const [sheetAbierta, setSheetAbierta] = useState(false);
@@ -138,6 +140,7 @@ export default function SessionDetail() {
           {formatWodResult(
             activa,
             activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
+            unit,
           ) ?? "Sin resultado registrado"}
         </p>
       ) : (
@@ -203,7 +206,7 @@ export default function SessionDetail() {
                   <Card key={`${grupo.name}-${indiceGrupo}`} className="p-3">
                     <div className="mb-2.5 px-1">
                       <p className="leading-tight font-bold">{grupo.name}</p>
-                      <p className="text-xs text-muted">{groupSummary(grupo)}</p>
+                      <p className="text-xs text-muted">{groupSummary(grupo, unit)}</p>
                     </div>
                     <div className="space-y-2">
                       {grupo.sets.map((set, indiceSerie) => (

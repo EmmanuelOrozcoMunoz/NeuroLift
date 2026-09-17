@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/AppShell";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { IconLogout } from "@/components/icons";
 import { Button, Card } from "@/components/ui";
+import { WeightUnitToggle } from "@/components/WeightUnitToggle";
 import { useAuth } from "@/lib/auth";
 
 export default function CoachProfile() {
@@ -13,6 +14,10 @@ export default function CoachProfile() {
 
       <Card className="mb-4">
         <AvatarUploader />
+      </Card>
+
+      <Card className="mb-4">
+        <WeightUnitToggle />
       </Card>
 
       <Button variant="danger" full onClick={() => void logout()}>

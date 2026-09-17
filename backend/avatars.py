@@ -39,6 +39,10 @@ _ALLOWED_OUTPUT: dict[str, tuple[str, str]] = {
     "WEBP": (".webp", "WEBP"),
 }
 
+# Extensión ya validada aquí (ver _ALLOWED_OUTPUT) -> Content-Type para servirla — mismo saneo
+# en los tres consumidores (avatar de usuario, portada de grupo, portada de plan).
+AVATAR_CONTENT_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
 
 def _sniff_magic_number(data: bytes) -> str | None:
     """Identifica el formato real por su firma binaria. Devuelve None si no coincide con

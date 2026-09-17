@@ -184,15 +184,19 @@ export function CreateMesocycleSheet({
                 <span className="mb-1.5 block text-sm font-medium text-muted">
                   Qué prescribir cada día (opcional)
                 </span>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {days.map((day) => (
-                    <Field
-                      key={day}
-                      label={WEEKDAY_NAMES[day]}
-                      value={dayFocus[day] ?? ""}
-                      onChange={(e) => setDayFocus((prev) => ({ ...prev, [day]: e.target.value }))}
-                      placeholder="Ej. Sentadilla y accesorios de pierna"
-                    />
+                    <label key={day} className="block">
+                      <span className="mb-1.5 block text-sm font-medium text-muted">{WEEKDAY_NAMES[day]}</span>
+                      <textarea
+                        value={dayFocus[day] ?? ""}
+                        onChange={(e) => setDayFocus((prev) => ({ ...prev, [day]: e.target.value }))}
+                        rows={2}
+                        maxLength={300}
+                        placeholder="Ej. Sentadilla y accesorios de pierna"
+                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+                      />
+                    </label>
                   ))}
                 </div>
               </div>

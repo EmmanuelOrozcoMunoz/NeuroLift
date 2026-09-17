@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import ai_agent, models, schemas
 from backend.core.security import ensure_owner_or_coach, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.shared import clean_ai_block, get_or_create_exercise
+from backend.routers.exercise_helpers import clean_ai_block, get_or_create_exercise
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

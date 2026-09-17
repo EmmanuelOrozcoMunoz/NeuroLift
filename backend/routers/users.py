@@ -19,7 +19,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.shared import AVATAR_CONTENT_TYPES, PR_NAME_TO_FIT_LEVEL_LIFT
+from backend.routers.pr_helpers import PR_NAME_TO_FIT_LEVEL_LIFT
 from backend.wod_scoring import format_wod_summary
 
 # Mezcla rutas /users/* y /coach/* (el leaderboard general es "del coach", no "de un usuario"),
@@ -206,7 +206,7 @@ async def upload_my_avatar(
 
     nombre_anterior = current_user.avatar_filename
     nuevo_nombre = storage.upload_object(
-        storage.AVATAR_BUCKET, clean_bytes, extension, AVATAR_CONTENT_TYPES[extension]
+        storage.AVATAR_BUCKET, clean_bytes, extension, avatars.AVATAR_CONTENT_TYPES[extension]
     )
 
     current_user.avatar_filename = nuevo_nombre
@@ -231,6 +231,20 @@ def delete_my_avatar(
     current_user.avatar_filename = None
     db.commit()
     return {"message": "Foto de perfil eliminada."}
+
+
+@router.put("/users/me/preferences", response_model=schemas.UserResponse)
+def update_my_preferences(
+    req: schemas.UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Preferencias propias de visualización (hoy solo la unidad de peso) — separado de
+    fitness-benchmarks porque también lo usan coaches, que no tienen Fit Level propio."""
+    current_user.weight_unit = req.weight_unit
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.get("/users/{user_id}/avatar")

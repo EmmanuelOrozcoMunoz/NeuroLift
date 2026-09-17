@@ -10,6 +10,7 @@ from backend.schemas.users import (
     PRResponse,
     RecentSessionExercise,
     RecentSessionSummary,
+    UserPreferencesUpdate,
     UserResponse,
 )
 from backend.schemas.fitness import FitnessBenchmarkUpdate, FitnessLevelResponse
@@ -63,7 +64,7 @@ __all__ = [
     "Bloque", "Dia", "FormatoWod", "MessageResponse", "SanitizedModel",
     "UserLogin", "UserRegister",
     "AthleteActivityResponse", "PRCreate", "PRResponse", "RecentSessionExercise",
-    "RecentSessionSummary", "UserResponse",
+    "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse",
     "FitnessBenchmarkUpdate", "FitnessLevelResponse",
     "ExerciseResponse", "SetCreate", "SetLogUpdate", "SetResponse", "SetUpdate",
     "SessionAdaptRequest", "SessionCompleteRequest", "SessionCreate", "SessionResponse", "WodFormatUpdate",

@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from backend import models, schemas
 from backend.core.security import ensure_owner_or_coach, limiter, require_coach
 from backend.database import SessionLocal, get_db
-from backend.routers.shared import clean_ai_block, get_athlete_prs, get_owned_group, resolve_weight_from_percentage
+from backend.routers.exercise_helpers import clean_ai_block
+from backend.routers.group_helpers import get_owned_group
+from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -134,7 +136,8 @@ def _build_smart_mesocycle(
         # de los demás (mismo contexto/marcas, solo cambian las semanas/fechas), así que esperarlas
         # una por una en fila era puro tiempo muerto — un mesociclo de 8 semanas (3 chunks) antes
         # tardaba la SUMA de los 3 chunks; ahora tarda lo que tarda el más lento de ellos.
-        from backend.ai_agent import generate_mesocycle_chunk, search_knowledge_base
+        from backend.ai_agent import generate_mesocycle_chunk
+        from backend.knowledge_search import search_knowledge_base
 
         # Se calcula UNA sola vez para todo el mesociclo (no por chunk): discipline/context no
         # cambian entre chunks, así que repetirla era una llamada a Gemini + consulta a la base

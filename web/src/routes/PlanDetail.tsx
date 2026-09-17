@@ -9,6 +9,7 @@ import { blockLabel } from "@/lib/blocks";
 import { formatPrice, todayIso } from "@/lib/dates";
 import { useAcquirePlan, usePlanCatalog, usePlanDetail } from "@/lib/queries";
 import { groupSets, groupSummary } from "@/lib/sessions";
+import { useWeightUnit } from "@/lib/units";
 
 export default function PlanDetail() {
   const { planId } = useParams<{ planId: string }>();
@@ -18,6 +19,7 @@ export default function PlanDetail() {
   const catalog = usePlanCatalog();
   const detail = usePlanDetail(planId);
   const acquire = useAcquirePlan(user.id);
+  const unit = useWeightUnit();
 
   const [startDate, setStartDate] = useState(todayIso());
   const [toast, setToast] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function PlanDetail() {
                       {grupos.map((grupo, index) => (
                         <p key={`${grupo.name}-${index}`} className="text-sm">
                           <span className="font-semibold">{grupo.name}</span>{" "}
-                          <span className="text-muted">— {groupSummary(grupo)}</span>
+                          <span className="text-muted">— {groupSummary(grupo, unit)}</span>
                         </p>
                       ))}
                     </div>

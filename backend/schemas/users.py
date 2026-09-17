@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -16,9 +16,15 @@ class UserResponse(BaseModel):
     role: str  # ¡Agregamos el rol aquí!
     has_avatar: bool = False  # true -> el cliente puede pedir GET /users/{id}/avatar
     created_at: datetime | None = None  # para mostrar "Miembro desde..." en el perfil
+    # "kg" | "lb" — en qué unidad este usuario prefiere ver/escribir cualquier peso en la app.
+    weight_unit: str | None = None
 
     class Config:
         from_attributes = True
+
+
+class UserPreferencesUpdate(SanitizedModel):
+    weight_unit: Literal["kg", "lb"]
 
 
 class PRResponse(BaseModel):
