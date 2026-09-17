@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { FitLevelCriteria } from "@/components/FitLevelCriteria";
-import { IconChevronRight } from "@/components/icons";
+import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
@@ -15,6 +15,7 @@ import { formatWeight, kgTo, toKg, useWeightUnit } from "@/lib/units";
 import {
   usePersonalRecords,
   useUpsertPersonalRecord,
+  useDeletePersonalRecord,
   useMesocycles,
   useRecentActivity,
   useFitnessLevel,
@@ -42,6 +43,7 @@ export default function AthleteDetail() {
   const fitLevel = useFitnessLevel(athleteId ?? "");
   const prs = usePersonalRecords(athleteId ?? "");
   const upsertPr = useUpsertPersonalRecord(athleteId ?? "");
+  const deletePr = useDeletePersonalRecord(athleteId ?? "");
   const recent = useRecentActivity(athleteId ?? "");
   const unit = useWeightUnit();
 
@@ -49,6 +51,14 @@ export default function AthleteDetail() {
   const [weight, setWeight] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  function handleDeletePr(id: string, exerciseName: string) {
+    if (!window.confirm(`¿Eliminar la marca de ${exerciseName}?`)) return;
+    deletePr.mutate(id, {
+      onSuccess: () => setToast("Marca eliminada."),
+      onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar la marca."),
+    });
+  }
 
   function handleSubmitPr(event: React.FormEvent) {
     event.preventDefault();
@@ -81,8 +91,17 @@ export default function AthleteDetail() {
         {!prs.isPending && (prs.data?.length ?? 0) > 0 && (
           <div className="mb-3 grid grid-cols-2 gap-2">
             {prs.data!.map((pr) => (
-              <div key={pr.id} className="rounded-xl bg-surface-2 p-2.5">
-                <p className="truncate text-xs font-semibold text-muted">{pr.exercise_name}</p>
+              <div key={pr.id} className="relative rounded-xl bg-surface-2 p-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleDeletePr(pr.id, pr.exercise_name)}
+                  disabled={deletePr.isPending}
+                  aria-label={`Eliminar marca de ${pr.exercise_name}`}
+                  className="absolute top-1.5 right-1.5 rounded-lg p-1 text-danger active:bg-danger/10 disabled:opacity-40"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                </button>
+                <p className="truncate pr-5 text-xs font-semibold text-muted">{pr.exercise_name}</p>
                 <p className="text-base font-bold">{formatWeight(pr.max_weight_kg, unit)}</p>
               </div>
             ))}

@@ -312,3 +312,24 @@ def obtener_marcas_atleta(
 ):
     ensure_owner_or_coach(db, user_id, current_user)
     return db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user_id).all()
+
+
+@router.delete("/users/{user_id}/records/{record_id}", response_model=schemas.MessageResponse)
+def eliminar_marca_atleta(
+    user_id: UUID,
+    record_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Borra una marca cargada por error o con un dato incorrecto — no toca el FitnessBenchmark
+    que haya alimentado (si se registró de nuevo con el dato correcto, ya lo sobreescribió)."""
+    ensure_owner_or_coach(db, user_id, current_user)
+    pr = db.query(models.PersonalRecord).filter(
+        models.PersonalRecord.id == record_id,
+        models.PersonalRecord.user_id == user_id,
+    ).first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="No se encontró esa marca.")
+    db.delete(pr)
+    db.commit()
+    return {"message": "Marca eliminada."}

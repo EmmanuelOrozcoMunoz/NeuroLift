@@ -3,24 +3,33 @@ import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { AvatarUploader } from "@/components/AvatarUploader";
-import { IconChevronRight, IconLogout } from "@/components/icons";
+import { IconChevronRight, IconLogout, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { WeightUnitToggle } from "@/components/WeightUnitToggle";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { COMMON_PR_EXERCISES } from "@/lib/exercises";
 import { formatWeight, toKg, useWeightUnit } from "@/lib/units";
-import { usePersonalRecords, useUpsertPersonalRecord } from "@/lib/queries";
+import { useDeletePersonalRecord, usePersonalRecords, useUpsertPersonalRecord } from "@/lib/queries";
 
 export default function Profile() {
   const user = useCurrentUser();
   const { logout } = useAuth();
   const { data: prs, isPending, error, refetch } = usePersonalRecords(user.id);
   const upsertPr = useUpsertPersonalRecord(user.id);
+  const deletePr = useDeletePersonalRecord(user.id);
   const unit = useWeightUnit();
 
   const [exercise, setExercise] = useState<string>(COMMON_PR_EXERCISES[0]);
   const [weight, setWeight] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+
+  function handleDeletePr(id: string, exerciseName: string) {
+    if (!window.confirm(`¿Eliminar la marca de ${exerciseName}?`)) return;
+    deletePr.mutate(id, {
+      onSuccess: () => setToast("Marca eliminada."),
+      onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar la marca."),
+    });
+  }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -75,8 +84,17 @@ export default function Profile() {
       {!isPending && !error && (prs?.length ?? 0) > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {prs!.map((pr) => (
-            <Card key={pr.id} className="p-3">
-              <p className="truncate text-xs font-semibold text-muted">{pr.exercise_name}</p>
+            <Card key={pr.id} className="relative p-3">
+              <button
+                type="button"
+                onClick={() => handleDeletePr(pr.id, pr.exercise_name)}
+                disabled={deletePr.isPending}
+                aria-label={`Eliminar marca de ${pr.exercise_name}`}
+                className="absolute top-2 right-2 rounded-lg p-1 text-danger active:bg-danger/10 disabled:opacity-40"
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+              </button>
+              <p className="truncate pr-5 text-xs font-semibold text-muted">{pr.exercise_name}</p>
               <p className="mt-0.5 text-lg font-bold">{formatWeight(pr.max_weight_kg, unit)}</p>
               <p className="text-xs text-muted">{pr.last_updated.split("T")[0]}</p>
             </Card>
