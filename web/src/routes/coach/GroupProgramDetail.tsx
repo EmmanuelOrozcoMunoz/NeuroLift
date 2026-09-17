@@ -17,6 +17,7 @@ import {
 import { shortDate } from "@/lib/dates";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
+import { useWeightUnit, WeightStepper } from "@/lib/units";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
@@ -148,6 +149,7 @@ function BulkExerciseBlock({
 }) {
   const bulkUpdate = useGroupBulkUpdate(groupId);
   const bulkDelete = useGroupBulkDelete(groupId);
+  const unit = useWeightUnit();
 
   const first = group.sets[0];
   const [name, setName] = useState(group.name);
@@ -211,18 +213,21 @@ function BulkExerciseBlock({
             value={tipoCarga}
             onChange={setTipoCarga}
             options={[
-              { value: "kg", label: "Kg fijos" },
+              { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
               { value: "porcentaje", label: "% de 1RM" },
             ]}
           />
           <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">
-              {tipoCarga === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
-            </span>
             {tipoCarga === "porcentaje" ? (
-              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+              <>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
+                <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+              </>
             ) : (
-              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+              <>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
+                <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
+              </>
             )}
           </div>
           {tipoCarga === "porcentaje" && (
@@ -242,23 +247,23 @@ function BulkExerciseBlock({
 
       {esMetcon && (
         <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD (kg) — por categoría y género</p>
+          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD ({unit}) — por categoría y género</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
-              <Stepper value={wRxMale} onChange={setWRxMale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wRxMale} onChangeKg={setWRxMale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
-              <Stepper value={wRxFemale} onChange={setWRxFemale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wRxFemale} onChangeKg={setWRxFemale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
-              <Stepper value={wScaledMale} onChange={setWScaledMale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wScaledMale} onChangeKg={setWScaledMale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
-              <Stepper value={wScaledFemale} onChange={setWScaledFemale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wScaledFemale} onChangeKg={setWScaledFemale} compact />
             </div>
           </div>
         </div>
@@ -312,6 +317,7 @@ function BulkAddForm({
   onFeedback: (message: string) => void;
 }) {
   const bulkAdd = useGroupBulkAdd(groupId);
+  const unit = useWeightUnit();
   const [name, setName] = useState("");
   const [series, setSeries] = useState(3);
   const [reps, setReps] = useState(8);
@@ -355,18 +361,21 @@ function BulkAddForm({
             value={tipoCarga}
             onChange={setTipoCarga}
             options={[
-              { value: "kg", label: "Kg fijos" },
+              { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
               { value: "porcentaje", label: "% de 1RM" },
             ]}
           />
           <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">
-              {tipoCarga === "porcentaje" ? "Porcentaje (%)" : "Peso (kg)"}
-            </span>
             {tipoCarga === "porcentaje" ? (
-              <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+              <>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
+                <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
+              </>
             ) : (
-              <Stepper value={weight} onChange={setWeight} step={2.5} min={0} max={1000} compact />
+              <>
+                <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
+                <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
+              </>
             )}
           </div>
           {tipoCarga === "porcentaje" && (
@@ -386,23 +395,23 @@ function BulkAddForm({
 
       {esMetcon && (
         <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD (kg) — por categoría y género</p>
+          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD ({unit}) — por categoría y género</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
-              <Stepper value={wRxMale} onChange={setWRxMale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wRxMale} onChangeKg={setWRxMale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
-              <Stepper value={wRxFemale} onChange={setWRxFemale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wRxFemale} onChangeKg={setWRxFemale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
-              <Stepper value={wScaledMale} onChange={setWScaledMale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wScaledMale} onChangeKg={setWScaledMale} compact />
             </div>
             <div>
               <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
-              <Stepper value={wScaledFemale} onChange={setWScaledFemale} step={2.5} min={0} max={1000} compact />
+              <WeightStepper valueKg={wScaledFemale} onChangeKg={setWScaledFemale} compact />
             </div>
           </div>
         </div>

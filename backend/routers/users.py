@@ -233,6 +233,20 @@ def delete_my_avatar(
     return {"message": "Foto de perfil eliminada."}
 
 
+@router.put("/users/me/preferences", response_model=schemas.UserResponse)
+def update_my_preferences(
+    req: schemas.UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Preferencias propias de visualización (hoy solo la unidad de peso) — separado de
+    fitness-benchmarks porque también lo usan coaches, que no tienen Fit Level propio."""
+    current_user.weight_unit = req.weight_unit
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @router.get("/users/{user_id}/avatar")
 def get_user_avatar(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)

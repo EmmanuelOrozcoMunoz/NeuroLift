@@ -1,5 +1,6 @@
 import { formatSeconds } from "@/lib/dates";
-import type { WodFormat } from "@/lib/types";
+import { formatWeight } from "@/lib/units";
+import type { WeightUnit, WodFormat } from "@/lib/types";
 
 export const WOD_FORMAT_LABELS: Record<WodFormat, string> = {
   for_time: "Por tiempo",
@@ -7,7 +8,7 @@ export const WOD_FORMAT_LABELS: Record<WodFormat, string> = {
   amrap_reps: "AMRAP (solo reps)",
   emom: "EMOM",
   tabata: "Tabata",
-  "1rm": "Peso (kg)",
+  "1rm": "Peso",
   calories: "Calorías",
   distance: "Distancia (m)",
   watts: "Vatios (W)",
@@ -28,7 +29,7 @@ export const WOD_TIMER_TEMPLATES: WodFormatOption[] = [
  *  unidad y, si aplica, un time cap propio. */
 export const WOD_OTHER_SCORE_TYPES: WodFormatOption[] = [
   { value: "amrap_reps", label: "AMRAP (solo reps)", hint: "Más reps totales = mejor" },
-  { value: "1rm", label: "Peso (kg)", hint: "Mayor peso = mejor" },
+  { value: "1rm", label: "Peso", hint: "Mayor peso = mejor" },
   { value: "calories", label: "Calorías", hint: "Más calorías = mejor" },
   { value: "distance", label: "Distancia (m)", hint: "Mayor distancia = mejor" },
   { value: "watts", label: "Vatios (W)", hint: "Mayor potencia = mejor" },
@@ -69,7 +70,11 @@ export interface WodResultFields {
  *  "Peso: 100 kg" / "215 cal" / "1000 m" / "320 W" — mismo criterio que _format_wod_summary en
  *  el backend. `actualWeights` solo se usa para formato "1rm" (el peso máximo REAL logueado en
  *  esa sesión); pásalo vacío para los demás. */
-export function formatWodResult(session: WodResultFields, actualWeights: number[] = []): string | null {
+export function formatWodResult(
+  session: WodResultFields,
+  actualWeights: number[] = [],
+  unit: WeightUnit = "kg",
+): string | null {
   if (!session.wod_format) return null;
 
   if (session.wod_format === "for_time" && session.wod_time_seconds != null) {
@@ -90,7 +95,7 @@ export function formatWodResult(session: WodResultFields, actualWeights: number[
     return session.wod_emom_completed ? "EMOM: cumplido ✓" : "EMOM: no completó ✗";
   }
   if (session.wod_format === "1rm" && actualWeights.length > 0) {
-    return `Peso: ${Math.max(...actualWeights)} kg`;
+    return `Peso: ${formatWeight(Math.max(...actualWeights), unit)}`;
   }
   if (session.wod_format === "calories" && session.wod_calories != null) {
     return `${session.wod_calories} cal`;

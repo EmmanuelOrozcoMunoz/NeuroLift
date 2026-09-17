@@ -73,11 +73,6 @@ export function formatPrice(price: number | null | undefined): string {
   return `$${price.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
 }
 
-/** Quita el .0 de los pesos: 135.0 -> "135", 77.5 -> "77.5" */
-export function formatKg(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
 /**
  * "septiembre 2026" — para "Miembro desde" en el perfil. `created_at` es un datetime COMPLETO
  * (con hora), a diferencia de las fechas YYYY-MM-DD de sesiones/mesociclos — así que acá sí es
