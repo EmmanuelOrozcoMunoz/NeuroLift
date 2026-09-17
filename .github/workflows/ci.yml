@@ -1,0 +1,61 @@
+name: CI
+
+# Corre en cada Pull Request hacia estas ramas (obligatorio para poder mezclar, una vez
+# configurada la regla de protección de rama en GitHub) y también al hacer push directo a
+# ellas (por si algo se mezcla sin pasar por PR) — así el commit final en la rama también
+# queda verificado, no solo el PR.
+#
+# "main" queda fuera a propósito por ahora: todavía es el checkout viejo de antes del rewrite
+# a React (sin web/, sin la reestructuración de backend/), así que estos checks fallarían sin
+# que signifique nada. Agrégalo aquí (y a la regla de protección de rama) el día que mezcles
+# Dev -> main y main pase a reflejar el código real.
+on:
+  pull_request:
+    branches: [Dev, qa]
+  push:
+    branches: [Dev, qa]
+
+jobs:
+  backend:
+    name: Backend (import check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Verificar que el backend importe sin errores
+        # No hay suite de tests todavía — esto es la misma verificación mínima que se ha
+        # hecho a mano durante todo el desarrollo antes de dar por buena una corrida: que
+        # main.py (y todo lo que importa) no tenga errores de sintaxis/import.
+        run: python -c "import backend.main"
+
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
