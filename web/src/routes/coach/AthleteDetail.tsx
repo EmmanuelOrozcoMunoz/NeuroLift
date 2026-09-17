@@ -11,7 +11,7 @@ import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
 import { COMMON_PR_EXERCISES } from "@/lib/exercises";
-import { formatWeight, kgTo, toKg, useWeightUnit } from "@/lib/units";
+import { formatWeight, kgTo, parseWeightInput, toKg, useWeightUnit } from "@/lib/units";
 import {
   usePersonalRecords,
   useUpsertPersonalRecord,
@@ -62,7 +62,7 @@ export default function AthleteDetail() {
 
   function handleSubmitPr(event: React.FormEvent) {
     event.preventDefault();
-    const entered = Number(weight);
+    const entered = parseWeightInput(weight);
     if (!exercise.trim() || !(entered > 0)) return;
     const kg = toKg(entered, unit);
     upsertPr.mutate(
@@ -125,10 +125,8 @@ export default function AthleteDetail() {
           </label>
           <Field
             label={unit}
-            type="number"
+            type="text"
             inputMode="decimal"
-            step={unit === "lb" ? "5" : "2.5"}
-            min="0"
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
             className="w-20"
