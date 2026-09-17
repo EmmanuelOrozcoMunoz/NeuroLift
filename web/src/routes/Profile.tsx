@@ -103,7 +103,7 @@ export default function Profile() {
       )}
 
       <Card className="mt-4">
-        <p className="mb-3 font-bold">Registrar nueva marca</p>
+        <p className="mb-3 font-bold">Registrar nueva marca o actualizar existente</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-muted">Ejercicio</span>
