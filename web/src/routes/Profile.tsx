@@ -8,7 +8,7 @@ import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from 
 import { WeightUnitToggle } from "@/components/WeightUnitToggle";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { COMMON_PR_EXERCISES } from "@/lib/exercises";
-import { formatWeight, toKg, useWeightUnit } from "@/lib/units";
+import { formatWeight, parseWeightInput, toKg, useWeightUnit } from "@/lib/units";
 import { useDeletePersonalRecord, usePersonalRecords, useUpsertPersonalRecord } from "@/lib/queries";
 
 export default function Profile() {
@@ -33,7 +33,7 @@ export default function Profile() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const entered = Number(weight);
+    const entered = parseWeightInput(weight);
     if (!exercise.trim() || !(entered > 0)) return;
     const kg = toKg(entered, unit);
 
@@ -121,10 +121,8 @@ export default function Profile() {
           </label>
           <Field
             label={`1RM en ${unit}`}
-            type="number"
+            type="text"
             inputMode="decimal"
-            step={unit === "lb" ? "5" : "2.5"}
-            min="0"
             value={weight}
             onChange={(event) => setWeight(event.target.value)}
             required

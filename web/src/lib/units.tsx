@@ -23,6 +23,13 @@ export function stepFor(unit: WeightUnit, kgStep = 2.5): number {
   return unit === "lb" ? 5 : kgStep;
 }
 
+/** Convierte lo que el usuario tecleó en un input de texto libre (no <input type="number">,
+ *  que en iOS con teclado numérico regional muestra coma decimal en vez de punto y la rechaza)
+ *  a un número real — acepta tanto "77.3" como "77,3". NaN si no es un número válido. */
+export function parseWeightInput(raw: string): number {
+  return Number(raw.trim().replace(",", "."));
+}
+
 /** Texto de un peso en kg, formateado en la unidad preferida del usuario (ej. "225 lb"). */
 export function formatWeight(kg: number | null | undefined, unit: WeightUnit): string {
   if (kg === null || kg === undefined) return "";
