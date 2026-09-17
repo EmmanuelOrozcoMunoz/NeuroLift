@@ -200,6 +200,19 @@ export function useUpsertPersonalRecord(userId: string) {
   });
 }
 
+export function useDeletePersonalRecord(userId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (recordId: string) =>
+      apiFetch<MessageResponse>(`/users/${userId}/records/${recordId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.prs(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.fitness(userId) });
+    },
+  });
+}
+
 export function useUpdateMyPreferences() {
   return useMutation({
     mutationFn: (weight_unit: "kg" | "lb") =>
