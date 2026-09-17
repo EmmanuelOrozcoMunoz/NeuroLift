@@ -1,3 +1,4 @@
+import html
 import re
 
 import bleach
@@ -12,7 +13,13 @@ def clean_text(value: str | None, max_length: int | None = None) -> str | None:
     if value is None or not isinstance(value, str):
         return value
 
-    value = bleach.clean(value, tags=[], attributes={}, strip=True)
+    # bleach.clean() serializa el texto que sobrevive como HTML válido, así que escapa
+    # "&", "<", ">" aunque el usuario nunca haya escrito una etiqueta (p. ej. "Clean & Jerk"
+    # quedaba guardado como "Clean &amp; Jerk"). Los tags peligrosos ya se quitaron como
+    # elementos reales durante el parseo (strip=True), no como texto escapado, así que
+    # des-escapar el resultado no reintroduce ningún tag — solo recupera el texto plano tal
+    # cual lo escribió el usuario.
+    value = html.unescape(bleach.clean(value, tags=[], attributes={}, strip=True))
     value = value.replace("\x00", "")
     value = _WHITESPACE_RE.sub(" ", value).strip()
 
