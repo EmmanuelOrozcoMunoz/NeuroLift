@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
@@ -42,6 +42,31 @@ export function useMesocycle(mesocycleId: string | undefined): UseQueryResult<Me
     queryFn: () => apiFetch<MesocycleFull>(`/mesocycles/${mesocycleId}`),
     enabled: Boolean(mesocycleId),
   });
+}
+
+/** Todas las sesiones del atleta, de TODOS sus mesociclos a la vez — para la vista de
+ *  calendario, que no puede depender de un solo mesociclo como `useMesocycle`. No hay un
+ *  endpoint que devuelva esto en un solo viaje, así que se pide la lista de mesociclos y
+ *  luego el detalle de cada uno en paralelo (mismo patrón que `AthleteDetail.tsx` con los
+ *  grupos de un coach) — un atleta tiene pocos mesociclos, así que esto no escala mal. */
+export function useMesocyclesWithSessions(userId: string): {
+  sessions: TrainingSession[];
+  isPending: boolean;
+  error: Error | null;
+} {
+  const mesocycles = useMesocycles(userId);
+  const details = useQueries({
+    queries: (mesocycles.data ?? []).map((m) => ({
+      queryKey: queryKeys.mesocycle(m.id),
+      queryFn: () => apiFetch<MesocycleFull>(`/mesocycles/${m.id}`),
+    })),
+  });
+
+  const isPending = mesocycles.isPending || details.some((d) => d.isPending);
+  const error = (mesocycles.error as Error | null) ?? (details.find((d) => d.error)?.error as Error | undefined) ?? null;
+  const sessions = details.flatMap((d) => d.data?.sessions ?? []);
+
+  return { sessions, isPending, error };
 }
 
 /** El coach prescribe (o quita) el formato de WOD de una sesión — el atleta ve ese formato al
