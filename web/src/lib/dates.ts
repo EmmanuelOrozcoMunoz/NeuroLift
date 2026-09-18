@@ -83,3 +83,35 @@ export function monthYear(isoDatetime: string): string {
   const mes = date.toLocaleDateString("es", { month: "long" });
   return `${mes} ${date.getFullYear()}`;
 }
+
+/** "Agosto 2026" — encabezado del calendario mensual, con el mes en mayúscula inicial. */
+export function monthLabel(year: number, month: number): string {
+  const mes = new Date(year, month, 1).toLocaleDateString("es", { month: "long" });
+  return `${mes.charAt(0).toUpperCase()}${mes.slice(1)} ${year}`;
+}
+
+export interface CalendarCell {
+  iso: string;
+  inMonth: boolean;
+}
+
+/**
+ * Rejilla de un mes calendario (lunes a domingo), con los días de los meses vecinos que hacen
+ * falta para completar la primera y la última semana — igual que cualquier calendario mensual.
+ * Solo trae tantas filas como el mes necesite (5 o 6), no siempre 6.
+ */
+export function monthGrid(year: number, month: number): CalendarCell[] {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const firstWeekday = (first.getDay() + 6) % 7; // 0 = lunes
+  const lastWeekday = (last.getDay() + 6) % 7;
+
+  const cells: CalendarCell[] = [];
+  const cursor = new Date(year, month, 1 - firstWeekday);
+  const end = new Date(year, month, last.getDate() + (6 - lastWeekday));
+  while (cursor <= end) {
+    cells.push({ iso: toApiDate(cursor), inMonth: cursor.getMonth() === month });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return cells;
+}
