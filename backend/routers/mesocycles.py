@@ -9,6 +9,7 @@ from backend import models, schemas
 from backend.core.security import _coach_athlete_ids, ensure_owner_or_coach, get_current_user, require_coach
 from backend.database import get_db
 from backend.routers.group_helpers import get_owned_group
+from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/mesocycles", tags=["mesocycles"])
 
@@ -67,6 +68,22 @@ def get_full_mesocycle(
     meso.sessions.sort(key=lambda s: s.scheduled_date)
     for sesion in meso.sessions:
         sesion.sets.sort(key=lambda serie: serie.set_order)
+
+    # Una serie prescrita por % de 1RM guarda el kg ya calculado al momento de crearse — si el
+    # atleta actualiza su marca después, ese kg queda desactualizado. Para sesiones YA
+    # completadas eso es correcto (es el registro histórico de lo que se hizo, no debe moverse);
+    # para las pendientes se recalcula contra la marca VIGENTE en cada lectura, sin persistirlo
+    # (no hay db.commit() acá), así el plan siempre refleja el 1RM actual sin reescribir nada.
+    if meso.user_id:
+        prs = get_athlete_prs(db, meso.user_id)
+        for sesion in meso.sessions:
+            if sesion.status == "completed":
+                continue
+            for serie in sesion.sets:
+                if serie.reference_exercise and serie.prescribed_percentage is not None:
+                    serie.prescribed_weight = resolve_weight_from_percentage(
+                        serie.prescribed_percentage, serie.prescribed_weight, serie.reference_exercise, prs
+                    )
 
     return meso
 
