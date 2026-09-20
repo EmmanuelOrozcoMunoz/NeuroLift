@@ -501,7 +501,7 @@ function GroupWideTab({
         cambies explícitamente aquí.
       </p>
       {sessions.map((session) => {
-        const bloques = groupByBlock(session.sets);
+        const bloques = groupByBlock(session.sets, session.block_order);
         return (
           <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
             {esCrossfit && (

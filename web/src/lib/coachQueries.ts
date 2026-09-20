@@ -27,6 +27,7 @@ import type {
   RegisterAthletePayload,
   SetCreatePayload,
   SetUpdatePayload,
+  TrainingSession,
   User,
   WodDaySummary,
   WodLeaderboardRow,
@@ -296,6 +297,22 @@ export function useUpdateSet(mesocycleId: string) {
   return useMutation({
     mutationFn: ({ setId, body }: { setId: string; body: SetUpdatePayload }) =>
       apiFetch<unknown>(`/sets/${setId}`, { method: "PUT", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) }),
+  });
+}
+
+/** Metadatos de la sesión aparte de sus series: orden de los bloques y pautas de calentamiento
+ *  (ver PUT /sessions/{id}/meta). Cada campo se guarda solo si viene en el body. */
+export function useUpdateSessionMeta(mesocycleId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      body,
+    }: {
+      sessionId: string;
+      body: { block_order?: string | null; warmup_notes?: string | null };
+    }) => apiFetch<TrainingSession>(`/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) }),
   });
 }

@@ -19,6 +19,7 @@ from backend.schemas.sessions import (
     SessionAdaptRequest,
     SessionCompleteRequest,
     SessionCreate,
+    SessionMetaUpdate,
     SessionResponse,
     WodFormatUpdate,
 )
@@ -67,7 +68,7 @@ __all__ = [
     "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse",
     "FitnessBenchmarkUpdate", "FitnessLevelResponse",
     "ExerciseResponse", "SetCreate", "SetLogUpdate", "SetResponse", "SetUpdate",
-    "SessionAdaptRequest", "SessionCompleteRequest", "SessionCreate", "SessionResponse", "WodFormatUpdate",
+    "SessionAdaptRequest", "SessionCompleteRequest", "SessionCreate", "SessionMetaUpdate", "SessionResponse", "WodFormatUpdate",
     "MesocycleCreate", "MesocycleFullResponse", "MesocycleManualCreate", "MesocycleManualGroupCreate",
     "MesocycleResponse", "MesocycleSummaryResponse",
     "GroupCreate", "GroupMemberAdd", "GroupMemberResponse", "GroupMesocycleAthlete", "GroupMesocycleProgram",

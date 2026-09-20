@@ -239,9 +239,13 @@ def update_my_preferences(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Preferencias propias de visualización (hoy solo la unidad de peso) — separado de
-    fitness-benchmarks porque también lo usan coaches, que no tienen Fit Level propio."""
-    current_user.weight_unit = req.weight_unit
+    """Preferencias propias de visualización (unidad de peso, disponibilidad de discos de
+    25kg) — separado de fitness-benchmarks porque también lo usan coaches, que no tienen Fit
+    Level propio. Cada campo se actualiza solo si vino en la petición."""
+    if req.weight_unit is not None:
+        current_user.weight_unit = req.weight_unit
+    if req.has_25kg_plates is not None:
+        current_user.has_25kg_plates = req.has_25kg_plates
     db.commit()
     db.refresh(current_user)
     return current_user

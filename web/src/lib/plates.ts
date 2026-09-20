@@ -19,9 +19,10 @@ export const PLATE_COLORS: Record<number, string> = {
   1.25: "#94a3b8",
 };
 
-/** Barra de 20kg (hombre) o 16kg (mujer) — null/sin dato usa 20kg por defecto. */
+/** Barra de 20kg (hombre) o 15kg (mujer) — el estándar de competencia IWF. null/sin dato
+ *  usa 20kg por defecto. */
 export function barWeightKg(sex: "male" | "female" | null | undefined): number {
-  return sex === "female" ? 16 : 20;
+  return sex === "female" ? 15 : 20;
 }
 
 export interface PlateBreakdown {
@@ -33,15 +34,21 @@ export interface PlateBreakdown {
   remainderKg: number;
 }
 
-export function calculatePlates(totalKg: number, barKg: number): PlateBreakdown {
+/** `has25kg = false` -> algunos boxes solo tienen discos de 20kg para abajo; se arma con más
+ *  discos de 20kg en vez de fallar o dejar el peso sin resolver. */
+export function calculatePlates(totalKg: number, barKg: number, has25kg = true): PlateBreakdown {
   const perSideScaled = Math.round(((totalKg - barKg) / 2) * SCALE);
   if (perSideScaled <= 0) {
     return { barKg, perSide: [], remainderKg: Math.max(0, -perSideScaled) / SCALE };
   }
 
+  const denominations = has25kg
+    ? PLATE_DENOMINATIONS_KG
+    : PLATE_DENOMINATIONS_KG.filter((kg) => kg !== 25);
+
   let remaining = perSideScaled;
   const perSide: number[] = [];
-  for (const denom of PLATE_DENOMINATIONS_KG) {
+  for (const denom of denominations) {
     const scaledDenom = Math.round(denom * SCALE);
     while (remaining >= scaledDenom) {
       perSide.push(denom);
