@@ -19,9 +19,10 @@ export const PLATE_COLORS: Record<number, string> = {
   1.25: "#94a3b8",
 };
 
-/** Barra de 20kg (hombre) o 16kg (mujer) — null/sin dato usa 20kg por defecto. */
+/** Barra de 20kg (hombre) o 15kg (mujer) — el estándar de competencia IWF. null/sin dato
+ *  usa 20kg por defecto. */
 export function barWeightKg(sex: "male" | "female" | null | undefined): number {
-  return sex === "female" ? 16 : 20;
+  return sex === "female" ? 15 : 20;
 }
 
 export interface PlateBreakdown {
