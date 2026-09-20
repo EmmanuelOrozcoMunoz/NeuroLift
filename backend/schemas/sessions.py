@@ -24,6 +24,8 @@ class SessionResponse(BaseModel):
     parent_session_id: Optional[UUID] = None  # si no es None, es una versión adaptada de otra sesión
     duration_minutes: Optional[int] = None
     day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
+    block_order: Optional[str] = None  # ej. "warmup,strength,metcon" — ver models.py:Session
+    warmup_notes: Optional[str] = None
     # --- resultado del WOD/metcon, ver models.py:Session ---
     wod_format: Optional[str] = None
     wod_time_cap_seconds: Optional[int] = None
@@ -63,3 +65,11 @@ class SessionCompleteRequest(SanitizedModel):
 # --- ESQUEMA PARA ADAPTAR UNA SESIÓN AL TIEMPO DISPONIBLE ---
 class SessionAdaptRequest(SanitizedModel):
     available_minutes: int = Field(..., ge=10, le=180)
+
+
+class SessionMetaUpdate(SanitizedModel):
+    """Metadatos de la sesión que el coach puede ajustar aparte de sus series: en qué orden se
+    muestran los bloques, y las pautas de calentamiento. Ambos opcionales -- cada uno se guarda
+    solo si vino en la petición, igual que UserPreferencesUpdate."""
+    block_order: str | None = Field(None, max_length=200)
+    warmup_notes: str | None = Field(None, max_length=1000)

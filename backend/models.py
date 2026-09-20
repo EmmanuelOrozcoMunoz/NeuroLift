@@ -153,6 +153,15 @@ class Session(Base):
     # también guarda un scheduled_date sintético (PLAN_EPOCH + day_offset) para no romper el
     # ordenamiento ni las vistas existentes; al adquirir el plan se recalcula la fecha real.
     day_offset = Column(Integer, nullable=True)
+    # Orden de los bloques que el coach eligió para ESTA sesión, como texto separado por comas
+    # (ej. "warmup,strength,metcon") — null usa el orden canónico de siempre (ver
+    # web/src/lib/blocks.ts:BLOCK_KEYS). Cualquier bloque presente en la sesión pero ausente de
+    # esta lista se agrega al final, en su posición canónica (ver groupByBlock en sessions.ts).
+    block_order = Column(String(200), nullable=True)
+    # Pautas de calentamiento/aproximaciones que el coach escribe para esta sesión — se muestran
+    # al atleta ANTES del primer bloque de series. Distinto de athlete_notes (ese lo llena la IA
+    # con el enfoque general de la sesión; este lo escribe el coach a mano para el calentamiento).
+    warmup_notes = Column(Text, nullable=True)
 
     # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
     # El coach prescribe el formato (y opcionalmente un time cap/duración) al programar la

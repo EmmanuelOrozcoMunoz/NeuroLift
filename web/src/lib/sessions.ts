@@ -43,11 +43,17 @@ export interface SessionBlockGroup {
 
 /**
  * Agrupa las series de una sesión por bloque (calentamiento/fuerza/weightlifting/skills/metcon/
- * accesorios/principal) en el orden canónico, y dentro de cada bloque por ejercicio (groupSets).
- * Si NINGÚN set trae bloque (sesiones viejas, o el coach no los usa), devuelve un solo grupo sin
- * etiqueta — se ve exactamente igual que antes de que existieran los bloques.
+ * accesorios/principal) y dentro de cada bloque por ejercicio (groupSets). Si NINGÚN set trae
+ * bloque (sesiones viejas, o el coach no los usa), devuelve un solo grupo sin etiqueta — se ve
+ * exactamente igual que antes de que existieran los bloques.
+ *
+ * `blockOrder` es el `Session.block_order` guardado (ej. "warmup,strength,metcon"), tal cual
+ * viene de la API — si el coach reordenó los bloques de ESTA sesión, se respeta ese orden en vez
+ * del canónico de BLOCK_KEYS. Cualquier bloque presente pero ausente de esa lista (ej. porque se
+ * agregó un ejercicio de un bloque nuevo después de fijar el orden) cae al final, en su posición
+ * canónica — así nunca desaparece un bloque por no estar en la lista guardada.
  */
-export function groupByBlock(sets: SetItem[]): SessionBlockGroup[] {
+export function groupByBlock(sets: SetItem[], blockOrder?: string | null): SessionBlockGroup[] {
   const ordered = [...sets].sort((a, b) => a.set_order - b.set_order);
   const anyBlocked = ordered.some((set) => set.block);
   if (!anyBlocked) {
@@ -62,7 +68,12 @@ export function groupByBlock(sets: SetItem[]): SessionBlockGroup[] {
     else buckets.set(key, [set]);
   }
 
-  const known = BLOCK_KEYS.filter((key) => buckets.has(key));
+  const customOrder = (blockOrder ?? "").split(",").filter(Boolean);
+  const orderSource = customOrder.length > 0 ? customOrder : BLOCK_KEYS;
+  const known = [
+    ...orderSource.filter((key) => buckets.has(key)),
+    ...BLOCK_KEYS.filter((key) => buckets.has(key) && !orderSource.includes(key)),
+  ];
   const custom = [...buckets.keys()].filter(
     (key): key is string => key !== null && !(BLOCK_KEYS as readonly string[]).includes(key),
   );

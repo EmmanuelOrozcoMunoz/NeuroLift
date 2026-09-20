@@ -56,6 +56,34 @@ def set_session_wod_format(
     return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
 
 
+@router.put("/{session_id}/meta", response_model=schemas.SessionResponse)
+def update_session_meta(
+    session_id: UUID,
+    req: schemas.SessionMetaUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """El coach ajusta el orden de los bloques y/o las pautas de calentamiento de esta sesión —
+    aparte de sus series, que se editan por su cuenta (ver routers/sets.py)."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle), joinedload(models.Session.sets).joinedload(models.Set.exercise))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+
+    if req.block_order is not None:
+        sesion.block_order = req.block_order or None
+    if req.warmup_notes is not None:
+        sesion.warmup_notes = req.warmup_notes or None
+    db.commit()
+    db.refresh(sesion)
+    return sesion
+
+
 @router.post("/{session_id}/complete")
 def complete_session(
     session_id: UUID,

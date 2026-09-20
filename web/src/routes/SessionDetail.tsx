@@ -94,7 +94,7 @@ export default function SessionDetail() {
 
   const { logged, total } = sessionProgress(activa);
   const completada = activa.status === "completed";
-  const bloques = groupByBlock(activa.sets);
+  const bloques = groupByBlock(activa.sets, activa.block_order);
 
   function completarConResultado(wodResult?: SessionCompletePayload) {
     completar.mutate(
@@ -185,6 +185,15 @@ export default function SessionDetail() {
       {activa.athlete_notes && (
         <Card className="mb-4 border-brand/30 bg-brand-soft/30">
           <p className="text-sm leading-relaxed">{activa.athlete_notes}</p>
+        </Card>
+      )}
+
+      {activa.warmup_notes && (
+        <Card className="mb-4">
+          <p className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">
+            🔥 Calentamiento y aproximaciones
+          </p>
+          <p className="text-sm leading-relaxed">{activa.warmup_notes}</p>
         </Card>
       )}
 

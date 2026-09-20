@@ -1,9 +1,10 @@
 import { useState } from "react";
 
 import { BlockSelect } from "@/components/BlockSelect";
-import { IconTrash } from "@/components/icons";
+import { blockLabel } from "@/lib/blocks";
+import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, Field, Segmented, Stepper, cx } from "@/components/ui";
-import { useAddSet, useDeleteSet, useUpdateSet } from "@/lib/coachQueries";
+import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import { useWeightUnit, WeightStepper } from "@/lib/units";
@@ -377,6 +378,103 @@ function AddExerciseForm({
   );
 }
 
+/** Pautas de calentamiento/aproximaciones que el coach escribe para esta sesión — se muestran
+ *  al atleta antes del primer bloque. Guarda al perder el foco, sin botón aparte. */
+function WarmupNotesCard({
+  mesocycleId,
+  session,
+  onSaved,
+}: {
+  mesocycleId: string;
+  session: TrainingSession;
+  onSaved: () => void;
+}) {
+  const updateMeta = useUpdateSessionMeta(mesocycleId);
+  const [texto, setTexto] = useState(session.warmup_notes ?? "");
+
+  function guardar() {
+    if (texto === (session.warmup_notes ?? "")) return;
+    updateMeta.mutate(
+      { sessionId: session.id, body: { warmup_notes: texto.trim() || "" } },
+      { onSuccess: onSaved },
+    );
+  }
+
+  return (
+    <Card>
+      <p className="mb-2 text-sm font-semibold text-muted">🔥 Calentamiento y aproximaciones (opcional)</p>
+      <textarea
+        rows={3}
+        maxLength={1000}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={guardar}
+        placeholder="Ej. 5 min de movilidad de cadera, 3 series de aproximación subiendo desde 40% hasta el primer set de trabajo..."
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+      />
+    </Card>
+  );
+}
+
+/** El orden en que se muestran los bloques de ESTA sesión — el coach lo sube/baja con flechas
+ *  (nada de drag-and-drop: más fácil de acertar con el dedo). Solo aparece si hay 2+ bloques. */
+function BlockOrderEditor({
+  mesocycleId,
+  session,
+  blockKeys,
+  onSaved,
+}: {
+  mesocycleId: string;
+  session: TrainingSession;
+  blockKeys: string[];
+  onSaved: () => void;
+}) {
+  const updateMeta = useUpdateSessionMeta(mesocycleId);
+
+  function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= blockKeys.length) return;
+    const next = [...blockKeys];
+    [next[index], next[target]] = [next[target], next[index]];
+    updateMeta.mutate({ sessionId: session.id, body: { block_order: next.join(",") } }, { onSuccess: onSaved });
+  }
+
+  if (blockKeys.length < 2) return null;
+
+  return (
+    <Card>
+      <p className="mb-2 text-sm font-semibold text-muted">🔀 Orden de los bloques</p>
+      <div className="space-y-1.5">
+        {blockKeys.map((key, index) => (
+          <div key={key} className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-2">
+            <span className="text-sm font-medium">{blockLabel(key)}</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                aria-label={`Subir ${blockLabel(key)}`}
+                disabled={index === 0 || updateMeta.isPending}
+                onClick={() => move(index, -1)}
+                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
+              >
+                <IconChevronRight className="h-4 w-4 -rotate-90" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Bajar ${blockLabel(key)}`}
+                disabled={index === blockKeys.length - 1 || updateMeta.isPending}
+                onClick={() => move(index, 1)}
+                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
+              >
+                <IconChevronRight className="h-4 w-4 rotate-90" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /** Editor completo (ver + editar + añadir ejercicios) de UNA sesión. Se usa tanto en la
  *  pantalla dedicada del coach como embebido dentro de la pestaña individual de un atleta
  *  dentro de un programa de grupo. */
@@ -391,11 +489,23 @@ export function SessionSetsEditor({
   session: TrainingSession;
   onFeedback: (message: string) => void;
 }) {
-  const bloques = groupByBlock(session.sets);
+  const bloques = groupByBlock(session.sets, session.block_order);
   const esCrossfit = discipline.toLowerCase() === "crossfit";
+  const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
 
   return (
     <div className="space-y-4">
+      <WarmupNotesCard
+        mesocycleId={mesocycleId}
+        session={session}
+        onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")}
+      />
+      <BlockOrderEditor
+        mesocycleId={mesocycleId}
+        session={session}
+        blockKeys={blockKeys}
+        onSaved={() => onFeedback("¡Orden de bloques actualizado!")}
+      />
       {esCrossfit && (
         <WodFormatCard
           mesocycleId={mesocycleId}
