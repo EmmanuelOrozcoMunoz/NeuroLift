@@ -94,8 +94,9 @@ export function useRecentActivity(userId: string): UseQueryResult<RecentSessionS
 interface LogSetVars {
   mesocycleId: string;
   setId: string;
-  actual_reps: number;
-  actual_weight: number;
+  /** null = deshacer el registro (vuelve a "pendiente"), no "cero". */
+  actual_reps: number | null;
+  actual_weight: number | null;
 }
 
 /**
@@ -171,6 +172,38 @@ export function useCompleteSession() {
               ...old,
               sessions: old.sessions.map((session) =>
                 marcadas.has(session.id) ? { ...session, status: "completed" } : session,
+              ),
+            }
+          : old,
+      );
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(context.key, context.previous);
+    },
+    onSettled: (_data, _err, vars) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(vars.mesocycleId) });
+    },
+  });
+}
+
+/** Deshace "Terminar entrenamiento" (por si se tocó sin querer) -- vuelve la sesión a
+ *  "pendiente" y borra el resultado del WOD que se hubiera reportado, no solo el estado. */
+export function useUncompleteSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId }: { mesocycleId: string; sessionId: string }) =>
+      apiFetch<MessageResponse>(`/sessions/${sessionId}/uncomplete`, { method: "POST" }),
+    onMutate: async (vars: { mesocycleId: string; sessionId: string }) => {
+      const key = queryKeys.mesocycle(vars.mesocycleId);
+      const previous = queryClient.getQueryData<MesocycleFull>(key);
+      queryClient.setQueryData<MesocycleFull>(key, (old) =>
+        old
+          ? {
+              ...old,
+              sessions: old.sessions.map((session) =>
+                session.id === vars.sessionId ? { ...session, status: "pending" } : session,
               ),
             }
           : old,
