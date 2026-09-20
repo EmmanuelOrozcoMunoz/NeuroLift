@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { IconCheck } from "@/components/icons";
+import { BarbellPlates } from "@/components/BarbellPlates";
+import { IconCheck, IconDumbbell } from "@/components/icons";
 import { Spinner, Stepper, cx } from "@/components/ui";
 import { useLogSet } from "@/lib/queries";
 import { isSetLogged, loadLabel } from "@/lib/sessions";
@@ -30,6 +31,7 @@ export function SetRow({
   const [editing, setEditing] = useState(false);
   const [reps, setReps] = useState(set.actual_reps ?? set.prescribed_reps ?? 0);
   const [weight, setWeight] = useState(set.actual_weight ?? set.prescribed_weight ?? 0);
+  const [showPlates, setShowPlates] = useState(false);
 
   const expanded = !logged || editing;
 
@@ -91,6 +93,16 @@ export function SetRow({
           {logSet.isPending ? <Spinner className="h-5 w-5" /> : <IconCheck className="h-6 w-6" />}
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowPlates((v) => !v)}
+        className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand"
+      >
+        <IconDumbbell className="h-3.5 w-3.5" />
+        {showPlates ? "Ocultar discos" : "Ver discos para la barra"}
+      </button>
+      {showPlates && <BarbellPlates weightKg={weight} />}
 
       {logSet.isError && (
         <p className="mt-2 text-xs font-medium text-danger">

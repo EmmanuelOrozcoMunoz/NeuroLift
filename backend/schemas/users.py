@@ -18,6 +18,8 @@ class UserResponse(BaseModel):
     created_at: datetime | None = None  # para mostrar "Miembro desde..." en el perfil
     # "kg" | "lb" — en qué unidad este usuario prefiere ver/escribir cualquier peso en la app.
     weight_unit: str | None = None
+    # "male" | "female" — para saber el peso de SU barra (20kg / 16kg) en la calculadora de discos.
+    sex: str | None = None
 
     class Config:
         from_attributes = True
