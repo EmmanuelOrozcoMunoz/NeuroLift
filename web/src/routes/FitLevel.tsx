@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/AppShell";
 import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { Button, Card, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
-import { useCurrentUser } from "@/lib/auth";
+import { useAuth, useCurrentUser } from "@/lib/auth";
 import { useFitnessLevel, useSaveBenchmarks } from "@/lib/queries";
 import { kgTo, toKg, useWeightUnit, WeightStepper } from "@/lib/units";
 import type { FitCategory, WodCategory } from "@/lib/types";
@@ -30,6 +30,7 @@ function timeToSeconds(t: TimeValue): number {
 
 export default function FitLevel() {
   const user = useCurrentUser();
+  const { refreshUser } = useAuth();
   const { data, isPending, error, refetch } = useFitnessLevel(user.id);
   const save = useSaveBenchmarks(user.id);
   const unit = useWeightUnit();
@@ -122,6 +123,10 @@ export default function FitLevel() {
       onSuccess: () => {
         setEditing(false);
         setToast("¡Marcas guardadas! Tu Fit Level se actualizó.");
+        // El sexo puede haber cambiado y afecta cosas fuera de esta pantalla (ej. la calculadora
+        // de discos usa una barra distinta para hombre/mujer) — refresca el usuario actual para
+        // que se vea correcto sin tener que cerrar sesión y volver a entrar.
+        if (payload.sex) void refreshUser();
       },
     });
   }

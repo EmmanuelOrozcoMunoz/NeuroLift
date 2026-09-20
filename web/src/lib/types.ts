@@ -17,8 +17,10 @@ export interface User {
   created_at: string | null;
   /** En qué unidad ESTE usuario prefiere ver/escribir cualquier peso. null = "kg". */
   weight_unit: WeightUnit | null;
-  /** Para la calculadora de discos: define el peso de SU barra (20kg / 16kg). */
+  /** Para la calculadora de discos: define el peso de SU barra (20kg / 15kg). */
   sex: "male" | "female" | null;
+  /** Si su box tiene discos de 25kg. null = true (por defecto sí tiene). */
+  has_25kg_plates: boolean | null;
 }
 
 export interface LoginResponse {
@@ -73,6 +75,11 @@ export interface TrainingSession {
   parent_session_id: string | null;
   duration_minutes: number | null;
   day_offset: number | null;
+  /** Orden de bloques que el coach eligió para esta sesión, ej. "warmup,strength,metcon" — null
+   *  usa el orden canónico de BLOCK_KEYS. Ver groupByBlock() en lib/sessions.ts. */
+  block_order: string | null;
+  /** Pautas de calentamiento/aproximaciones del coach, mostradas antes del primer bloque. */
+  warmup_notes: string | null;
   /** El coach lo prescribe (PUT /sessions/{id}/wod-format); el atleta reporta el resultado al
    *  completar la sesión. null = esta sesión no tiene un WOD con formato de puntaje formal. */
   wod_format: WodFormat | null;

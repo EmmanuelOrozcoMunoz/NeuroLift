@@ -36,7 +36,8 @@ function PlateStack({ plates }: { plates: number[] }) {
 export function BarbellPlates({ weightKg }: { weightKg: number }) {
   const user = useCurrentUser();
   const bar = barWeightKg(user.sex);
-  const { perSide, remainderKg } = calculatePlates(weightKg, bar);
+  const has25kg = user.has_25kg_plates ?? true;
+  const { perSide, remainderKg } = calculatePlates(weightKg, bar, has25kg);
 
   if (perSide.length === 0) {
     return (

@@ -26,6 +26,11 @@ class User(Base):
     # "kg". El valor que se GUARDA siempre es en kg (los % de 1RM y el redondeo a 2.5kg no
     # cambian); esto solo afecta cómo se muestra/captura en el frontend.
     weight_unit = Column(String(10), nullable=True)
+    # Si el box de este atleta tiene discos de 25kg — algunos boxes solo tienen de 20kg para
+    # abajo. null se trata como True (sí tiene), para no romper la calculadora de discos de
+    # quien no haya tocado esta preferencia. Afecta solo esa calculadora, nada del cálculo de
+    # cargas prescritas (% de 1RM, redondeo a 2.5kg, etc.).
+    has_25kg_plates = Column(Boolean, nullable=True)
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.
@@ -148,6 +153,15 @@ class Session(Base):
     # también guarda un scheduled_date sintético (PLAN_EPOCH + day_offset) para no romper el
     # ordenamiento ni las vistas existentes; al adquirir el plan se recalcula la fecha real.
     day_offset = Column(Integer, nullable=True)
+    # Orden de los bloques que el coach eligió para ESTA sesión, como texto separado por comas
+    # (ej. "warmup,strength,metcon") — null usa el orden canónico de siempre (ver
+    # web/src/lib/blocks.ts:BLOCK_KEYS). Cualquier bloque presente en la sesión pero ausente de
+    # esta lista se agrega al final, en su posición canónica (ver groupByBlock en sessions.ts).
+    block_order = Column(String(200), nullable=True)
+    # Pautas de calentamiento/aproximaciones que el coach escribe para esta sesión — se muestran
+    # al atleta ANTES del primer bloque de series. Distinto de athlete_notes (ese lo llena la IA
+    # con el enfoque general de la sesión; este lo escribe el coach a mano para el calentamiento).
+    warmup_notes = Column(Text, nullable=True)
 
     # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
     # El coach prescribe el formato (y opcionalmente un time cap/duración) al programar la

@@ -240,8 +240,8 @@ export function useDeletePersonalRecord(userId: string) {
 
 export function useUpdateMyPreferences() {
   return useMutation({
-    mutationFn: (weight_unit: "kg" | "lb") =>
-      apiFetch<User>("/users/me/preferences", { method: "PUT", body: { weight_unit } }),
+    mutationFn: (body: { weight_unit?: "kg" | "lb"; has_25kg_plates?: boolean }) =>
+      apiFetch<User>("/users/me/preferences", { method: "PUT", body }),
   });
 }
 

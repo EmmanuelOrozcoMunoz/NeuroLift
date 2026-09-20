@@ -18,15 +18,20 @@ class UserResponse(BaseModel):
     created_at: datetime | None = None  # para mostrar "Miembro desde..." en el perfil
     # "kg" | "lb" — en qué unidad este usuario prefiere ver/escribir cualquier peso en la app.
     weight_unit: str | None = None
-    # "male" | "female" — para saber el peso de SU barra (20kg / 16kg) en la calculadora de discos.
+    # "male" | "female" — para saber el peso de SU barra (20kg / 15kg) en la calculadora de discos.
     sex: str | None = None
+    # Si su box tiene discos de 25kg — null se trata como True en el frontend.
+    has_25kg_plates: bool | None = None
 
     class Config:
         from_attributes = True
 
 
 class UserPreferencesUpdate(SanitizedModel):
-    weight_unit: Literal["kg", "lb"]
+    # Ambos opcionales: cada toggle (unidad de peso, disponibilidad de discos de 25kg) guarda
+    # solo lo suyo, sin obligar a mandar el resto de las preferencias en la misma llamada.
+    weight_unit: Literal["kg", "lb"] | None = None
+    has_25kg_plates: bool | None = None
 
 
 class PRResponse(BaseModel):
