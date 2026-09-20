@@ -80,9 +80,16 @@ def get_full_mesocycle(
             if sesion.status == "completed":
                 continue
             for serie in sesion.sets:
-                if serie.reference_exercise and serie.prescribed_percentage is not None:
+                if serie.prescribed_percentage is None:
+                    continue
+                # "1RM de referencia" vacío significa "el mismo ejercicio" (así lo promete el
+                # placeholder del campo en SessionSetsEditor.tsx, y así lo resuelven sets.py/ai.py
+                # al crear/editar) — hay que replicar ese fallback aquí, si no las series creadas
+                # sin referencia explícita nunca se recalculan y se quedan sin peso para siempre.
+                referencia = serie.reference_exercise or (serie.exercise.name if serie.exercise else None)
+                if referencia:
                     serie.prescribed_weight = resolve_weight_from_percentage(
-                        serie.prescribed_percentage, serie.prescribed_weight, serie.reference_exercise, prs
+                        serie.prescribed_percentage, serie.prescribed_weight, referencia, prs
                     )
 
     return meso
