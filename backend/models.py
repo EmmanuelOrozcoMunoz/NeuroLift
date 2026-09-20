@@ -26,6 +26,11 @@ class User(Base):
     # "kg". El valor que se GUARDA siempre es en kg (los % de 1RM y el redondeo a 2.5kg no
     # cambian); esto solo afecta cómo se muestra/captura en el frontend.
     weight_unit = Column(String(10), nullable=True)
+    # Si el box de este atleta tiene discos de 25kg — algunos boxes solo tienen de 20kg para
+    # abajo. null se trata como True (sí tiene), para no romper la calculadora de discos de
+    # quien no haya tocado esta preferencia. Afecta solo esa calculadora, nada del cálculo de
+    # cargas prescritas (% de 1RM, redondeo a 2.5kg, etc.).
+    has_25kg_plates = Column(Boolean, nullable=True)
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.

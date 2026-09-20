@@ -17,8 +17,10 @@ export interface User {
   created_at: string | null;
   /** En qué unidad ESTE usuario prefiere ver/escribir cualquier peso. null = "kg". */
   weight_unit: WeightUnit | null;
-  /** Para la calculadora de discos: define el peso de SU barra (20kg / 16kg). */
+  /** Para la calculadora de discos: define el peso de SU barra (20kg / 15kg). */
   sex: "male" | "female" | null;
+  /** Si su box tiene discos de 25kg. null = true (por defecto sí tiene). */
+  has_25kg_plates: boolean | null;
 }
 
 export interface LoginResponse {
