@@ -11,6 +11,7 @@ import {
   useGroupBulkAdd,
   useGroupBulkDelete,
   useGroupBulkSetWodFormat,
+  useGroupBulkSetWodNotes,
   useGroupBulkUpdate,
   useGroupMesocycles,
 } from "@/lib/coachQueries";
@@ -22,30 +23,45 @@ import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
 
-function BulkWodFormatCard({
+/** Dentro del bloque Metabólico, para TODO el grupo a la vez: el coach escribe el WOD tal cual
+ *  en texto libre y elige cómo se puntúa -- convive con los ejercicios estructurados que ya
+ *  tenga ese mismo bloque (ver BulkExerciseBlock), mismo criterio que WodBlockCard en
+ *  SessionSetsEditor.tsx pero aplicado a todos los atletas del programa de una sola vez. */
+function BulkWodBlockCard({
   groupId,
   programName,
   programStartDate,
   scheduledDate,
+  currentNotes,
   currentFormat,
   currentTimeCapSeconds,
   onFeedback,
+  onRemoved,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   scheduledDate: string;
+  currentNotes: string | null;
   currentFormat: WodFormat | null;
   currentTimeCapSeconds: number | null;
   onFeedback: (message: string) => void;
+  onRemoved: () => void;
 }) {
+  const bulkSetWodNotes = useGroupBulkSetWodNotes(groupId);
   const bulkSetWodFormat = useGroupBulkSetWodFormat(groupId);
+  const [texto, setTexto] = useState(currentNotes ?? "");
   const [seleccionado, setSeleccionado] = useState<WodFormat | "">(currentFormat ?? "");
   const [timerMin, setTimerMin] = useState(Math.round((currentTimeCapSeconds ?? 0) / 60));
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
 
-  function guardar(formato: WodFormat | "", minutos: number) {
+  function guardarTexto() {
+    if (texto === (currentNotes ?? "")) return;
+    bulkSetWodNotes.mutate({ ...base, wod_notes: texto.trim() || "" }, { onSuccess: (r) => onFeedback(r.message) });
+  }
+
+  function guardarFormato(formato: WodFormat | "", minutos: number) {
     bulkSetWodFormat.mutate(
       {
         ...base,
@@ -59,75 +75,100 @@ function BulkWodFormatCard({
   function elegir(valor: WodFormat) {
     const nuevo = seleccionado === valor ? "" : valor;
     setSeleccionado(nuevo);
-    guardar(nuevo, timerMin);
+    guardarFormato(nuevo, timerMin);
+  }
+
+  function quitar() {
+    if (!window.confirm("¿Borrar la descripción libre y el puntaje del WOD para todo el grupo?")) return;
+    bulkSetWodNotes.mutate({ ...base, wod_notes: "" });
+    bulkSetWodFormat.mutate({ ...base, wod_format: null, time_cap_seconds: null });
+    onRemoved();
   }
 
   return (
     <Card>
-      <p className="mb-2 text-sm font-semibold text-muted">🔥 Formato del WOD para TODO el grupo (opcional)</p>
-
-      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        ⏱ Plantillas rápidas
-      </p>
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        {WOD_TIMER_TEMPLATES.map((opcion) => (
-          <button
-            key={opcion.value}
-            type="button"
-            disabled={bulkSetWodFormat.isPending}
-            onClick={() => elegir(opcion.value)}
-            className={cx(
-              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
-              seleccionado === opcion.value
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-line bg-surface-2 text-fg",
-            )}
-          >
-            <p className="text-sm font-bold">{opcion.label}</p>
-            <p className="text-xs text-muted">{opcion.hint}</p>
-          </button>
-        ))}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-muted">📋 Escribir el WOD como texto, para TODO el grupo (opcional)</p>
+        <button
+          type="button"
+          onClick={quitar}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10"
+          aria-label="Borrar descripción y puntaje del WOD para todo el grupo"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
       </div>
 
-      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        Otros tipos de resultado
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {WOD_OTHER_SCORE_TYPES.map((opcion) => (
-          <button
-            key={opcion.value}
-            type="button"
-            disabled={bulkSetWodFormat.isPending}
-            onClick={() => elegir(opcion.value)}
-            className={cx(
-              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
-              seleccionado === opcion.value
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-line bg-surface-2 text-fg",
-            )}
-          >
-            <p className="text-sm font-bold">{opcion.label}</p>
-            <p className="text-xs text-muted">{opcion.hint}</p>
-          </button>
-        ))}
-      </div>
+      <textarea
+        rows={3}
+        maxLength={2000}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={guardarTexto}
+        placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+      />
 
-      {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
-        <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-1.5 text-xs font-medium text-muted">⏱ Timer / time cap (min) — opcional</p>
-          <Stepper
-            value={timerMin}
-            onChange={(v) => {
-              setTimerMin(v);
-              guardar(seleccionado, v);
-            }}
-            min={0}
-            max={90}
-            suffix="min"
-            compact
-          />
+      <div className="mt-3 border-t border-line pt-3">
+        <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+          Puntuación (opcional)
+        </p>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          {WOD_TIMER_TEMPLATES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={bulkSetWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
         </div>
-      )}
+        <div className="grid grid-cols-2 gap-2">
+          {WOD_OTHER_SCORE_TYPES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={bulkSetWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
+        </div>
+
+        {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
+          <div className="mt-3 border-t border-line pt-3">
+            <p className="mb-1.5 text-xs font-medium text-muted">⏱ Timer / time cap (min) — opcional</p>
+            <Stepper
+              value={timerMin}
+              onChange={(v) => {
+                setTimerMin(v);
+                guardarFormato(seleccionado, v);
+              }}
+              min={0}
+              max={90}
+              suffix="min"
+              compact
+            />
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -470,23 +511,96 @@ function DateAccordion({ label, children }: { label: string; children: React.Rea
   );
 }
 
+/** Una fecha del programa, para TODO el grupo -- lleva su propio estado de si el bloque
+ *  Metabólico/WOD está "activado" para poder mostrarlo aunque todavía no tenga ejercicios
+ *  estructurados ni descripción guardada (mismo criterio que SessionSetsEditor). */
+function GroupDateSection({
+  groupId,
+  programName,
+  programStartDate,
+  session,
+  onFeedback,
+}: {
+  groupId: string;
+  programName: string;
+  programStartDate: string;
+  session: TrainingSession;
+  onFeedback: (message: string) => void;
+}) {
+  const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  const bloques = groupByBlock(session.sets, session.block_order, forzarMetcon);
+  const tieneMetcon = bloques.some((b) => b.key === "metcon");
+
+  return (
+    <DateAccordion label={shortDate(session.scheduled_date)}>
+      {session.sets.length === 0 && !tieneMetcon && (
+        <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>
+      )}
+      {bloques.map((bloque, indiceBloque) => (
+        <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
+          {bloque.label && (
+            <p className="text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+          )}
+          {bloque.key === "metcon" && (
+            <BulkWodBlockCard
+              groupId={groupId}
+              programName={programName}
+              programStartDate={programStartDate}
+              scheduledDate={session.scheduled_date}
+              currentNotes={session.wod_notes}
+              currentFormat={session.wod_format}
+              currentTimeCapSeconds={session.wod_time_cap_seconds}
+              onFeedback={onFeedback}
+              onRemoved={() => setForzarMetcon(false)}
+            />
+          )}
+          {bloque.groups.map((group, index) => (
+            <BulkExerciseBlock
+              key={`${group.name}-${index}`}
+              groupId={groupId}
+              programName={programName}
+              programStartDate={programStartDate}
+              scheduledDate={session.scheduled_date}
+              group={group}
+              onFeedback={onFeedback}
+            />
+          ))}
+        </div>
+      ))}
+      <BulkAddForm
+        groupId={groupId}
+        programName={programName}
+        programStartDate={programStartDate}
+        scheduledDate={session.scheduled_date}
+        onFeedback={onFeedback}
+      />
+      {!tieneMetcon && (
+        <button
+          type="button"
+          onClick={() => setForzarMetcon(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
+        >
+          🔥 Añadir bloque metabólico (WOD) para todo el grupo
+        </button>
+      )}
+    </DateAccordion>
+  );
+}
+
 function GroupWideTab({
   groupId,
   programName,
   programStartDate,
   referenceMesocycleId,
-  discipline,
   onFeedback,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   referenceMesocycleId: string;
-  discipline: string;
   onFeedback: (message: string) => void;
 }) {
   const { data, isPending, error, refetch } = useMesocycle(referenceMesocycleId);
-  const esCrossfit = discipline.toLowerCase() === "crossfit";
 
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -500,50 +614,16 @@ function GroupWideTab({
         tengan ese ejercicio en esa fecha — cada quien conserva su propio peso salvo que lo
         cambies explícitamente aquí.
       </p>
-      {sessions.map((session) => {
-        const bloques = groupByBlock(session.sets, session.block_order);
-        return (
-          <DateAccordion key={session.id} label={shortDate(session.scheduled_date)}>
-            {esCrossfit && (
-              <BulkWodFormatCard
-                groupId={groupId}
-                programName={programName}
-                programStartDate={programStartDate}
-                scheduledDate={session.scheduled_date}
-                currentFormat={session.wod_format}
-                currentTimeCapSeconds={session.wod_time_cap_seconds}
-                onFeedback={onFeedback}
-              />
-            )}
-            {session.sets.length === 0 && <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>}
-            {bloques.map((bloque, indiceBloque) => (
-              <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
-                {bloque.label && (
-                  <p className="text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
-                )}
-                {bloque.groups.map((group, index) => (
-                  <BulkExerciseBlock
-                    key={`${group.name}-${index}`}
-                    groupId={groupId}
-                    programName={programName}
-                    programStartDate={programStartDate}
-                    scheduledDate={session.scheduled_date}
-                    group={group}
-                    onFeedback={onFeedback}
-                  />
-                ))}
-              </div>
-            ))}
-            <BulkAddForm
-              groupId={groupId}
-              programName={programName}
-              programStartDate={programStartDate}
-              scheduledDate={session.scheduled_date}
-              onFeedback={onFeedback}
-            />
-          </DateAccordion>
-        );
-      })}
+      {sessions.map((session) => (
+        <GroupDateSection
+          key={session.id}
+          groupId={groupId}
+          programName={programName}
+          programStartDate={programStartDate}
+          session={session}
+          onFeedback={onFeedback}
+        />
+      ))}
     </div>
   );
 }
@@ -692,7 +772,6 @@ export default function GroupProgramDetail() {
           programName={program.name}
           programStartDate={program.start_date}
           referenceMesocycleId={referenceId}
-          discipline={program.discipline}
           onFeedback={setToast}
         />
       )}

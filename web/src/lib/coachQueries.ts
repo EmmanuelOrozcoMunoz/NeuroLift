@@ -13,6 +13,7 @@ import type {
   GroupBulkDeletePayload,
   GroupBulkUpdatePayload,
   GroupBulkWodFormatPayload,
+  GroupBulkWodNotesPayload,
   GroupDetail,
   GroupMesocycleProgram,
   GroupProgramDeletePayload,
@@ -30,6 +31,7 @@ import type {
   TrainingSession,
   User,
   WodDaySummary,
+  WodFormatPayload,
   WodLeaderboardRow,
 } from "@/lib/types";
 
@@ -198,6 +200,17 @@ export function useGroupBulkSetWodFormat(groupId: string) {
   });
 }
 
+/** Escribe (o borra) la descripción libre del WOD para TODO el grupo a la vez, en una fecha
+ *  dada — mismo motivo que useGroupBulkSetWodFormat, para el bloque Metabólico/WOD. */
+export function useGroupBulkSetWodNotes(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupBulkWodNotesPayload) =>
+      apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-wod-notes`, { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
+  });
+}
+
 /** Fechas del grupo con un WOD prescrito — para elegir cuál ver en la tabla de posiciones. */
 export function useGroupWodDays(groupId: string | undefined): UseQueryResult<WodDaySummary[]> {
   return useQuery({
@@ -311,7 +324,7 @@ export function useUpdateSessionMeta(mesocycleId: string) {
       body,
     }: {
       sessionId: string;
-      body: { block_order?: string | null; warmup_notes?: string | null };
+      body: { block_order?: string | null; warmup_notes?: string | null; wod_notes?: string | null };
     }) => apiFetch<TrainingSession>(`/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) }),
   });
@@ -383,6 +396,34 @@ export function useDeletePlanSet(planId: string) {
   return useMutation({
     mutationFn: (setId: string) =>
       apiFetch<MessageResponse>(`/plans/${planId}/sets/${setId}`, { method: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
+  });
+}
+
+/** Metadatos de un día del plan aparte de sus series -- hoy solo se usa para wod_notes (texto
+ *  libre del bloque Metabólico/WOD). No reutiliza PUT /sessions/{id}/meta porque un plan no
+ *  tiene dueño (Mesocycle.user_id=None) y ese endpoint general lo exige. */
+export function useUpdatePlanSessionMeta(planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      body,
+    }: {
+      sessionId: string;
+      body: { wod_notes?: string | null };
+    }) => apiFetch<TrainingSession>(`/plans/${planId}/sessions/${sessionId}/meta`, { method: "PUT", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
+  });
+}
+
+/** Fija (o quita) el formato de WOD y su timer/time cap de un día del plan -- mismo motivo que
+ *  useUpdatePlanSessionMeta arriba. */
+export function useSetPlanSessionWodFormat(planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, body }: { sessionId: string; body: WodFormatPayload }) =>
+      apiFetch<MessageResponse>(`/plans/${planId}/sessions/${sessionId}/wod-format`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
   });
 }

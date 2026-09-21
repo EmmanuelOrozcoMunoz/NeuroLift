@@ -52,11 +52,16 @@ export interface SessionBlockGroup {
  * del canónico de BLOCK_KEYS. Cualquier bloque presente pero ausente de esa lista (ej. porque se
  * agregó un ejercicio de un bloque nuevo después de fijar el orden) cae al final, en su posición
  * canónica — así nunca desaparece un bloque por no estar en la lista guardada.
+ *
+ * `forceMetcon` asegura que el bloque "metcon" (Metabólico) exista en el resultado aunque
+ * ningún Set real lleve ese bloque -- así el llamador puede mostrar ahí el texto libre + puntaje
+ * de `Session.wod_notes`/`wod_format` (ver WodBlockCard) para una sesión que todavía no tiene
+ * ejercicios estructurados en ese bloque, sin perder los que ya existan.
  */
-export function groupByBlock(sets: SetItem[], blockOrder?: string | null): SessionBlockGroup[] {
+export function groupByBlock(sets: SetItem[], blockOrder?: string | null, forceMetcon?: boolean): SessionBlockGroup[] {
   const ordered = [...sets].sort((a, b) => a.set_order - b.set_order);
   const anyBlocked = ordered.some((set) => set.block);
-  if (!anyBlocked) {
+  if (!anyBlocked && !forceMetcon) {
     return [{ key: null, label: "", groups: groupSets(ordered) }];
   }
 
@@ -66,6 +71,9 @@ export function groupByBlock(sets: SetItem[], blockOrder?: string | null): Sessi
     const list = buckets.get(key);
     if (list) list.push(set);
     else buckets.set(key, [set]);
+  }
+  if (forceMetcon && !buckets.has("metcon")) {
+    buckets.set("metcon", []);
   }
 
   const customOrder = (blockOrder ?? "").split(",").filter(Boolean);
