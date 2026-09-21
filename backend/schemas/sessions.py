@@ -67,6 +67,12 @@ class SessionAdaptRequest(SanitizedModel):
     available_minutes: int = Field(..., ge=10, le=180)
 
 
+class PersonalSessionCreate(SanitizedModel):
+    """El propio atleta (sin coach de por medio) pide una sesión para una fecha, para llevar su
+    registro manual. Ver POST /users/me/personal-sessions."""
+    scheduled_date: date
+
+
 class SessionMetaUpdate(SanitizedModel):
     """Metadatos de la sesión que el coach puede ajustar aparte de sus series: en qué orden se
     muestran los bloques, y las pautas de calentamiento. Ambos opcionales -- cada uno se guarda

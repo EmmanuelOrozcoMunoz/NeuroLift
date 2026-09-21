@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { IconCheck, IconClock, IconSpark } from "@/components/icons";
@@ -208,9 +208,20 @@ export default function SessionDetail() {
         </Card>
       )}
 
+      {data?.is_self_managed && (
+        <Link
+          to={`/entrenos/${mesocycleId}/sesion/${activa.id}/editar`}
+          className="mb-4 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+        >
+          <span className="font-semibold">✏️ {activa.sets.length === 0 ? "Agregar ejercicios" : "Editar ejercicios"}</span>
+        </Link>
+      )}
+
       {activa.sets.length === 0 ? (
         <EmptyState title="Sin ejercicios asignados">
-          Tu coach todavía no cargó los ejercicios de este día.
+          {data?.is_self_managed
+            ? "Todavía no has agregado ejercicios a esta sesión."
+            : "Tu coach todavía no cargó los ejercicios de este día."}
         </EmptyState>
       ) : (
         <div className="space-y-5">

@@ -134,6 +134,19 @@ def ensure_owner_or_coach(db: Session, owner_id: UUID | None, current_user: mode
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
 
 
+def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, current_user: models.User):
+    """Como ensure_owner_or_coach, pero además: si quien edita ES el propio atleta (no su coach
+    ni un admin), solo puede hacerlo sobre un mesociclo que él mismo creó a mano
+    (is_self_managed) -- uno que le prescribió su coach sigue siendo editable solo por el
+    coach, aunque el atleta sea su "dueño" en el sentido de a quién pertenece."""
+    ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+    if current_user.role == "athlete" and not mesocycle.is_self_managed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta sesión la prescribió tu coach — solo tu coach puede editarla",
+        )
+
+
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "?"
 

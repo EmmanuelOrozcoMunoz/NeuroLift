@@ -44,6 +44,7 @@ class MesocycleSummaryResponse(BaseModel):
     created_at: Optional[datetime] = None
     description: Optional[str] = None
     level: Optional[str] = None
+    is_self_managed: bool = False
 
     class Config:
         from_attributes = True
@@ -62,6 +63,7 @@ class MesocycleFullResponse(BaseModel):
     is_template: bool = False
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     is_preview: bool = False  # ver PlanPreviewResponse: esta es SIEMPRE la versión completa
+    is_self_managed: bool = False
     sessions: List[SessionResponse] = []  # ¡Aquí anidamos las sesiones!
 
     class Config:

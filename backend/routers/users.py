@@ -251,6 +251,47 @@ def update_my_preferences(
     return current_user
 
 
+@router.post("/users/me/personal-sessions", response_model=schemas.SessionResponse)
+def crear_sesion_personal(
+    req: schemas.PersonalSessionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Cualquier atleta (tenga coach o no) puede llevar su propio registro manual, sin depender
+    de que alguien le programe algo -- esto NO reemplaza lo que prescribe su coach, es aparte.
+    Usa (o crea la primera vez) un único mesociclo "de bolsillo" marcado is_self_managed=True
+    para ir acumulando ahí sus sesiones sueltas por fecha; si ya existe una sesión personal para
+    esa fecha, se devuelve esa en vez de duplicarla."""
+    meso = (
+        db.query(models.Mesocycle)
+        .filter(models.Mesocycle.user_id == current_user.id, models.Mesocycle.is_self_managed == True)  # noqa: E712
+        .first()
+    )
+    if not meso:
+        meso = models.Mesocycle(
+            user_id=current_user.id,
+            name="Mis entrenamientos",
+            discipline="General",
+            start_date=req.scheduled_date,
+            is_self_managed=True,
+        )
+        db.add(meso)
+        db.flush()
+
+    sesion = (
+        db.query(models.Session)
+        .filter(models.Session.mesocycle_id == meso.id, models.Session.scheduled_date == req.scheduled_date)
+        .first()
+    )
+    if not sesion:
+        sesion = models.Session(mesocycle_id=meso.id, scheduled_date=req.scheduled_date)
+        db.add(sesion)
+
+    db.commit()
+    db.refresh(sesion)
+    return sesion
+
+
 @router.get("/users/{user_id}/avatar")
 def get_user_avatar(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)

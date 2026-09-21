@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models, schemas
-from backend.core.security import ensure_owner_or_coach, get_current_user, require_coach
+from backend.core.security import ensure_owner_or_coach_editable, get_current_user
 from backend.database import get_db
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
@@ -16,8 +16,10 @@ def update_set(
     set_id: UUID,
     set_update: schemas.SetUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_coach),
+    current_user: models.User = Depends(get_current_user),
 ):
+    """El coach edita lo que prescribió; el atleta también puede, pero solo en un mesociclo que
+    él mismo creó a mano (is_self_managed) -- ver ensure_owner_or_coach_editable."""
     db_set = (
         db.query(models.Set)
         .options(joinedload(models.Set.session).joinedload(models.Session.mesocycle))
@@ -26,7 +28,7 @@ def update_set(
     )
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie (Set) no encontrada")
-    ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
+    ensure_owner_or_coach_editable(db, db_set.session.mesocycle, current_user)
 
     # Nombre de referencia para resolver el % de 1RM: el que se está escribiendo ahora, o si no
     # cambia, el que ya tenía el ejercicio (se calcula ANTES de tocar exercise_id).
@@ -65,7 +67,7 @@ def agregar_serie(
     session_id: UUID,
     req: schemas.SetCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_coach),
+    current_user: models.User = Depends(get_current_user),
 ):
     sesion = (
         db.query(models.Session)
@@ -75,7 +77,7 @@ def agregar_serie(
     )
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
-    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ensure_owner_or_coach_editable(db, sesion.mesocycle, current_user)
 
     ejercicio = db.query(models.Exercise).filter(models.Exercise.name == req.exercise_name).first()
     if not ejercicio:
@@ -110,7 +112,7 @@ def agregar_serie(
 
 
 @router.delete("/sets/{set_id}")
-def delete_set(set_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
+def delete_set(set_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_set = (
         db.query(models.Set)
         .options(joinedload(models.Set.session).joinedload(models.Session.mesocycle))
@@ -119,7 +121,7 @@ def delete_set(set_id: UUID, db: Session = Depends(get_db), current_user: models
     )
     if not db_set:
         raise HTTPException(status_code=404, detail="Serie no encontrada")
-    ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
+    ensure_owner_or_coach_editable(db, db_set.session.mesocycle, current_user)
 
     db.delete(db_set)
     db.commit()
