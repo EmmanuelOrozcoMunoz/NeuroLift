@@ -281,6 +281,20 @@ export function useUpdateMyPreferences() {
   });
 }
 
+/** Crea (o recupera, si ya existía) la sesión personal del atleta para una fecha -- su propio
+ *  registro manual, sin depender de un coach. Ver POST /users/me/personal-sessions. */
+export function useCreatePersonalSession(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (scheduled_date: string) =>
+      apiFetch<TrainingSession>("/users/me/personal-sessions", { method: "POST", body: { scheduled_date } }),
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(session.mesocycle_id) });
+    },
+  });
+}
+
 // -------------------------------------------------------------------- fit level
 
 export function useFitnessLevel(userId: string): UseQueryResult<FitnessLevel> {

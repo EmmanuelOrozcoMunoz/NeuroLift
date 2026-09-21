@@ -14,7 +14,15 @@ const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
  * programada; lima si ya se completó (mismo color que el resto de la app usa para "Hecho"),
  * violeta si todavía está pendiente. El círculo violeta marca el día de hoy.
  */
-export function TrainingCalendar({ sessions }: { sessions: TrainingSession[] }) {
+export function TrainingCalendar({
+  sessions,
+  onEmptyDayTap,
+}: {
+  sessions: TrainingSession[];
+  /** Si se pasa, un día del mes actual sin sesión también se puede tocar (para que el atleta
+   *  agregue ahí su propia rutina manual) en vez de quedar inerte. */
+  onEmptyDayTap?: (iso: string) => void;
+}) {
   const navigate = useNavigate();
   const today = todayIso();
   const now = new Date();
@@ -79,13 +87,14 @@ export function TrainingCalendar({ sessions }: { sessions: TrainingSession[] }) 
           const isToday = iso === today;
           const hasCompleted = daySessions.some((s) => s.status === "completed");
           const hasSession = daySessions.length > 0;
+          const canTapEmpty = !hasSession && inMonth && Boolean(onEmptyDayTap);
 
           return (
             <button
               key={iso}
               type="button"
-              disabled={!hasSession}
-              onClick={() => handleSelectDay(daySessions)}
+              disabled={!hasSession && !canTapEmpty}
+              onClick={() => (hasSession ? handleSelectDay(daySessions) : onEmptyDayTap?.(iso))}
               className="flex flex-col items-center gap-1 py-0.5"
             >
               <span

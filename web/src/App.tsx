@@ -23,6 +23,7 @@ import CoachSessionEditor from "@/routes/coach/SessionEditor";
 import Login from "@/routes/Login";
 import MesocycleDetail from "@/routes/MesocycleDetail";
 import Mesocycles from "@/routes/Mesocycles";
+import MyPersonalSessionEditor from "@/routes/MyPersonalSessionEditor";
 import PlanDetail from "@/routes/PlanDetail";
 import Plans from "@/routes/Plans";
 import Profile from "@/routes/Profile";
@@ -134,6 +135,14 @@ export default function App() {
           element={
             <RoleGate role="athlete">
               <SessionDetail />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/entrenos/:mesocycleId/sesion/:sessionId/editar"
+          element={
+            <RoleGate role="athlete">
+              <MyPersonalSessionEditor />
             </RoleGate>
           }
         />
