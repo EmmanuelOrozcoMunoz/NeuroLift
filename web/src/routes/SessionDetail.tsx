@@ -18,7 +18,7 @@ import {
   Toast,
 } from "@/components/ui";
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
-import { useAdaptSession, useCompleteSession, useMesocycle } from "@/lib/queries";
+import { useAdaptSession, useCompleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
@@ -49,6 +49,7 @@ export default function SessionDetail() {
 
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
+  const descompletar = useUncompleteSession();
 
   const sesiones = data?.sessions ?? [];
   const objetivo = sesiones.find((session) => session.id === sessionId);
@@ -110,6 +111,16 @@ export default function SessionDetail() {
           setToast("¡Entrenamiento registrado! Buen trabajo 💪");
         },
       },
+    );
+  }
+
+  // Por si "Terminar entrenamiento" se tocó sin querer -- confirma porque revertir el estado
+  // de la sesión no es algo que uno quiera deshacer sin querer también.
+  function deshacerCompletado() {
+    if (!window.confirm("¿Deshacer esta sesión completada? Volverá a quedar pendiente.")) return;
+    descompletar.mutate(
+      { mesocycleId: mesocycleId!, sessionId: activa!.id },
+      { onSuccess: () => setToast("Sesión revertida a pendiente.") },
     );
   }
 
@@ -255,9 +266,10 @@ export default function SessionDetail() {
           variant={completada ? "secondary" : "done"}
           full
           className="mt-3"
-          loading={completar.isPending}
+          loading={completar.isPending || descompletar.isPending}
           onClick={() => {
-            if (!completada && pideResultadoAparte) abrirRegistroDeResultado();
+            if (completada) deshacerCompletado();
+            else if (pideResultadoAparte) abrirRegistroDeResultado();
             else completarConResultado();
           }}
         >
@@ -275,6 +287,9 @@ export default function SessionDetail() {
         <p className="mt-2 text-center text-xs text-muted">
           Te faltan {total - logged} series por registrar. Puedes terminar igual.
         </p>
+      )}
+      {completada && (
+        <p className="mt-2 text-center text-xs text-muted">¿Te equivocaste? Toca el botón para deshacerlo.</p>
       )}
 
       <Sheet open={sheetAbierta} onClose={() => setSheetAbierta(false)} title="¿Cuánto tiempo tienes?">

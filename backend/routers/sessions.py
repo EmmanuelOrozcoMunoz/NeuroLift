@@ -126,6 +126,41 @@ def complete_session(
     return {"message": "Sesión marcada como completada"}
 
 
+@router.post("/{session_id}/uncomplete")
+def uncomplete_session(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Deshace un "Terminar entrenamiento" hecho sin querer -- vuelve la sesión a "pendiente" y
+    borra el resultado del WOD que se hubiera reportado (no solo el estado), para que si se
+    vuelve a completar no quede un resultado viejo mezclado con uno nuevo. NO toca las series
+    individuales (actual_reps/actual_weight de cada Set): eso se deshace por separado, serie por
+    serie, con PUT /sets/{id}/log mandando null."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+
+    sesion.status = "pending"
+    sesion.completed_date = None
+    sesion.wod_time_seconds = None
+    sesion.wod_rounds = None
+    sesion.wod_extra_reps = None
+    sesion.wod_emom_completed = None
+    sesion.wod_calories = None
+    sesion.wod_distance_meters = None
+    sesion.wod_watts = None
+    db.commit()
+    return {"message": "Se deshizo la sesión completada"}
+
+
 @router.post("/{session_id}/adapt", response_model=schemas.SessionResponse)
 @limiter.limit("10/hour")
 def adapt_session_to_available_time(

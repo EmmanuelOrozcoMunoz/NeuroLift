@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { BarbellPlates } from "@/components/BarbellPlates";
-import { IconCheck, IconDumbbell } from "@/components/icons";
+import { IconCheck, IconDumbbell, IconTrash } from "@/components/icons";
 import { Spinner, Stepper, cx } from "@/components/ui";
 import { useLogSet } from "@/lib/queries";
 import { isSetLogged, loadLabel } from "@/lib/sessions";
@@ -45,23 +45,40 @@ export function SetRow({
     setEditing(false);
   }
 
+  // Deshace un registro hecho sin querer: manda null (no 0) para que la serie vuelva a
+  // "pendiente" de verdad, no a "0 reps a 0 kg" (isSetLogged distingue null de 0).
+  function undo() {
+    logSet.mutate({ mesocycleId, setId: set.id, actual_reps: null, actual_weight: null });
+  }
+
   if (!expanded) {
     return (
-      <button
-        type="button"
-        disabled={readOnly}
-        onClick={() => setEditing(true)}
-        className="flex w-full items-center gap-3 rounded-xl bg-done-soft/60 px-3 py-2.5 text-left"
-      >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-done text-ink">
-          <IconCheck className="h-3.5 w-3.5" />
-        </span>
-        <span className="text-sm font-semibold text-muted">Serie {index}</span>
-        <span className="grow text-right text-sm font-bold tabular-nums">
-          {set.actual_reps} reps
-          {set.actual_weight ? ` · ${formatWeight(set.actual_weight, unit)}` : ""}
-        </span>
-      </button>
+      <div className="flex w-full items-center gap-2 rounded-xl bg-done-soft/60 px-3 py-2.5">
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => setEditing(true)}
+          className="flex grow items-center gap-3 text-left"
+        >
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-done text-ink">
+            <IconCheck className="h-3.5 w-3.5" />
+          </span>
+          <span className="text-sm font-semibold text-muted">Serie {index}</span>
+          <span className="grow text-right text-sm font-bold tabular-nums">
+            {set.actual_reps} reps
+            {set.actual_weight ? ` · ${formatWeight(set.actual_weight, unit)}` : ""}
+          </span>
+        </button>
+        <button
+          type="button"
+          disabled={readOnly || logSet.isPending}
+          onClick={undo}
+          aria-label={`Deshacer registro de la serie ${index}`}
+          className="shrink-0 rounded-lg p-1.5 text-muted active:bg-danger/10 active:text-danger disabled:opacity-40"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
     );
   }
 
