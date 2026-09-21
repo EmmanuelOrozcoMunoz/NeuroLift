@@ -561,7 +561,13 @@ function AthleteTab({
   if (isPending) return <LoadingList rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-  const sessions = [...(data?.sessions ?? [])].sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  // Una sesión "adaptada al tiempo" (el atleta tocó "¿Tienes menos tiempo hoy?") vive el mismo
+  // día que su original y apunta a ella con parent_session_id — sin filtrarla aquí, el coach ve
+  // dos tarjetas con la misma fecha y parece un día duplicado. El coach edita la original; la
+  // adaptada la genera y regenera la IA a demanda, no tiene sentido editarla aparte.
+  const sessions = [...(data?.sessions ?? [])]
+    .filter((s) => !s.parent_session_id)
+    .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
 
   return (
     <div className="space-y-3">
