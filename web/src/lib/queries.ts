@@ -64,7 +64,10 @@ export function useMesocyclesWithSessions(userId: string): {
 
   const isPending = mesocycles.isPending || details.some((d) => d.isPending);
   const error = (mesocycles.error as Error | null) ?? (details.find((d) => d.error)?.error as Error | undefined) ?? null;
-  const sessions = details.flatMap((d) => d.data?.sessions ?? []);
+  // Una sesión "adaptada al tiempo" vive el mismo día que su original (parent_session_id) --
+  // sin filtrarla, un día con adaptación aparecería con dos sesiones/puntos en el calendario.
+  // El toggle Normal/Adaptada para elegir cuál seguir vive dentro de la sesión, no aquí.
+  const sessions = details.flatMap((d) => d.data?.sessions ?? []).filter((s) => !s.parent_session_id);
 
   return { sessions, isPending, error };
 }
