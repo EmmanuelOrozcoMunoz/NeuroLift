@@ -166,6 +166,11 @@ class Session(Base):
     # al atleta ANTES del primer bloque de series. Distinto de athlete_notes (ese lo llena la IA
     # con el enfoque general de la sesión; este lo escribe el coach a mano para el calentamiento).
     warmup_notes = Column(Text, nullable=True)
+    # Descripción libre del WOD/entrenamiento en texto plano (ej. "21-15-9 thrusters 42kg,
+    # pull-ups — por tiempo, cap 12 min") — para cuando el formato rígido de ejercicios/series
+    # (Set: nombre + reps/peso fijos) no alcanza para capturar cómodamente un WOD de CrossFit.
+    # No reemplaza a los Sets: coexiste con ellos, el atleta/coach usa el que le sirva.
+    wod_notes = Column(Text, nullable=True)
 
     # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
     # El coach prescribe el formato (y opcionalmente un time cap/duración) al programar la

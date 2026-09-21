@@ -16,113 +16,6 @@ import type { TrainingSession, WodFormat } from "@/lib/types";
  *  registradas del atleta), o sin carga (peso en 0/null). */
 type TipoCarga = "kg" | "porcentaje" | "libre";
 
-/** El coach marca (o quita) el formato de WOD de esta sesión, y opcionalmente un timer (cap
- *  duro para "Por tiempo", duración de la ventana para los demás formatos que lo admiten) — el
- *  atleta lo ve al completarla y reporta el resultado que corresponda. */
-function WodFormatCard({
-  mesocycleId,
-  session,
-  onSaved,
-}: {
-  mesocycleId: string;
-  session: TrainingSession;
-  onSaved: () => void;
-}) {
-  const setWodFormat = useSetWodFormat(mesocycleId);
-  const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
-  const [timerMin, setTimerMin] = useState(Math.round((session.wod_time_cap_seconds ?? 0) / 60));
-
-  function guardar(formato: WodFormat | "", minutos: number) {
-    setWodFormat.mutate(
-      {
-        sessionId: session.id,
-        body: {
-          wod_format: formato || null,
-          time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
-        },
-      },
-      { onSuccess: onSaved },
-    );
-  }
-
-  function elegir(valor: WodFormat) {
-    const nuevo = seleccionado === valor ? "" : valor;
-    setSeleccionado(nuevo);
-    guardar(nuevo, timerMin);
-  }
-
-  return (
-    <Card>
-      <p className="mb-2 text-sm font-semibold text-muted">🔥 Formato del WOD (opcional)</p>
-
-      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        ⏱ Plantillas rápidas
-      </p>
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        {WOD_TIMER_TEMPLATES.map((opcion) => (
-          <button
-            key={opcion.value}
-            type="button"
-            disabled={setWodFormat.isPending}
-            onClick={() => elegir(opcion.value)}
-            className={cx(
-              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
-              seleccionado === opcion.value
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-line bg-surface-2 text-fg",
-            )}
-          >
-            <p className="text-sm font-bold">{opcion.label}</p>
-            <p className="text-xs text-muted">{opcion.hint}</p>
-          </button>
-        ))}
-      </div>
-
-      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        Otros tipos de resultado
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {WOD_OTHER_SCORE_TYPES.map((opcion) => (
-          <button
-            key={opcion.value}
-            type="button"
-            disabled={setWodFormat.isPending}
-            onClick={() => elegir(opcion.value)}
-            className={cx(
-              "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
-              seleccionado === opcion.value
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-line bg-surface-2 text-fg",
-            )}
-          >
-            <p className="text-sm font-bold">{opcion.label}</p>
-            <p className="text-xs text-muted">{opcion.hint}</p>
-          </button>
-        ))}
-      </div>
-
-      {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
-        <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-1.5 text-xs font-medium text-muted">
-            ⏱ Timer / time cap (min) — opcional
-          </p>
-          <Stepper
-            value={timerMin}
-            onChange={(v) => {
-              setTimerMin(v);
-              guardar(seleccionado, v);
-            }}
-            min={0}
-            max={90}
-            suffix="min"
-            compact
-          />
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function ExerciseBlock({
   mesocycleId,
   sessionId,
@@ -416,6 +309,146 @@ function WarmupNotesCard({
   );
 }
 
+/** Dentro del bloque Metabólico: en vez (o además) del esquema rígido de ejercicios/series
+ *  (nombre + reps/peso fijos), se puede escribir el WOD tal cual en texto libre y elegir cómo se
+ *  puntúa -- respaldado por Session.wod_notes/wod_format directamente, no por Sets. Convive con
+ *  los ejercicios estructurados que ya tenga ese mismo bloque (ver SessionSetsEditor). */
+function WodBlockCard({
+  mesocycleId,
+  session,
+  onSaved,
+  onRemoved,
+}: {
+  mesocycleId: string;
+  session: TrainingSession;
+  onSaved: () => void;
+  onRemoved: () => void;
+}) {
+  const updateMeta = useUpdateSessionMeta(mesocycleId);
+  const setWodFormat = useSetWodFormat(mesocycleId);
+  const [texto, setTexto] = useState(session.wod_notes ?? "");
+  const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
+  const [timerMin, setTimerMin] = useState(Math.round((session.wod_time_cap_seconds ?? 0) / 60));
+
+  function guardarTexto() {
+    if (texto === (session.wod_notes ?? "")) return;
+    updateMeta.mutate({ sessionId: session.id, body: { wod_notes: texto.trim() || "" } }, { onSuccess: onSaved });
+  }
+
+  function guardarFormato(formato: WodFormat | "", minutos: number) {
+    setWodFormat.mutate(
+      {
+        sessionId: session.id,
+        body: {
+          wod_format: formato || null,
+          time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+        },
+      },
+      { onSuccess: onSaved },
+    );
+  }
+
+  function elegir(valor: WodFormat) {
+    const nuevo = seleccionado === valor ? "" : valor;
+    setSeleccionado(nuevo);
+    guardarFormato(nuevo, timerMin);
+  }
+
+  function quitar() {
+    if (!window.confirm("¿Borrar la descripción libre y el puntaje del WOD?")) return;
+    updateMeta.mutate({ sessionId: session.id, body: { wod_notes: "" } });
+    setWodFormat.mutate({ sessionId: session.id, body: { wod_format: null, time_cap_seconds: null } });
+    onRemoved();
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-muted">📋 Escribir el WOD como texto (opcional)</p>
+        <button
+          type="button"
+          onClick={quitar}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10"
+          aria-label="Borrar descripción y puntaje del WOD"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
+
+      <textarea
+        rows={3}
+        maxLength={2000}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={guardarTexto}
+        placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+      />
+
+      <div className="mt-3 border-t border-line pt-3">
+        <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+          Puntuación (opcional)
+        </p>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          {WOD_TIMER_TEMPLATES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={setWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {WOD_OTHER_SCORE_TYPES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={setWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
+        </div>
+
+        {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
+          <div className="mt-3 border-t border-line pt-3">
+            <p className="mb-1.5 text-xs font-medium text-muted">⏱ Timer / time cap (min) — opcional</p>
+            <Stepper
+              value={timerMin}
+              onChange={(v) => {
+                setTimerMin(v);
+                guardarFormato(seleccionado, v);
+              }}
+              min={0}
+              max={90}
+              suffix="min"
+              compact
+            />
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /** El orden en que se muestran los bloques de ESTA sesión — el coach lo sube/baja con flechas
  *  (nada de drag-and-drop: más fácil de acertar con el dedo). Solo aparece si hay 2+ bloques. */
 function BlockOrderEditor({
@@ -480,7 +513,6 @@ function BlockOrderEditor({
  *  dentro de un programa de grupo. */
 export function SessionSetsEditor({
   mesocycleId,
-  discipline,
   session,
   onFeedback,
 }: {
@@ -489,9 +521,10 @@ export function SessionSetsEditor({
   session: TrainingSession;
   onFeedback: (message: string) => void;
 }) {
-  const bloques = groupByBlock(session.sets, session.block_order);
-  const esCrossfit = discipline.toLowerCase() === "crossfit";
+  const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  const bloques = groupByBlock(session.sets, session.block_order, forzarMetcon);
   const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
+  const tieneMetcon = bloques.some((b) => b.key === "metcon");
 
   return (
     <div className="space-y-4">
@@ -506,18 +539,21 @@ export function SessionSetsEditor({
         blockKeys={blockKeys}
         onSaved={() => onFeedback("¡Orden de bloques actualizado!")}
       />
-      {esCrossfit && (
-        <WodFormatCard
-          mesocycleId={mesocycleId}
-          session={session}
-          onSaved={() => onFeedback("Formato de WOD actualizado.")}
-        />
+      {session.sets.length === 0 && !tieneMetcon && (
+        <EmptyState title="Esta sesión todavía no tiene ejercicios" />
       )}
-      {session.sets.length === 0 && <EmptyState title="Esta sesión todavía no tiene ejercicios" />}
       {bloques.map((bloque, indiceBloque) => (
         <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
           {bloque.label && (
             <p className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+          )}
+          {bloque.key === "metcon" && (
+            <WodBlockCard
+              mesocycleId={mesocycleId}
+              session={session}
+              onSaved={() => onFeedback("¡WOD guardado!")}
+              onRemoved={() => setForzarMetcon(false)}
+            />
           )}
           {bloque.groups.map((group, index) => (
             <ExerciseBlock
@@ -535,6 +571,15 @@ export function SessionSetsEditor({
         sessionId={session.id}
         onAdded={() => onFeedback("¡Ejercicio añadido!")}
       />
+      {!tieneMetcon && (
+        <button
+          type="button"
+          onClick={() => setForzarMetcon(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
+        >
+          🔥 Añadir bloque metabólico (WOD)
+        </button>
+      )}
     </div>
   );
 }

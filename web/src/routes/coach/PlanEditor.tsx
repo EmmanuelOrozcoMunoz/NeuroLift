@@ -6,12 +6,20 @@ import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
 import { CoverUploader } from "@/components/CoverImage";
 import { IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
-import { coachKeys, useAddPlanSet, useDeletePlanSet, useUpdatePlan } from "@/lib/coachQueries";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast, cx } from "@/components/ui";
+import {
+  coachKeys,
+  useAddPlanSet,
+  useDeletePlanSet,
+  useSetPlanSessionWodFormat,
+  useUpdatePlan,
+  useUpdatePlanSessionMeta,
+} from "@/lib/coachQueries";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock, groupSummary } from "@/lib/sessions";
 import { useWeightUnit, WeightStepper } from "@/lib/units";
-import type { MesocycleFull, PlanLevel, SetItem } from "@/lib/types";
+import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
+import type { MesocycleFull, PlanLevel, TrainingSession, WodFormat } from "@/lib/types";
 
 type TipoCarga = "porcentaje" | "kg" | "libre";
 
@@ -129,22 +137,164 @@ function EditPlanSheet({
   );
 }
 
+/** Dentro del bloque Metabólico de un día del plan: en vez (o además) del esquema rígido de
+ *  ejercicios/series, se escribe el WOD tal cual en texto libre y se elige cómo se puntúa --
+ *  mismo criterio que WodBlockCard en SessionSetsEditor.tsx, pero contra los endpoints propios
+ *  de planes (un plan no tiene dueño, así que no puede usar los endpoints generales de sesión). */
+function PlanWodBlockCard({
+  planId,
+  session,
+  onSaved,
+  onRemoved,
+}: {
+  planId: string;
+  session: TrainingSession;
+  onSaved: () => void;
+  onRemoved: () => void;
+}) {
+  const updateMeta = useUpdatePlanSessionMeta(planId);
+  const setWodFormat = useSetPlanSessionWodFormat(planId);
+  const [texto, setTexto] = useState(session.wod_notes ?? "");
+  const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
+  const [timerMin, setTimerMin] = useState(Math.round((session.wod_time_cap_seconds ?? 0) / 60));
+
+  function guardarTexto() {
+    if (texto === (session.wod_notes ?? "")) return;
+    updateMeta.mutate({ sessionId: session.id, body: { wod_notes: texto.trim() || "" } }, { onSuccess: onSaved });
+  }
+
+  function guardarFormato(formato: WodFormat | "", minutos: number) {
+    setWodFormat.mutate(
+      {
+        sessionId: session.id,
+        body: {
+          wod_format: formato || null,
+          time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+        },
+      },
+      { onSuccess: onSaved },
+    );
+  }
+
+  function elegir(valor: WodFormat) {
+    const nuevo = seleccionado === valor ? "" : valor;
+    setSeleccionado(nuevo);
+    guardarFormato(nuevo, timerMin);
+  }
+
+  function quitar() {
+    if (!window.confirm("¿Borrar la descripción libre y el puntaje del WOD de este día del plan?")) return;
+    updateMeta.mutate({ sessionId: session.id, body: { wod_notes: "" } });
+    setWodFormat.mutate({ sessionId: session.id, body: { wod_format: null, time_cap_seconds: null } });
+    onRemoved();
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-muted">📋 Escribir el WOD como texto (opcional)</p>
+        <button
+          type="button"
+          onClick={quitar}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10"
+          aria-label="Borrar descripción y puntaje del WOD"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
+
+      <textarea
+        rows={3}
+        maxLength={2000}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={guardarTexto}
+        placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+      />
+
+      <div className="mt-3 border-t border-line pt-3">
+        <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+          Puntuación (opcional)
+        </p>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          {WOD_TIMER_TEMPLATES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={setWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {WOD_OTHER_SCORE_TYPES.map((opcion) => (
+            <button
+              key={opcion.value}
+              type="button"
+              disabled={setWodFormat.isPending}
+              onClick={() => elegir(opcion.value)}
+              className={cx(
+                "rounded-xl border px-3 py-2.5 text-left disabled:opacity-60",
+                seleccionado === opcion.value
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-line bg-surface-2 text-fg",
+              )}
+            >
+              <p className="text-sm font-bold">{opcion.label}</p>
+              <p className="text-xs text-muted">{opcion.hint}</p>
+            </button>
+          ))}
+        </div>
+
+        {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
+          <div className="mt-3 border-t border-line pt-3">
+            <p className="mb-1.5 text-xs font-medium text-muted">⏱ Timer / time cap (min) — opcional</p>
+            <Stepper
+              value={timerMin}
+              onChange={(v) => {
+                setTimerMin(v);
+                guardarFormato(seleccionado, v);
+              }}
+              min={0}
+              max={90}
+              suffix="min"
+              compact
+            />
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function DayEditor({
   planId,
-  sessionId,
+  session,
   dayNumber,
-  sets,
   onFeedback,
 }: {
   planId: string;
-  sessionId: string;
+  session: TrainingSession;
   dayNumber: number;
-  sets: SetItem[];
   onFeedback: (message: string) => void;
 }) {
   const addSet = useAddPlanSet(planId);
   const deleteSet = useDeletePlanSet(planId);
-  const bloques = groupByBlock(sets);
+  const sessionId = session.id;
+  const sets = session.sets;
+  const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  const bloques = groupByBlock(sets, undefined, forzarMetcon);
+  const tieneMetcon = bloques.some((b) => b.key === "metcon");
   const unit = useWeightUnit();
 
   const [name, setName] = useState("");
@@ -190,7 +340,7 @@ function DayEditor({
     <Card>
       <p className="mb-3 font-bold">📆 Día {dayNumber}</p>
 
-      {sets.length === 0 ? (
+      {sets.length === 0 && !tieneMetcon ? (
         <p className="mb-3 text-sm text-muted">Todavía sin ejercicios.</p>
       ) : (
         <div className="mb-3 space-y-3">
@@ -198,6 +348,14 @@ function DayEditor({
             <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
               {bloque.label && (
                 <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+              )}
+              {bloque.key === "metcon" && (
+                <PlanWodBlockCard
+                  planId={planId}
+                  session={session}
+                  onSaved={() => onFeedback("¡WOD guardado!")}
+                  onRemoved={() => setForzarMetcon(false)}
+                />
               )}
               <div className="space-y-2">
                 {bloque.groups.map((group, index) => (
@@ -223,7 +381,25 @@ function DayEditor({
               </div>
             </div>
           ))}
+          {!tieneMetcon && (
+            <button
+              type="button"
+              onClick={() => setForzarMetcon(true)}
+              className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+            >
+              🔥 Añadir bloque metabólico (WOD)
+            </button>
+          )}
         </div>
+      )}
+      {sets.length === 0 && !tieneMetcon && (
+        <button
+          type="button"
+          onClick={() => setForzarMetcon(true)}
+          className="mb-3 w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+        >
+          🔥 Añadir bloque metabólico (WOD)
+        </button>
       )}
 
       <div className="space-y-3 border-t border-line pt-3">
@@ -352,9 +528,8 @@ export default function PlanEditor() {
           <DayEditor
             key={session.id}
             planId={planId!}
-            sessionId={session.id}
+            session={session}
             dayNumber={(session.day_offset ?? 0) + 1}
-            sets={session.sets}
             onFeedback={setToast}
           />
         ))}

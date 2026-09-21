@@ -295,6 +295,21 @@ export function useCreatePersonalSession(userId: string) {
   });
 }
 
+/** Elimina un día suelto del calendario personal (y sus ejercicios) -- el backend solo lo
+ *  permite sobre una sesión de un mesociclo is_self_managed (o a un coach/admin sobre lo suyo).
+ *  Ver DELETE /sessions/{id}. */
+export function useDeleteSession(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId }: { mesocycleId: string; sessionId: string }) =>
+      apiFetch<MessageResponse>(`/sessions/${sessionId}`, { method: "DELETE" }),
+    onSuccess: (_data, vars) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(vars.mesocycleId) });
+    },
+  });
+}
+
 // -------------------------------------------------------------------- fit level
 
 export function useFitnessLevel(userId: string): UseQueryResult<FitnessLevel> {

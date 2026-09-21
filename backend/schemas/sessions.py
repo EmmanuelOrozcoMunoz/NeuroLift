@@ -26,6 +26,7 @@ class SessionResponse(BaseModel):
     day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
     block_order: Optional[str] = None  # ej. "warmup,strength,metcon" — ver models.py:Session
     warmup_notes: Optional[str] = None
+    wod_notes: Optional[str] = None
     # --- resultado del WOD/metcon, ver models.py:Session ---
     wod_format: Optional[str] = None
     wod_time_cap_seconds: Optional[int] = None
@@ -79,3 +80,4 @@ class SessionMetaUpdate(SanitizedModel):
     solo si vino en la petición, igual que UserPreferencesUpdate."""
     block_order: str | None = Field(None, max_length=200)
     warmup_notes: str | None = Field(None, max_length=1000)
+    wod_notes: str | None = Field(None, max_length=2000)
