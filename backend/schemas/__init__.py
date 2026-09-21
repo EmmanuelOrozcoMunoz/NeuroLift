@@ -16,6 +16,7 @@ from backend.schemas.users import (
 from backend.schemas.fitness import FitnessBenchmarkUpdate, FitnessLevelResponse
 from backend.schemas.sets import ExerciseResponse, SetCreate, SetLogUpdate, SetResponse, SetUpdate
 from backend.schemas.sessions import (
+    PersonalSessionCreate,
     SessionAdaptRequest,
     SessionCompleteRequest,
     SessionCreate,
@@ -68,6 +69,7 @@ __all__ = [
     "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse",
     "FitnessBenchmarkUpdate", "FitnessLevelResponse",
     "ExerciseResponse", "SetCreate", "SetLogUpdate", "SetResponse", "SetUpdate",
+    "PersonalSessionCreate",
     "SessionAdaptRequest", "SessionCompleteRequest", "SessionCreate", "SessionMetaUpdate", "SessionResponse", "WodFormatUpdate",
     "MesocycleCreate", "MesocycleFullResponse", "MesocycleManualCreate", "MesocycleManualGroupCreate",
     "MesocycleResponse", "MesocycleSummaryResponse",

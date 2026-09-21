@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 
 from backend import ai_agent, models, schemas
-from backend.core.security import ensure_owner_or_coach, get_current_user, limiter, require_coach
+from backend.core.security import (
+    ensure_owner_or_coach,
+    ensure_owner_or_coach_editable,
+    get_current_user,
+    limiter,
+    require_coach,
+)
 from backend.database import get_db
 from backend.routers.exercise_helpers import clean_ai_block, get_or_create_exercise
 
@@ -61,10 +67,11 @@ def update_session_meta(
     session_id: UUID,
     req: schemas.SessionMetaUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_coach),
+    current_user: models.User = Depends(get_current_user),
 ):
     """El coach ajusta el orden de los bloques y/o las pautas de calentamiento de esta sesión —
-    aparte de sus series, que se editan por su cuenta (ver routers/sets.py)."""
+    aparte de sus series, que se editan por su cuenta (ver routers/sets.py). El atleta también
+    puede, pero solo en un mesociclo que él mismo creó a mano (is_self_managed)."""
     sesion = (
         db.query(models.Session)
         .options(joinedload(models.Session.mesocycle), joinedload(models.Session.sets).joinedload(models.Set.exercise))
@@ -73,7 +80,7 @@ def update_session_meta(
     )
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
-    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ensure_owner_or_coach_editable(db, sesion.mesocycle, current_user)
 
     if req.block_order is not None:
         sesion.block_order = req.block_order or None

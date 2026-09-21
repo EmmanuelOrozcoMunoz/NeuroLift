@@ -100,6 +100,10 @@ class Mesocycle(Base):
     is_active = Column(Boolean, default=True)
     ai_prompt_context = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # true = el propio atleta lo creó a mano (sin coach), para llevar su registro personal. Solo
+    # el dueño puede agregar/editar/borrar series de un mesociclo así -- uno prescrito por un
+    # coach sigue siendo editable solo por el coach (ver ensure_owner_or_coach_editable).
+    is_self_managed = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # --- PLANES (plantillas vendibles, sin dueño) ---
     # Un "plan" es un Mesocycle con is_template=True y user_id=None: no pertenece a ningún

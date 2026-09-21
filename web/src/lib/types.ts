@@ -153,6 +153,8 @@ export interface MesocycleSummary {
   created_at: string;
   description: string | null;
   level: string | null;
+  /** true = lo creó el propio atleta a mano (sin coach), para su registro personal. */
+  is_self_managed: boolean;
 }
 
 /** GET /mesocycles/{id} y GET /plans/{id} */
@@ -173,6 +175,8 @@ export interface MesocycleFull {
   /** Siempre false aquí — esta es la forma COMPLETA. Ver PlanPreview para la otra mitad de la
    *  unión que puede devolver GET /plans/{id}. */
   is_preview?: false;
+  /** true = el propio atleta lo creó a mano (sin coach), para su registro personal. */
+  is_self_managed: boolean;
   sessions: TrainingSession[];
 }
 
