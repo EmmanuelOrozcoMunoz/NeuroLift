@@ -347,6 +347,58 @@ def delete_set_from_plan(
     return {"message": "Serie eliminada del plan"}
 
 
+@router.put("/{plan_id}/sessions/{session_id}/meta", response_model=schemas.SessionResponse)
+def update_plan_session_meta(
+    plan_id: UUID,
+    session_id: UUID,
+    req: schemas.SessionMetaUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Igual que PUT /sessions/{id}/meta pero para un día de PLAN (plantilla, sin dueño) -- ese
+    endpoint general no sirve aquí porque exige un mesociclo con user_id. Hoy solo se usa para
+    wod_notes (texto libre del bloque Metabólico/WOD del plan, ver WodBlockCard en el frontend)."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+    sesion = db.query(models.Session).filter(
+        models.Session.id == session_id, models.Session.mesocycle_id == plan.id
+    ).first()
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Ese día no pertenece a este plan")
+
+    if req.block_order is not None:
+        sesion.block_order = req.block_order or None
+    if req.warmup_notes is not None:
+        sesion.warmup_notes = req.warmup_notes or None
+    if req.wod_notes is not None:
+        sesion.wod_notes = req.wod_notes or None
+    db.commit()
+    db.refresh(sesion)
+    return sesion
+
+
+@router.put("/{plan_id}/sessions/{session_id}/wod-format", response_model=schemas.MessageResponse)
+def set_plan_session_wod_format(
+    plan_id: UUID,
+    session_id: UUID,
+    req: schemas.WodFormatUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Igual que PUT /sessions/{id}/wod-format pero para un día de PLAN -- mismo motivo que
+    update_plan_session_meta arriba."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+    sesion = db.query(models.Session).filter(
+        models.Session.id == session_id, models.Session.mesocycle_id == plan.id
+    ).first()
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Ese día no pertenece a este plan")
+
+    sesion.wod_format = req.wod_format
+    sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
+    db.commit()
+    return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
+
+
 @router.post("/{plan_id}/acquire")
 def acquire_plan(
     plan_id: UUID,
@@ -393,6 +445,10 @@ def acquire_plan(
             athlete_notes=sesion_plan.athlete_notes,
             status="pending",
             duration_minutes=sesion_plan.duration_minutes,
+            warmup_notes=sesion_plan.warmup_notes,
+            wod_notes=sesion_plan.wod_notes,
+            wod_format=sesion_plan.wod_format,
+            wod_time_cap_seconds=sesion_plan.wod_time_cap_seconds,
         )
         db.add(nueva_sesion)
         db.flush()

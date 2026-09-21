@@ -42,10 +42,12 @@ def set_session_wod_format(
     session_id: UUID,
     req: schemas.WodFormatUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_coach),
+    current_user: models.User = Depends(get_current_user),
 ):
     """El coach marca (o quita) qué formato de WOD tiene esta sesión — así el atleta sabe qué
-    reportar al completarla (tiempo, rondas+reps, o si cumplió el EMOM)."""
+    reportar al completarla (tiempo, rondas+reps, o si cumplió el EMOM). El atleta también puede,
+    pero solo en un mesociclo que él mismo creó a mano (is_self_managed) -- ver el bloque WOD en
+    SessionSetsEditor.tsx, que reutiliza este mismo endpoint para elegir la puntuación."""
     sesion = (
         db.query(models.Session)
         .options(joinedload(models.Session.mesocycle))
@@ -54,7 +56,7 @@ def set_session_wod_format(
     )
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
-    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ensure_owner_or_coach_editable(db, sesion.mesocycle, current_user)
 
     sesion.wod_format = req.wod_format
     sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
@@ -86,9 +88,36 @@ def update_session_meta(
         sesion.block_order = req.block_order or None
     if req.warmup_notes is not None:
         sesion.warmup_notes = req.warmup_notes or None
+    if req.wod_notes is not None:
+        sesion.wod_notes = req.wod_notes or None
     db.commit()
     db.refresh(sesion)
     return sesion
+
+
+@router.delete("/{session_id}")
+def delete_session(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Elimina UNA sesión suelta (y en cascada sus series) -- a diferencia de borrar todo el
+    mesociclo (DELETE /mesocycles/{id}, solo coach/admin), esto lo puede pedir el propio atleta
+    para un día que él mismo creó a mano (mesociclo is_self_managed); ver
+    ensure_owner_or_coach_editable. Coach/admin pueden borrar cualquier sesión de sus atletas."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    ensure_owner_or_coach_editable(db, sesion.mesocycle, current_user)
+
+    db.delete(sesion)
+    db.commit()
+    return {"message": "Sesión eliminada correctamente"}
 
 
 @router.post("/{session_id}/complete")

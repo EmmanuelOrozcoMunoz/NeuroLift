@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
-import { IconCheck, IconClock, IconSpark } from "@/components/icons";
+import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
 import { SetRow } from "@/components/SetRow";
 import { WodTimer } from "@/components/WodTimer";
 import {
@@ -17,8 +17,9 @@ import {
   Stepper,
   Toast,
 } from "@/components/ui";
+import { useCurrentUser } from "@/lib/auth";
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
-import { useAdaptSession, useCompleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
+import { useAdaptSession, useCompleteSession, useDeleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
@@ -30,6 +31,8 @@ export default function SessionDetail() {
   const { mesocycleId, sessionId } = useParams<{ mesocycleId: string; sessionId: string }>();
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
   const unit = useWeightUnit();
+  const user = useCurrentUser();
+  const navigate = useNavigate();
 
   const [vista, setVista] = useState<Vista>("normal");
   const [sheetAbierta, setSheetAbierta] = useState(false);
@@ -50,6 +53,7 @@ export default function SessionDetail() {
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
   const descompletar = useUncompleteSession();
+  const eliminar = useDeleteSession(user.id);
 
   const sesiones = data?.sessions ?? [];
   const objetivo = sesiones.find((session) => session.id === sessionId);
@@ -95,7 +99,8 @@ export default function SessionDetail() {
 
   const { logged, total } = sessionProgress(activa);
   const completada = activa.status === "completed";
-  const bloques = groupByBlock(activa.sets, activa.block_order);
+  const tieneWod = Boolean(activa.wod_notes) || activa.wod_format != null;
+  const bloques = groupByBlock(activa.sets, activa.block_order, tieneWod);
 
   function completarConResultado(wodResult?: SessionCompletePayload) {
     completar.mutate(
@@ -124,6 +129,17 @@ export default function SessionDetail() {
     );
   }
 
+  // Borra este día del calendario personal (y sus ejercicios) -- confirma porque no hay forma
+  // de deshacerlo después, a diferencia de "deshacer sesión completada".
+  function eliminarSesion() {
+    if (!window.confirm("¿Eliminar este día? Se perderán los ejercicios y el registro de esta sesión."))
+      return;
+    eliminar.mutate(
+      { mesocycleId: mesocycleId!, sessionId: activa!.id },
+      { onSuccess: () => navigate("/entrenos") },
+    );
+  }
+
   function abrirRegistroDeResultado(segundosDelTimer?: number) {
     const segundos = segundosDelTimer ?? activa!.wod_time_seconds ?? 0;
     setWodMin(Math.floor(segundos / 60));
@@ -140,27 +156,32 @@ export default function SessionDetail() {
   // "1rm" no necesita un resultado aparte: el peso real ya se logueó por serie (SetRow).
   const pideResultadoAparte = activa.wod_format != null && activa.wod_format !== "1rm";
 
-  const wodCard = activa.wod_format && (
-    <Card className="mt-3">
-      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
-        🔥 {WOD_FORMAT_LABELS[activa.wod_format]}
-        {activa.wod_time_cap_seconds ? ` · Time cap ${formatSeconds(activa.wod_time_cap_seconds)}` : ""}
-      </p>
-      {completada ? (
-        <p className="mt-1 text-sm font-bold">
-          {formatWodResult(
-            activa,
-            activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
-            unit,
-          ) ?? "Sin resultado registrado"}
-        </p>
-      ) : (
-        <WodTimer
-          format={activa.wod_format}
-          timeCapSeconds={activa.wod_time_cap_seconds}
-          onDone={(segundos) => abrirRegistroDeResultado(segundos)}
-          fallback={<p className="mt-1 text-sm font-bold">Registra tu resultado al terminar</p>}
-        />
+  const wodCard = tieneWod && (
+    <Card className="mb-3">
+      {activa.wod_notes && <p className="mb-2 text-sm leading-relaxed">{activa.wod_notes}</p>}
+      {activa.wod_format && (
+        <>
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+            {WOD_FORMAT_LABELS[activa.wod_format]}
+            {activa.wod_time_cap_seconds ? ` · Time cap ${formatSeconds(activa.wod_time_cap_seconds)}` : ""}
+          </p>
+          {completada ? (
+            <p className="mt-1 text-sm font-bold">
+              {formatWodResult(
+                activa,
+                activa.sets.map((s) => s.actual_weight).filter((w): w is number => w != null),
+                unit,
+              ) ?? "Sin resultado registrado"}
+            </p>
+          ) : (
+            <WodTimer
+              format={activa.wod_format}
+              timeCapSeconds={activa.wod_time_cap_seconds}
+              onDone={(segundos) => abrirRegistroDeResultado(segundos)}
+              fallback={<p className="mt-1 text-sm font-bold">Registra tu resultado al terminar</p>}
+            />
+          )}
+        </>
       )}
     </Card>
   );
@@ -209,15 +230,28 @@ export default function SessionDetail() {
       )}
 
       {data?.is_self_managed && (
-        <Link
-          to={`/entrenos/${mesocycleId}/sesion/${activa.id}/editar`}
-          className="mb-4 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
-        >
-          <span className="font-semibold">✏️ {activa.sets.length === 0 ? "Agregar ejercicios" : "Editar ejercicios"}</span>
-        </Link>
+        <div className="mb-4 flex items-center gap-2">
+          <Link
+            to={`/entrenos/${mesocycleId}/sesion/${activa.id}/editar`}
+            className="flex flex-1 items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+          >
+            <span className="font-semibold">
+              ✏️ {activa.sets.length === 0 ? "Agregar ejercicios" : "Editar ejercicios"}
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={eliminarSesion}
+            disabled={eliminar.isPending}
+            aria-label="Eliminar este día"
+            className="rounded-2xl border border-line bg-surface p-4 text-danger active:bg-danger/10 disabled:opacity-50"
+          >
+            <IconTrash className="h-5 w-5" />
+          </button>
+        </div>
       )}
 
-      {activa.sets.length === 0 ? (
+      {activa.sets.length === 0 && !tieneWod ? (
         <EmptyState title="Sin ejercicios asignados">
           {data?.is_self_managed
             ? "Todavía no has agregado ejercicios a esta sesión."
@@ -232,6 +266,7 @@ export default function SessionDetail() {
                   {bloque.label}
                 </p>
               )}
+              {bloque.key === "metcon" && wodCard}
               <div className="space-y-3">
                 {bloque.groups.map((grupo, indiceGrupo) => (
                   <Card key={`${grupo.name}-${indiceGrupo}`} className="p-3">
@@ -252,16 +287,11 @@ export default function SessionDetail() {
                   </Card>
                 ))}
               </div>
-              {/* El timer/resultado del WOD va justo debajo del bloque METABÓLICO — ahí es
-                  donde el atleta realmente lo necesita, no arriba de todo antes de calentar. */}
-              {bloque.key === "metcon" && wodCard}
             </div>
           ))}
-          {/* Respaldo: si la sesión tiene wod_format pero ningún set está etiquetado como
-              "metcon" (ej. cargada a mano sin bloques), igual se muestra al final. */}
-          {activa.wod_format && !bloques.some((b) => b.key === "metcon") && wodCard}
         </div>
       )}
+
 
       {/* Adaptar al tiempo disponible: solo desde la sesión original (el backend rechaza
           adaptar una adaptada), y solo si ya hay ejercicios que recortar. */}

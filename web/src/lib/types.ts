@@ -80,6 +80,9 @@ export interface TrainingSession {
   block_order: string | null;
   /** Pautas de calentamiento/aproximaciones del coach, mostradas antes del primer bloque. */
   warmup_notes: string | null;
+  /** Descripción libre del WOD en texto plano (ej. "21-15-9 thrusters 42kg, pull-ups") — para
+   *  cuando el esquema de ejercicios/series (nombre + reps/peso fijos) no alcanza. */
+  wod_notes: string | null;
   /** El coach lo prescribe (PUT /sessions/{id}/wod-format); el atleta reporta el resultado al
    *  completar la sesión. null = esta sesión no tiene un WOD con formato de puntaje formal. */
   wod_format: WodFormat | null;
@@ -297,6 +300,14 @@ export interface GroupBulkWodFormatPayload {
   scheduled_date: string;
   wod_format: WodFormat | null;
   time_cap_seconds: number | null;
+}
+
+/** Body de POST /groups/{id}/sessions/bulk-set-wod-notes. */
+export interface GroupBulkWodNotesPayload {
+  program_name: string;
+  program_start_date: string;
+  scheduled_date: string;
+  wod_notes: string | null;
 }
 
 // ============================================================ panel de coach

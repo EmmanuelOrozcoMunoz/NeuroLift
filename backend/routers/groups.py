@@ -527,6 +527,38 @@ def set_group_session_wod_format(
     }
 
 
+@router.post("/{group_id}/sessions/bulk-set-wod-notes")
+def set_group_session_wod_notes(
+    group_id: UUID,
+    req: schemas.GroupSessionWodNotesUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """El coach escribe la descripción libre del WOD UNA sola vez para la sesión de una fecha
+    dada, aplicado a TODOS los atletas del programa — mismo motivo que bulk-set-wod-format, para
+    el bloque Metabólico/WOD (ver WodBlockCard/BulkWodBlockCard en el frontend)."""
+    mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+
+    resultados = []
+    for meso in mesos:
+        sesion = db.query(models.Session).filter(
+            models.Session.mesocycle_id == meso.id,
+            models.Session.scheduled_date == req.scheduled_date,
+        ).first()
+        if not sesion:
+            resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
+            continue
+        sesion.wod_notes = req.wod_notes or None
+        resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
+
+    db.commit()
+    exitosos = sum(1 for r in resultados if r["status"] == "actualizado")
+    return {
+        "message": f"Descripción del WOD actualizada para {exitosos}/{len(resultados)} atleta(s) del grupo",
+        "results": resultados,
+    }
+
+
 @router.get("/{group_id}/wod-days", response_model=List[schemas.WodDaySummary])
 def get_group_wod_days(
     group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
