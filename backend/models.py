@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, ForeignKey, Text, Table, UniqueConstraint
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, ForeignKey, Text, Table, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -200,6 +200,13 @@ class Session(Base):
     # (ya tiene ON DELETE CASCADE) en vez de traerlas todas a memoria para borrarlas una por una.
     sets = relationship("Set", back_populates="session", cascade="all, delete-orphan", passive_deletes=True)
 
+    # Los endpoints bulk-* de grupo y el leaderboard de WOD filtran exactamente por
+    # (mesocycle_id, scheduled_date) -- el índice simple de mesocycle_id no cubre el filtro de
+    # fecha sin escanear fila por fila.
+    __table_args__ = (
+        Index("ix_sessions_mesocycle_scheduled_date", "mesocycle_id", "scheduled_date"),
+    )
+
 class Exercise(Base):
     __tablename__ = "exercises"
 
@@ -213,7 +220,7 @@ class Set(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True)
-    exercise_id = Column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="SET NULL"), nullable=True)
+    exercise_id = Column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="SET NULL"), nullable=True, index=True)
     set_order = Column(Integer, nullable=False)
     # Parte de la sesión a la que pertenece este ejercicio (calentamiento, fuerza, weightlifting,
     # skills/gimnasia, metabólico...). Ver backend/schemas.py:Bloque para los valores válidos y
