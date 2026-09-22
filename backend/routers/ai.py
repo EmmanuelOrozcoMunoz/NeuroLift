@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend import models, schemas
-from backend.core.security import ensure_owner_or_coach, limiter, require_coach
+from backend.core.security import _ip_and_user_key, ensure_owner_or_coach, limiter, require_coach
 from backend.database import SessionLocal, get_db
 from backend.routers.exercise_helpers import clean_ai_block
 from backend.routers.group_helpers import get_owned_group
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 @router.post("/generate-session/")
-@limiter.limit("20/hour")
+@limiter.limit("20/hour", key_func=_ip_and_user_key)
 def generate_and_save_session(
     request: Request,
     req: schemas.AIGenerateRequest, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
@@ -337,7 +337,7 @@ def _build_smart_mesocycle_en_su_propia_sesion(
 
 
 @router.post("/generate-smart-mesocycle/")
-@limiter.limit("10/hour")
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
 def generate_and_save_smart_mesocycle(
     request: Request,
     req: schemas.AIGenerateSmart, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
@@ -358,7 +358,7 @@ def generate_and_save_smart_mesocycle(
 
 
 @router.post("/generate-smart-mesocycle/group")
-@limiter.limit("3/hour")
+@limiter.limit("3/hour", key_func=_ip_and_user_key)
 def generate_and_save_smart_mesocycle_for_group(
     request: Request,
     req: schemas.AIGenerateSmartGroup, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)

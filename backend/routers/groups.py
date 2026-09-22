@@ -10,7 +10,7 @@ from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
 from backend.routers.exercise_helpers import get_or_create_exercise
-from backend.routers.group_helpers import get_owned_group
+from backend.routers.group_helpers import ensure_athletes_addable, get_owned_group
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
@@ -25,6 +25,7 @@ def create_group(
         atletas = db.query(models.User).filter(
             models.User.id.in_(req.athlete_ids), models.User.role == "athlete"
         ).all()
+        ensure_athletes_addable(atletas, current_user)
         nuevo_grupo.members = atletas
     db.add(nuevo_grupo)
     db.commit()
@@ -166,6 +167,7 @@ def add_group_members(
     nuevos = db.query(models.User).filter(
         models.User.id.in_(req.athlete_ids), models.User.role == "athlete"
     ).all()
+    ensure_athletes_addable(nuevos, current_user)
     atletas_nuevos = [a for a in nuevos if a.id not in existentes]
 
     for atleta in atletas_nuevos:

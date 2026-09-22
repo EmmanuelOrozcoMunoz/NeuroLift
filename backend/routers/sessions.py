@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import ai_agent, models, schemas
 from backend.core.security import (
+    _ip_and_user_key,
     ensure_owner_or_coach,
     ensure_owner_or_coach_editable,
     get_current_user,
@@ -198,7 +199,7 @@ def uncomplete_session(
 
 
 @router.post("/{session_id}/adapt", response_model=schemas.SessionResponse)
-@limiter.limit("10/hour")
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
 def adapt_session_to_available_time(
     request: Request,
     session_id: UUID,

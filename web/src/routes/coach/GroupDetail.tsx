@@ -18,12 +18,13 @@ import {
   useSearchAthleteByEmail,
 } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
-import type { User } from "@/lib/types";
+import type { AthleteLookup } from "@/lib/types";
 
 /** Busca por correo exacto a un atleta que todavía no es "tuyo" (se auto-registró por su
  *  cuenta), para poder agregarlo a este grupo. GET /users/athletes solo trae tus propios
- *  atletas, así que uno recién auto-registrado no aparece ahí hasta que lo agregues aquí. */
-function SearchAndAddByEmail({ onFound }: { onFound: (athlete: User) => void }) {
+ *  atletas, así que uno recién auto-registrado no aparece ahí hasta que lo agregues aquí.
+ *  El backend solo devuelve atletas SIN afiliar (ver users.py:search_athlete_by_email). */
+function SearchAndAddByEmail({ onFound }: { onFound: (athlete: AthleteLookup) => void }) {
   const search = useSearchAthleteByEmail();
   const [email, setEmail] = useState("");
 
@@ -73,7 +74,7 @@ function AddMembersSheet({
   const athletes = useAthletes();
   const addMembers = useAddGroupMembers(groupId);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [found, setFound] = useState<User | null>(null);
+  const [found, setFound] = useState<AthleteLookup | null>(null);
 
   const disponibles = (athletes.data ?? []).filter((a) => !currentIds.has(a.id));
 

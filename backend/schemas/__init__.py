@@ -6,6 +6,7 @@ from backend.schemas.common import Bloque, Dia, FormatoWod, MessageResponse, San
 from backend.schemas.auth import UserLogin, UserRegister
 from backend.schemas.users import (
     AthleteActivityResponse,
+    AthleteLookupResponse,
     PRCreate,
     PRResponse,
     RecentSessionExercise,
@@ -67,7 +68,7 @@ __all__ = [
     "Bloque", "Dia", "FormatoWod", "MessageResponse", "SanitizedModel",
     "UserLogin", "UserRegister",
     "AthleteActivityResponse", "PRCreate", "PRResponse", "RecentSessionExercise",
-    "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse",
+    "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse", "AthleteLookupResponse",
     "FitnessBenchmarkUpdate", "FitnessLevelResponse",
     "ExerciseResponse", "SetCreate", "SetLogUpdate", "SetResponse", "SetUpdate",
     "PersonalSessionCreate",
