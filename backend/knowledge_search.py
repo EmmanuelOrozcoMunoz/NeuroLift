@@ -13,12 +13,13 @@ from backend.database import SessionLocal
 def search_knowledge_base(user_context: str) -> str:
     """Busca en el PDF inyectado los párrafos más relevantes para el atleta."""
     api_key = os.getenv("GEMINI_API_KEY").strip()
-    embed_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
+    # La key va en un header, no en la URL -- ver el mismo fix en ai_agent.py._generate_json_with_fallback.
+    embed_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
 
     try:
         # 1. Convertimos lo que pide el usuario en un vector matemático
         payload = {"model": "models/gemini-embedding-001", "content": {"parts": [{"text": user_context}]}}
-        headers = {'Content-Type': 'application/json'}
+        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
         data = _post_to_gemini(embed_url, payload, headers)
         vector_busqueda = data["embedding"]["values"]
 

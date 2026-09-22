@@ -10,8 +10,9 @@ from backend.database import SessionLocal
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY").strip()
-# URL para el modelo de embeddings
-EMBEDDING_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={API_KEY}"
+# URL para el modelo de embeddings -- la key va en un header, no en la query string (ver el
+# mismo fix en ai_agent.py._generate_json_with_fallback).
+EMBEDDING_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
 
 def get_embedding(text_chunk: str) -> list:
     """Llama a Google Gemini para convertir un fragmento de texto en un vector matemático de 768 dimensiones."""
@@ -21,7 +22,8 @@ def get_embedding(text_chunk: str) -> list:
             "parts": [{"text": text_chunk}]
         }
     }
-    response = requests.post(EMBEDDING_URL, json=payload)
+    headers = {"Content-Type": "application/json", "x-goog-api-key": API_KEY}
+    response = requests.post(EMBEDDING_URL, json=payload, headers=headers)
     response.raise_for_status()
     # Extraemos la lista de números del JSON que devuelve Google
     return response.json()["embedding"]["values"]

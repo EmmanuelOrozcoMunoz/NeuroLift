@@ -7,6 +7,7 @@ import type {
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
   AthleteActivity,
+  AthleteLookup,
   BulkResponse,
   CreateGroupPayload,
   GroupBulkAddPayload,
@@ -70,7 +71,8 @@ export function useAthleteLeaderboard(): UseQueryResult<AthleteActivity[]> {
  *  a demanda con un botón, no automáticamente al montar el componente. */
 export function useSearchAthleteByEmail() {
   return useMutation({
-    mutationFn: (email: string) => apiFetch<User>(`/users/search?email=${encodeURIComponent(email.trim())}`),
+    mutationFn: (email: string) =>
+      apiFetch<AthleteLookup>(`/users/search?email=${encodeURIComponent(email.trim())}`),
   });
 }
 

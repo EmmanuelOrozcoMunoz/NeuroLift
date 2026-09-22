@@ -23,6 +23,14 @@ export interface User {
   has_25kg_plates: boolean | null;
 }
 
+/** Respuesta mínima de GET /users/search -- a propósito no es un User completo, ver
+ *  AthleteLookupResponse en el backend. */
+export interface AthleteLookup {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
