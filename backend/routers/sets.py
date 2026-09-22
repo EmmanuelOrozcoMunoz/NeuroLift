@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models, schemas
-from backend.core.security import ensure_owner_or_coach_editable, get_current_user
+from backend.core.security import ensure_owner_or_coach, ensure_owner_or_coach_editable, get_current_user
 from backend.database import get_db
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
