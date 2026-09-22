@@ -155,5 +155,9 @@ def log_set_performance(
         db_set.technique_feedback = log.technique_feedback
 
     db.commit()
-    db.refresh(db_set)
+    # Sin refresh: nada server-generado cambia en esta fila (no hay default/onupdate que
+    # dispare aquí), así que lo que ya está asignado en Python es exactamente lo que quedó en la
+    # base de datos. Este es el endpoint de mayor QPS de toda la app (cada serie, cada atleta,
+    # cada sesión) -- el refresh era un round-trip extra pagado por cada tap, multiplicado por
+    # el path más caliente del sistema.
     return db_set
