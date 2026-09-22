@@ -335,6 +335,41 @@ def _resolve_group_weight(db: Session, req, athlete: models.User, nombre_ejercic
     return req.prescribed_weight
 
 
+def _sessions_by_mesocycle(
+    db: Session, meso_ids: List[UUID], scheduled_date: date
+) -> dict[UUID, models.Session]:
+    """Una sola consulta para la sesión de esa fecha de CADA mesociclo del programa, en vez de
+    una consulta por atleta dentro de un loop -- con un grupo de 30 atletas eso eran 30
+    round-trips a la base de datos solo para ubicar la sesión de cada uno."""
+    if not meso_ids:
+        return {}
+    sesiones = db.query(models.Session).filter(
+        models.Session.mesocycle_id.in_(meso_ids),
+        models.Session.scheduled_date == scheduled_date,
+    ).all()
+    return {s.mesocycle_id: s for s in sesiones}
+
+
+def _sets_by_session_for_exercise(
+    db: Session, session_ids: List[UUID], exercise_name: str
+) -> dict[UUID, List[models.Set]]:
+    """Igual que _sessions_by_mesocycle pero para las series de un ejercicio dado -- una sola
+    consulta con session_id.in_(...) en vez de un JOIN por atleta dentro del loop."""
+    if not session_ids:
+        return {}
+    todas = (
+        db.query(models.Set)
+        .join(models.Exercise, models.Set.exercise_id == models.Exercise.id)
+        .filter(models.Set.session_id.in_(session_ids), models.Exercise.name == exercise_name)
+        .order_by(models.Set.set_order)
+        .all()
+    )
+    agrupadas: dict[UUID, List[models.Set]] = {}
+    for s in todas:
+        agrupadas.setdefault(s.session_id, []).append(s)
+    return agrupadas
+
+
 @router.post("/{group_id}/sessions/bulk-add-exercise")
 def add_exercise_to_group_session(
     group_id: UUID,
@@ -347,18 +382,24 @@ def add_exercise_to_group_session(
     mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
     ejercicio = get_or_create_exercise(db, req.exercise_name)
 
+    sesiones_por_meso = _sessions_by_mesocycle(db, [m.id for m in mesos], req.scheduled_date)
+    session_ids = [s.id for s in sesiones_por_meso.values()]
+    conteos_por_sesion = dict(
+        db.query(models.Set.session_id, func.count(models.Set.id))
+        .filter(models.Set.session_id.in_(session_ids))
+        .group_by(models.Set.session_id)
+        .all()
+    ) if session_ids else {}
+
     resultados = []
     for meso in mesos:
-        sesion = db.query(models.Session).filter(
-            models.Session.mesocycle_id == meso.id,
-            models.Session.scheduled_date == req.scheduled_date,
-        ).first()
+        sesion = sesiones_por_meso.get(meso.id)
 
         if not sesion:
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
 
-        series_actuales = db.query(models.Set).filter(models.Set.session_id == sesion.id).count()
+        series_actuales = conteos_por_sesion.get(sesion.id, 0)
         peso = _resolve_group_weight(db, req, meso.user, req.exercise_name)
         for i in range(req.prescribed_sets):
             db.add(models.Set(
@@ -395,23 +436,19 @@ def update_exercise_in_group_session(
     mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
     nuevo_ejercicio = get_or_create_exercise(db, req.new_exercise_name)
 
+    sesiones_por_meso = _sessions_by_mesocycle(db, [m.id for m in mesos], req.scheduled_date)
+    sets_por_sesion = _sets_by_session_for_exercise(
+        db, [s.id for s in sesiones_por_meso.values()], req.exercise_name
+    )
+
     resultados = []
     for meso in mesos:
-        sesion = db.query(models.Session).filter(
-            models.Session.mesocycle_id == meso.id,
-            models.Session.scheduled_date == req.scheduled_date,
-        ).first()
+        sesion = sesiones_por_meso.get(meso.id)
         if not sesion:
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
 
-        sets_existentes = (
-            db.query(models.Set)
-            .join(models.Exercise, models.Set.exercise_id == models.Exercise.id)
-            .filter(models.Set.session_id == sesion.id, models.Exercise.name == req.exercise_name)
-            .order_by(models.Set.set_order)
-            .all()
-        )
+        sets_existentes = sets_por_sesion.get(sesion.id, [])
         if not sets_existentes:
             resultados.append({"full_name": meso.user.full_name, "status": "no tenía ese ejercicio en esa fecha"})
             continue
@@ -467,23 +504,19 @@ def delete_exercise_from_group_session(
     """Elimina por completo un ejercicio (todas sus series) de la sesión de una fecha dada,
     para TODOS los atletas del programa."""
     mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    sesiones_por_meso = _sessions_by_mesocycle(db, [m.id for m in mesos], req.scheduled_date)
+    sets_por_sesion = _sets_by_session_for_exercise(
+        db, [s.id for s in sesiones_por_meso.values()], req.exercise_name
+    )
 
     resultados = []
     for meso in mesos:
-        sesion = db.query(models.Session).filter(
-            models.Session.mesocycle_id == meso.id,
-            models.Session.scheduled_date == req.scheduled_date,
-        ).first()
+        sesion = sesiones_por_meso.get(meso.id)
         if not sesion:
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
 
-        sets_existentes = (
-            db.query(models.Set)
-            .join(models.Exercise, models.Set.exercise_id == models.Exercise.id)
-            .filter(models.Set.session_id == sesion.id, models.Exercise.name == req.exercise_name)
-            .all()
-        )
+        sets_existentes = sets_por_sesion.get(sesion.id, [])
         for s in sets_existentes:
             db.delete(s)
         resultados.append({"full_name": meso.user.full_name, "status": "eliminado" if sets_existentes else "no tenía ese ejercicio"})
@@ -507,13 +540,11 @@ def set_group_session_wod_format(
     sesión de una fecha dada, aplicado a TODOS los atletas del programa — así no hay que
     repetir la misma acción atleta por atleta cuando todo el grupo hace el mismo WOD."""
     mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    sesiones_por_meso = _sessions_by_mesocycle(db, [m.id for m in mesos], req.scheduled_date)
 
     resultados = []
     for meso in mesos:
-        sesion = db.query(models.Session).filter(
-            models.Session.mesocycle_id == meso.id,
-            models.Session.scheduled_date == req.scheduled_date,
-        ).first()
+        sesion = sesiones_por_meso.get(meso.id)
         if not sesion:
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
@@ -540,13 +571,11 @@ def set_group_session_wod_notes(
     dada, aplicado a TODOS los atletas del programa — mismo motivo que bulk-set-wod-format, para
     el bloque Metabólico/WOD (ver WodBlockCard/BulkWodBlockCard en el frontend)."""
     mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    sesiones_por_meso = _sessions_by_mesocycle(db, [m.id for m in mesos], req.scheduled_date)
 
     resultados = []
     for meso in mesos:
-        sesion = db.query(models.Session).filter(
-            models.Session.mesocycle_id == meso.id,
-            models.Session.scheduled_date == req.scheduled_date,
-        ).first()
+        sesion = sesiones_por_meso.get(meso.id)
         if not sesion:
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
