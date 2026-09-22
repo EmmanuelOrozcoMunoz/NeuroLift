@@ -27,6 +27,19 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class AthleteLookupResponse(BaseModel):
+    """Resultado mínimo de GET /users/search -- a propósito NO reutiliza UserResponse: ese
+    endpoint solo sirve para que un coach ubique a un atleta sin afiliar y lo agregue a un
+    grupo, así que no hay motivo para devolverle peso corporal, sexo, unidad de peso u otros
+    datos privados de alguien que todavía no es su atleta."""
+    id: UUID
+    full_name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
 class UserPreferencesUpdate(SanitizedModel):
     # Ambos opcionales: cada toggle (unidad de peso, disponibilidad de discos de 25kg) guarda
     # solo lo suyo, sin obligar a mandar el resto de las preferencias en la misma llamada.

@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import requests
@@ -5,6 +6,14 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Mensaje genérico que sí es seguro devolver al cliente -- el detalle real (que puede incluir
+# la URL de la petición a Gemini) se queda solo en el log del servidor. Nunca se debe propagar
+# str(e) crudo en una respuesta HTTP: antes de este fix, un error de Gemini devolvía la URL
+# completa de la petición -- con la API key en la query string -- directo al navegador del coach.
+_MENSAJE_ERROR_GENERICO = "No se pudo generar la rutina en este momento. Intenta de nuevo."
 
 # Errores transitorios de Gemini (hipos momentáneos del servicio, rate limiting) que vale la
 # pena reintentar en vez de fallar de inmediato y obligar al usuario a repetir la acción a mano.
@@ -70,11 +79,14 @@ def _generate_json_with_fallback(prompt: str, modelos: list[str] = _MODELOS_CON_
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"},
     }
-    headers = {"Content-Type": "application/json"}
+    # La key va en un header, nunca en la URL: una URL con `?key=...` queda embebida tal cual
+    # en el mensaje de cualquier excepción de `requests` (timeouts, HTTPError, etc.), y ese
+    # mensaje es exactamente lo que _generate_json_with_fallback captura y podría propagar.
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
 
     last_exception = None
     for modelo in modelos:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
         try:
             return _post_to_gemini(url, payload, headers)
         except requests.exceptions.RequestException as e:
@@ -121,7 +133,8 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
         return structured_data
 
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("generate_workout_session: fallo llamando a Gemini: %s", e)
+        return {"error": _MENSAJE_ERROR_GENERICO}
 
 def generate_mesocycle_chunk(
     athlete_name: str,
@@ -239,7 +252,8 @@ def generate_mesocycle_chunk(
 
         return json.loads(raw_json_text)
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("generate_mesocycle_chunk: fallo llamando a Gemini: %s", e)
+        return {"error": _MENSAJE_ERROR_GENERICO}
 
 
 def adapt_session_to_time(
@@ -304,4 +318,5 @@ def adapt_session_to_time(
         raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
         return json.loads(raw_json_text)
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("adapt_session_to_time: fallo llamando a Gemini: %s", e)
+        return {"error": _MENSAJE_ERROR_GENERICO}

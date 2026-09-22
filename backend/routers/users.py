@@ -174,20 +174,30 @@ def get_recent_activity(
     return resultados
 
 
-@router.get("/users/search", response_model=schemas.UserResponse)
+@router.get("/users/search", response_model=schemas.AthleteLookupResponse)
 @limiter.limit("30/hour", key_func=_ip_and_user_key)
 def search_athlete_by_email(
     request: Request, email: str, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
-    """Busca UN atleta por correo EXACTO (case-insensitive) — para que un coach pueda encontrar
-    a un atleta que se auto-registró por su cuenta y agregarlo a un grupo, sin exponerle el
-    listado completo de usuarios de la plataforma (eso rompería el aislamiento por coach).
-    Limitado por hora para que no se use como herramienta de enumeración masiva de correos."""
+    """Busca UN atleta SIN afiliar por correo EXACTO (case-insensitive) — para que un coach
+    pueda encontrar a un atleta que se auto-registró por su cuenta y agregarlo a un grupo, sin
+    exponerle el listado completo de usuarios de la plataforma (eso rompería el aislamiento por
+    coach). Limitado por hora para que no se use como herramienta de enumeración masiva de
+    correos.
+
+    A propósito NO devuelve atletas que ya tienen coach (aunque sea otro coach distinto de
+    quien busca): sin este filtro, cualquier coach podía ubicar el ID de CUALQUIER atleta de la
+    plataforma y luego agregarlo a un grupo propio para heredar acceso a su mesociclo, marcas y
+    fitness level (ver ensure_athletes_addable en group_helpers.py, que ahora bloquea ese
+    agregado, pero este endpoint tampoco debe servir de reconocimiento previo). Tampoco se
+    reutiliza UserResponse como schema de respuesta: ver AthleteLookupResponse."""
     usuario = db.query(models.User).filter(
-        models.User.role == "athlete", models.User.email.ilike(email.strip())
+        models.User.role == "athlete",
+        models.User.email.ilike(email.strip()),
+        models.User.coach_id.is_(None),
     ).first()
     if not usuario:
-        raise HTTPException(status_code=404, detail="No hay ningún atleta registrado con ese correo.")
+        raise HTTPException(status_code=404, detail="No hay ningún atleta sin afiliar registrado con ese correo.")
     return usuario
 
 
