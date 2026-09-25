@@ -22,6 +22,9 @@ class PlanCreate(SanitizedModel):
 
 class PlanPublishUpdate(SanitizedModel):
     is_published: bool
+    # Quién lo ve en el catálogo: solo atletas del box del autor, o toda la plataforma. None =
+    # conservar la visibilidad que ya tenía.
+    visibility: Literal["box", "public"] | None = None
 
 
 class PlanUpdate(SanitizedModel):
@@ -67,6 +70,9 @@ class PlanSummaryResponse(BaseModel):
     is_published: bool
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     created_at: datetime
+    visibility: Literal["box", "public"] = "box"
+    # Box del autor — el catálogo lo muestra en planes públicos que vienen de OTRO box.
+    box_name: str | None = None
 
 
 class PlanSessionPreview(BaseModel):

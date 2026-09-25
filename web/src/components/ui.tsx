@@ -18,7 +18,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white active:bg-brand/85 disabled:bg-brand/40",
+  primary: "bg-brand text-on-brand active:bg-brand/85 disabled:bg-brand/40",
   secondary: "bg-surface-2 text-fg border border-line active:bg-line",
   ghost: "bg-transparent text-muted active:bg-surface-2",
   danger: "bg-transparent text-danger border border-danger/40 active:bg-danger/10",
@@ -223,7 +223,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           className={cx(
             "min-h-10 grow rounded-lg px-3 text-sm font-semibold transition-colors",
-            option.value === value ? "bg-brand text-white" : "text-muted active:bg-line",
+            option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
           )}
         >
           {option.label}
@@ -245,7 +245,10 @@ export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-skeleton rounded-xl bg-surface-2", className)} />;
+  // Si quien lo usa pasa su propio radio (ej. rounded-full para un anillo), ese manda: dos
+  // clases de radio a la vez no garantizan cuál gana, depende del orden en el CSS generado.
+  const ownRadius = (className ?? "").includes("rounded");
+  return <div aria-hidden className={cx("animate-skeleton bg-surface-2", !ownRadius && "rounded-xl", className)} />;
 }
 
 export function LoadingList({ rows = 3 }: { rows?: number }) {
@@ -311,7 +314,9 @@ export function Toast({
   }, [message, onDismiss]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4">
+    // Justo encima de la barra inferior (incluido el indicador de gestos); en escritorio,
+    // centrado en el área de contenido, a la derecha del sidebar
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom)+0.75rem)] z-50 flex justify-center px-4 lg:bottom-6 lg:left-sidebar">
       <div
         className={cx(
           "max-w-sm rounded-xl px-4 py-3 text-sm font-semibold shadow-lg",

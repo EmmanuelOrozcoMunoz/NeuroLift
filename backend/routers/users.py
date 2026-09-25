@@ -40,7 +40,7 @@ def get_athletes(db: Session = Depends(get_db), current_user: models.User = Depe
     desplegable. Un admin sigue viendo a todos."""
     if current_user.role == "admin":
         return db.query(models.User).filter(models.User.role == "athlete").all()
-    ids = _coach_athlete_ids(db, current_user.id)
+    ids = _coach_athlete_ids(db, current_user)
     if not ids:
         return []
     return db.query(models.User).filter(models.User.id.in_(ids)).all()
@@ -54,7 +54,7 @@ def get_athlete_leaderboard(db: Session = Depends(get_db), current_user: models.
     if current_user.role == "admin":
         ids = {u.id for u in db.query(models.User.id).filter(models.User.role == "athlete").all()}
     else:
-        ids = _coach_athlete_ids(db, current_user.id)
+        ids = _coach_athlete_ids(db, current_user)
     if not ids:
         return []
 
@@ -191,11 +191,15 @@ def search_athlete_by_email(
     fitness level (ver ensure_athletes_addable en group_helpers.py, que ahora bloquea ese
     agregado, pero este endpoint tampoco debe servir de reconocimiento previo). Tampoco se
     reutiliza UserResponse como schema de respuesta: ver AthleteLookupResponse."""
-    usuario = db.query(models.User).filter(
+    filtros = [
         models.User.role == "athlete",
         models.User.email.ilike(email.strip()),
         models.User.coach_id.is_(None),
-    ).first()
+    ]
+    # Solo atletas del propio box: la búsqueda no debe cruzar la frontera entre boxes
+    if current_user.role != "admin":
+        filtros.append(models.User.box_id == current_user.box_id)
+    usuario = db.query(models.User).filter(*filtros).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="No hay ningún atleta sin afiliar registrado con ese correo.")
     return usuario
@@ -306,10 +310,12 @@ def crear_sesion_personal(
 def get_user_avatar(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    """Cualquier usuario autenticado puede ver la foto de perfil de otro (no es información
-    sensible más allá del nombre, que ya es visible en toda la app)."""
+    """Cualquier miembro del mismo box puede ver la foto de perfil de otro (los nombres ya se
+    ven en grupos, tablas de actividad, etc.). Entre boxes distintos, no: un 404 igual que si no
+    tuviera foto, para no confirmar siquiera que ese usuario existe."""
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
-    if not usuario or not usuario.avatar_filename:
+    mismo_box = usuario is not None and (current_user.role == "admin" or usuario.box_id == current_user.box_id)
+    if not mismo_box or not usuario.avatar_filename:
         raise HTTPException(status_code=404, detail="Este usuario no tiene foto de perfil.")
     return storage.redirect_to_image(storage.AVATAR_BUCKET, usuario.avatar_filename)
 

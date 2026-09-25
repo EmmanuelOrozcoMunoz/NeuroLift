@@ -45,7 +45,7 @@ export function WeekdayPicker({
             onClick={() => toggle(day.value)}
             className={cx(
               "flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-colors",
-              active ? "bg-brand text-white" : "bg-surface-2 text-muted",
+              active ? "bg-brand text-on-brand" : "bg-surface-2 text-muted",
             )}
           >
             {day.label}

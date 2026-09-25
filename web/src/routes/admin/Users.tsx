@@ -6,8 +6,8 @@ import { useAllUsers, useRevokeUserSessions, useUpdateUserRole } from "@/lib/adm
 import { useCurrentUser } from "@/lib/auth";
 import type { Role, User } from "@/lib/types";
 
-const ROLES: Role[] = ["athlete", "coach", "admin"];
-const ROLE_LABEL: Record<Role, string> = { athlete: "Atleta", coach: "Coach", admin: "Admin" };
+const ROLES: Role[] = ["athlete", "coach", "owner", "admin"];
+const ROLE_LABEL: Record<Role, string> = { athlete: "Atleta", coach: "Coach", owner: "Dueño de box", admin: "Admin" };
 
 type ToastFn = (message: string, tone?: "done" | "danger") => void;
 
@@ -24,6 +24,7 @@ function UserRow({ user, onToast }: { user: User; onToast: ToastFn }) {
         <div className="min-w-0">
           <p className="truncate font-semibold">{user.full_name}</p>
           <p className="truncate text-sm text-muted">{user.email}</p>
+          {user.box && <p className="truncate text-xs text-muted">{user.box.name}</p>}
         </div>
         <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
       </div>

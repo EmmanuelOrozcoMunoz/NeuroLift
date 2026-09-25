@@ -1,27 +1,123 @@
 @import "tailwindcss";
+/* Inter empaquetada (no Google Fonts): funciona sin red — el service worker precachea los
+   .woff2 — y no bloquea el primer render esperando a un tercero. Variable: un solo archivo
+   cubre todos los pesos, del 400 del texto al 900 de las cifras. */
+@import "@fontsource-variable/inter";
 
 /* ==========================================================================
-   Tokens de diseño. Tema oscuro por defecto y único: la app se usa en el
-   gimnasio, muchas veces con poca luz y el celular en la mano.
+   NeuroLift — sistema de diseño "Dark Energy" (minimalismo deportivo)
+
+   Principios:
+   - Oscuro único: se usa en el gimnasio, con poca luz y el celular en la mano.
+   - "Raw": la jerarquía la dan las SUPERFICIES y el espacio, no los bordes ni las sombras.
+     Por eso `line` es un filo casi invisible y las sombras son mínimas.
+   - El acento (naranja por defecto, personalizable por cuenta) se reserva para CTAs
+     principales, estado activo y progreso. Nunca decorativo.
+   - Las cifras (kg, reps, tiempos) son protagonistas: `text-metric*` + `num`.
+   - Todo lo tocable mide al menos `touch` (48px).
+
+   Los NOMBRES de los tokens son un contrato con toda la app (bg-surface, text-muted,
+   border-line...): se pueden cambiar valores, no renombrar sin migrar los componentes.
    ========================================================================== */
 @theme {
-  --color-ink: #0b0f14; /* fondo de la app */
-  --color-surface: #141a22; /* tarjetas */
-  --color-surface-2: #1b2430; /* inputs, filas dentro de tarjetas */
-  --color-line: #263140; /* bordes */
-  --color-fg: #e8eef5; /* texto principal */
-  --color-muted: #8fa0b3; /* texto secundario */
-  --color-brand: #7c5cff; /* violeta: acciones primarias */
-  --color-brand-soft: #2a2350;
-  --color-done: #a3e635; /* lima: completado */
-  --color-done-soft: #26350f;
+  /* ------------------------------------------------------------------ color */
+  --color-ink: #121212; /* fondo base — negro carbón */
+  --color-surface: #1e1e1e; /* tarjetas y módulos */
+  --color-surface-2: #282828; /* inputs, filas y controles dentro de una tarjeta */
+  --color-surface-3: #323232; /* estado presionado de controles sobre surface-2 */
+  /* Filo, no borde: separa solo cuando dos superficies iguales se tocan. */
+  --color-line: color-mix(in oklab, var(--color-fg) 7%, transparent);
+  --color-fg: #f3f4f6; /* texto principal — blanco humo (17:1 sobre ink) */
+  --color-muted: #9ca3af; /* texto secundario — gris pizarra (7.3:1 sobre ink, 6.6:1 sobre surface) */
+
+  /* Acento dinámico: lib/brand.ts sobreescribe --color-brand y --color-on-brand en <html>
+     con el color de cada cuenta; los derivados se recalculan solos. */
+  --color-brand: #ff4700; /* naranja eléctrico (por defecto) */
+  --color-brand-soft: color-mix(in oklab, var(--color-brand) 16%, var(--color-ink));
+  --color-on-brand: #ffffff;
+
+  /* Semánticos: siempre acompañados de ícono o texto, nunca el color solo */
+  --color-done: #a3e635; /* completado — lima */
+  --color-done-soft: color-mix(in oklab, var(--color-done) 14%, var(--color-ink));
   --color-warn: #fbbf24;
+  --color-warn-soft: color-mix(in oklab, var(--color-warn) 14%, var(--color-ink));
   --color-danger: #f87171;
+  --color-danger-soft: color-mix(in oklab, var(--color-danger) 14%, var(--color-ink));
 
-  --font-sans: "Inter var", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* ------------------------------------------------------------- tipografía */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
+  /* Escala de CIFRAS (text-metric-*): peso black, tracking cerrado e interlineado 1 para que
+     el número se lea de un vistazo entre series. Combinar con `num` (dígitos tabulares). */
+  --text-metric-sm: 1.5rem; /* 24px — cifras dentro de filas */
+  --text-metric-sm--line-height: 1;
+  --text-metric-sm--letter-spacing: -0.02em;
+  --text-metric-sm--font-weight: 800;
+  --text-metric: 2.25rem; /* 36px — cifra principal de una tarjeta */
+  --text-metric--line-height: 1;
+  --text-metric--letter-spacing: -0.03em;
+  --text-metric--font-weight: 900;
+  --text-metric-lg: 3.5rem; /* 56px — hero: peso de la serie, timer */
+  --text-metric-lg--line-height: 0.95;
+  --text-metric-lg--letter-spacing: -0.04em;
+  --text-metric-lg--font-weight: 900;
+
+  /* Etiqueta en versalitas sobre una cifra ("KG", "REPS", "ESTA SEMANA") */
+  --text-label: 0.6875rem; /* 11px: solo mayúsculas cortas, nunca texto corrido */
+  --text-label--line-height: 1rem;
+  --text-label--letter-spacing: 0.08em;
+  --text-label--font-weight: 600;
+
+  /* --------------------------------------------------------------- espacio */
+  --spacing-touch: 3rem; /* 48px: mínimo de cualquier blanco táctil (h-touch, min-h-touch) */
+  --spacing-touch-lg: 3.5rem; /* 56px: CTA principal de pantalla */
+  --spacing-tabbar: 4.5rem; /* alto de la barra inferior, sin contar el safe area */
+  --spacing-sidebar: 15rem; /* ancho del sidebar en escritorio */
+
+  /* ---------------------------------------------------------------- formas */
+  --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+
+  /* Sombras casi ausentes: solo lo que flota (sheets, toasts) se separa del fondo */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px -4px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px -12px rgb(0 0 0 / 0.7);
+
+  /* ------------------------------------------------------------ movimiento */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* entradas: llega rápido y se asienta */
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0); /* salidas */
+  /* animate-skeleton: lo usan LoadingList/Skeleton (el nombre se conserva) */
+  --animate-skeleton: nl-pulse 1.4s ease-in-out infinite;
+  --animate-sheet-in: nl-sheet-in 280ms var(--ease-out-expo);
+  --animate-fade-in: nl-fade-in 180ms ease-out;
+
+  @keyframes nl-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+  @keyframes nl-sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes nl-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 @layer base {
@@ -30,6 +126,24 @@
     color-scheme: dark;
     /* Evita el zoom automático de iOS al enfocar un input (necesita >= 16px) */
     -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Inter: "1" con base y "l" con cola (cv05/cv11) — se confunden menos 1/l/I en cifras */
+    font-feature-settings: "cv05", "cv11";
+    /* Sin barras de scroll visibles (sensación de app nativa). El scroll sigue funcionando
+       con dedo, rueda, trackpad y teclado. */
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  * {
+    scrollbar-width: none;
   }
 
   body {
@@ -38,9 +152,37 @@
     background-color: var(--color-ink);
     color: var(--color-fg);
     font-family: var(--font-sans);
+    line-height: 1.5;
     /* Nada de rebote elástico: se siente a página web, no a app */
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Sin el retraso de doble-tap-para-zoom en lo que se toca */
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="button"],
+  a[href],
+  summary,
+  label[for],
+  select {
+    cursor: pointer;
+  }
+
+  /* Foco visible SOLO con teclado (no aparece al tocar con el dedo). Antes no había ninguno. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: var(--radius-lg);
   }
 
   /* Los inputs por debajo de 16px hacen que iOS haga zoom al enfocarlos */
@@ -75,32 +217,58 @@
 
   ::selection {
     background-color: var(--color-brand);
-    color: white;
+    color: var(--color-on-brand);
+  }
+
+  /* Quien pidió menos movimiento al sistema lo obtiene en toda la app */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer components {
-  /* Respeta el notch y el indicador de gestos del iPhone */
+  /* Respeta el notch, el indicador de gestos y los bordes redondeados en horizontal */
   .pb-safe {
     padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
-@layer utilities {
-  /* Skeletons de carga */
-  @keyframes nl-pulse {
-    0%,
-    100% {
-      opacity: 0.45;
-    }
-    50% {
-      opacity: 0.85;
-    }
-  }
-  .animate-skeleton {
-    animation: nl-pulse 1.4s ease-in-out infinite;
+/* Cifra protagonista: dígitos tabulares (no "bailan" al cambiar 95 -> 100 kg ni en un timer
+   que corre) y cero con barra para no confundirlo con la O. Se combina con text-metric-*. */
+@utility num {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* Etiqueta en versalitas encima de una cifra */
+@utility label-caps {
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+  letter-spacing: var(--text-label--letter-spacing);
+  font-weight: var(--text-label--font-weight);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Presionar se siente físico: leve escala, sin mover el layout */
+@utility press {
+  transition: transform 120ms var(--ease-out-expo), background-color 150ms ease-out;
+  &:active {
+    transform: scale(0.97);
   }
 }

@@ -747,7 +747,7 @@ export default function GroupProgramDetail() {
           type="button"
           onClick={() => setTab("grupo")}
           className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
-            tab === "grupo" ? "bg-brand text-white" : "bg-surface-2 text-muted"
+            tab === "grupo" ? "bg-brand text-on-brand" : "bg-surface-2 text-muted"
           }`}
         >
           👥 Grupo completo
@@ -758,7 +758,7 @@ export default function GroupProgramDetail() {
             type="button"
             onClick={() => setTab(athlete.user_id)}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
-              tab === athlete.user_id ? "bg-brand text-white" : "bg-surface-2 text-muted"
+              tab === athlete.user_id ? "bg-brand text-on-brand" : "bg-surface-2 text-muted"
             }`}
           >
             {athlete.full_name}

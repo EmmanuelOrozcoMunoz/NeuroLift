@@ -171,3 +171,49 @@ export function IconList({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function IconDownload({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 19h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** El ícono de "Compartir" de Safari (cuadro con flecha hacia arriba). */
+export function IconShare({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3v12M8 7l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Logo de NeuroLift (la mancuerna del ícono de la app). Toma el color de acento del box vía
+ *  text-brand; el ícono PNG de la pantalla de inicio sí es fijo. */
+export function Logo({ className = "h-8 w-8" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" aria-hidden>
+      <rect width="32" height="32" rx="8" className="fill-surface" />
+      <path
+        d="M8 12v8M11 9v14M21 9v14M24 12v8M11 16h10"
+        className="stroke-brand"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** Box/gimnasio: una nave con techo a dos aguas */
+export function IconHome({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9.5Z" strokeLinejoin="round" />
+      <path d="M9 21v-6h6v6" strokeLinejoin="round" />
+    </svg>
+  );
+}

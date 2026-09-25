@@ -8,7 +8,9 @@ const SCALE = 4;
 
 /** Colores estándar de discos de competencia (IWF/CrossFit) — el mismo código de colores
  *  que ya usan casi todos los boxes con discos de goma, sea cual sea la unidad en la que la
- *  app le muestra el peso al atleta (por eso el cálculo siempre trabaja en kg). */
+ *  app le muestra el peso al atleta (por eso el cálculo siempre trabaja en kg).
+ *  Son FIJOS a propósito: no dependen del tema ni del color de acento del box (ver
+ *  lib/brand.ts). Cualquier dibujo de discos en la app debe usar estos valores. */
 export const PLATE_COLORS: Record<number, string> = {
   25: "#dc2626",
   20: "#2563eb",

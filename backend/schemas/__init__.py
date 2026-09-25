@@ -4,6 +4,23 @@
 # que ese acceso plano siga funcionando igual que cuando era un módulo único.
 from backend.schemas.common import Bloque, Dia, FormatoWod, MessageResponse, SanitizedModel
 from backend.schemas.auth import UserLogin, UserRegister
+from backend.schemas.boxes import (
+    AdminBoxPlanUpdate,
+    AdminBoxRow,
+    AdminBoxStatusUpdate,
+    AdminPaymentCreate,
+    AthleteCoachAssign,
+    BoxDetail,
+    BoxMember,
+    BoxPublicInfo,
+    BoxRegister,
+    BoxSummary,
+    BoxUpdate,
+    CoachAccountRegister,
+    CoachCreate,
+    PricingPlan,
+    PricingResponse,
+)
 from backend.schemas.users import (
     AthleteActivityResponse,
     AthleteLookupResponse,
