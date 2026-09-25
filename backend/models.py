@@ -5,6 +5,56 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
+# Roles de usuario:
+#  - "athlete": entrena. Pertenece a un box; puede tener coach (coach_id) o ser "del box" (sin
+#    coach), en cuyo caso recibe los mesociclos generales que el dueño programe a sus grupos.
+#  - "coach": programa a SUS atletas (coach_id / sus grupos), siempre dentro de su box.
+#  - "owner": dueño/administrador de un box. Es un coach con más alcance: ve y gestiona a
+#    TODOS los atletas, coaches y grupos de su box, edita el perfil del box y da de alta coaches.
+#  - "admin": administrador de la PLATAFORMA (no pertenece a ningún box). Aprueba boxes.
+ROLES = ("athlete", "coach", "owner", "admin")
+# Roles que programan entrenamientos (pasan require_coach)
+COACHING_ROLES = ("coach", "owner")
+
+
+class Box(Base):
+    """Un gimnasio/box cliente de la plataforma. Todo lo demás (usuarios, grupos, planes) cuelga
+    de un box: es la frontera de aislamiento entre clientes — un coach o atleta nunca ve datos de
+    otro box (ver backend/core/security.py)."""
+    __tablename__ = "boxes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    address = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
+    country = Column(String(100), nullable=True)
+    # Foto/logo del box: mismo pipeline de saneo que el avatar (magic number, re-render sin
+    # metadatos, nombre aleatorio). Vive en el bucket BOX_LOGO_BUCKET de Supabase Storage.
+    logo_filename = Column(String(255), nullable=True)
+    # Color de acento de la marca del box ("#rrggbb"). null = acento por defecto de la app.
+    # El frontend lo aplica con web/src/lib/brand.ts:applyAccent.
+    accent_color = Column(String(7), nullable=True)
+    # "pending" (se registró, espera aprobación del admin de plataforma) | "active" | "rejected"
+    # | "suspended". Solo un box activo puede programar entrenamientos o recibir atletas.
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    # Código que va en el link de invitación (/registro?box=CODIGO) para que un atleta se una a
+    # este box por su cuenta. El dueño puede regenerarlo si el link se filtró.
+    invite_code = Column(String(16), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+
+    members = relationship("User", back_populates="box", foreign_keys="User.box_id")
+
+    @property
+    def has_logo(self) -> bool:
+        return self.logo_filename is not None
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == "active"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -46,6 +96,9 @@ class User(Base):
     # que un coach lo agregue a un grupo (eso también le da acceso, vía Group.members) o lo
     # reclame explícitamente. Es la base de que "cada coach solo vea a sus propios atletas".
     coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Box al que pertenece. None solo para el admin de plataforma. RESTRICT: un box con miembros
+    # no se puede borrar por accidente (se suspende en su lugar).
+    box_id = Column(UUID(as_uuid=True), ForeignKey("boxes.id", ondelete="RESTRICT"), nullable=True, index=True)
 
     @property
     def has_avatar(self) -> bool:
@@ -58,6 +111,7 @@ class User(Base):
     personal_records = relationship("PersonalRecord", back_populates="user", cascade="all, delete-orphan")
     coached_groups = relationship("Group", back_populates="coach", foreign_keys="Group.coach_id", cascade="all, delete-orphan")
     coach = relationship("User", remote_side=[id], foreign_keys=[coach_id])
+    box = relationship("Box", back_populates="members", foreign_keys=[box_id])
 
 
 # Tabla puente para la relación muchos-a-muchos Grupo <-> Atleta
@@ -74,6 +128,9 @@ class Group(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    # Box del grupo (el del coach que lo creó). El dueño del box puede gestionar todos los
+    # grupos de su box, incluidos los "generales" que arma para atletas sin coach.
+    box_id = Column(UUID(as_uuid=True), ForeignKey("boxes.id", ondelete="RESTRICT"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     # Foto de portada (mismo pipeline de saneo que el avatar de usuario: magic-number, re-render
@@ -120,9 +177,14 @@ class Mesocycle(Base):
     # sentido en plantillas (is_template=True) pero vive en esta tabla como el resto de campos
     # exclusivos de plan (description, level, price). Vive en backend/uploads/plan_covers/.
     cover_image_filename = Column(String(255), nullable=True)
+    # Solo en planes: box del autor y quién puede verlo en el catálogo. "box" = solo atletas del
+    # mismo box; "public" = cualquier atleta de la plataforma. Lo elige el coach al publicar.
+    box_id = Column(UUID(as_uuid=True), ForeignKey("boxes.id", ondelete="SET NULL"), nullable=True, index=True)
+    plan_visibility = Column(String(10), nullable=False, default="box", server_default="box")
 
     user = relationship("User", back_populates="mesocycles", foreign_keys=[user_id])
     created_by_coach = relationship("User", foreign_keys=[created_by_coach_id])
+    box = relationship("Box")
     group = relationship("Group")
     # passive_deletes=True: al borrar un mesociclo/plan, deja que la base de datos borre las
     # sesiones en cascada ella misma (ya tiene ON DELETE CASCADE) en vez de que SQLAlchemy traiga

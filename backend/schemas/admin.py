@@ -10,7 +10,7 @@ from backend.schemas.common import SanitizedModel
 # --- ESQUEMAS PARA EL PANEL DE ADMINISTRACIÓN ---
 class UserRoleUpdate(SanitizedModel):
     """Solo un admin puede cambiar el rol de un usuario (incluyendo promover a otro admin)."""
-    role: Literal["athlete", "coach", "admin"]
+    role: Literal["athlete", "coach", "owner", "admin"]
 
 
 class AdminOverview(BaseModel):
@@ -18,6 +18,8 @@ class AdminOverview(BaseModel):
     total_coaches: int
     total_athletes: int
     total_admins: int
+    total_boxes: int = 0
+    boxes_pending: int = 0
     total_groups: int
     total_mesocycles: int
     total_sessions: int

@@ -11,7 +11,7 @@ from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
 from backend.database import engine, get_db
 from backend import models, storage
-from backend.routers import admin, ai, auth, fitness, groups, mesocycles, plans, sessions, sets, users
+from backend.routers import admin, ai, auth, boxes, fitness, groups, mesocycles, plans, sessions, sets, users
 
 # Esto crea las tablas si por alguna razón no existieran en la BD
 models.Base.metadata.create_all(bind=engine)
@@ -63,6 +63,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(boxes.router)
 app.include_router(users.router)
 app.include_router(fitness.router)
 app.include_router(groups.router)
