@@ -311,7 +311,9 @@ export function Toast({
   }, [message, onDismiss]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4">
+    // Justo encima de la barra inferior (incluido el indicador de gestos); en escritorio,
+    // centrado en el área de contenido, a la derecha del sidebar
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom)+0.75rem)] z-50 flex justify-center px-4 lg:bottom-6 lg:left-sidebar">
       <div
         className={cx(
           "max-w-sm rounded-xl px-4 py-3 text-sm font-semibold shadow-lg",
