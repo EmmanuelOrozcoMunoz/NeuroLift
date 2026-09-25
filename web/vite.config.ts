@@ -48,6 +48,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+        // De Inter solo se precachea el alfabeto latino (incluye ñ y tildes). Los demás
+        // (cirílico, griego, vietnamita, latin-ext) los baja el navegador bajo demanda si algún
+        // texto los necesita: precacharlos sumaba ~170 KB a cada instalación sin usarse nunca.
+        globIgnores: ["**/inter-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese,latin-ext}-*.woff2"],
         // El shell se sirve desde caché para que la app abra sin red; los datos de la API
         // NUNCA se cachean aquí (van con token y cambian a cada rato) — de eso se encarga
         // TanStack Query en memoria.
