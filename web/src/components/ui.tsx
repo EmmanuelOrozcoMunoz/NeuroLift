@@ -245,7 +245,10 @@ export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-skeleton rounded-xl bg-surface-2", className)} />;
+  // Si quien lo usa pasa su propio radio (ej. rounded-full para un anillo), ese manda: dos
+  // clases de radio a la vez no garantizan cuál gana, depende del orden en el CSS generado.
+  const ownRadius = (className ?? "").includes("rounded");
+  return <div aria-hidden className={cx("animate-skeleton bg-surface-2", !ownRadius && "rounded-xl", className)} />;
 }
 
 export function LoadingList({ rows = 3 }: { rows?: number }) {
