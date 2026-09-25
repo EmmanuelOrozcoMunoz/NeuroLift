@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { IconDownload, IconShare } from "@/components/icons";
+import { IconDownload, IconShare, Logo } from "@/components/icons";
 import { Button, Card, cx } from "@/components/ui";
 import { useInstallPrompt } from "@/lib/pwa";
 
@@ -82,7 +82,7 @@ export function InstallAppCard({ className }: { className?: string }) {
   return (
     <Card className={className}>
       <div className="flex items-start gap-3">
-        <img src="/pwa-64x64.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+        <Logo className="h-11 w-11 shrink-0" />
         <div className="min-w-0">
           <p className="font-bold">Instala NeuroLift</p>
           <p className="text-sm text-muted">Ábrela desde tu pantalla de inicio, a pantalla completa y más rápido.</p>

@@ -25,8 +25,8 @@ export default defineConfig({
         scope: "/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#0b0f14",
-        theme_color: "#0b0f14",
+        background_color: "#121212",
+        theme_color: "#121212",
         categories: ["health", "fitness", "sports"],
         // PNG generados con `npm run pwa-assets` (ver pwa-assets.config.ts)
         icons: [

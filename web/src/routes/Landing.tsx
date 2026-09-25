@@ -11,6 +11,7 @@ import {
   IconToday,
   IconTrophy,
   IconUsers,
+  Logo,
 } from "@/components/icons";
 import { cx } from "@/components/ui";
 import { useInstallPrompt } from "@/lib/pwa";
@@ -31,7 +32,7 @@ export default function Landing() {
       {/* ------------------------------------------------------------ barra superior */}
       <header className="pt-safe mx-auto flex max-w-5xl items-center justify-between px-5">
         <div className="flex min-h-16 items-center gap-2.5">
-          <img src="/pwa-64x64.png" alt="" className="h-8 w-8 rounded-lg" />
+          <Logo className="h-8 w-8" />
           <span className="font-bold tracking-tight">NeuroLift</span>
         </div>
         <Link to="/login" className="rounded-xl px-3 py-2 text-sm font-semibold text-muted active:bg-surface-2">
@@ -41,7 +42,7 @@ export default function Landing() {
 
       {/* ---------------------------------------------------------------------- hero */}
       <section className="relative mx-auto grid max-w-5xl items-center gap-12 px-5 pt-8 pb-16 md:grid-cols-2 md:pt-16">
-        {/* Halo violeta detrás del teléfono: da profundidad sin imágenes externas */}
+        {/* Halo del color de acento detrás del teléfono: da profundidad sin imágenes externas */}
         <div
           aria-hidden
           className="pointer-events-none absolute top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl md:top-24 md:left-3/4"
@@ -65,7 +66,7 @@ export default function Landing() {
                 "flex min-h-12 w-full items-center justify-center rounded-xl px-4 font-semibold transition-colors",
                 installable
                   ? "border border-line bg-surface-2 text-fg active:bg-line"
-                  : "bg-brand text-white active:bg-brand/85",
+                  : "bg-brand text-on-brand active:bg-brand/85",
               )}
             >
               Crear cuenta

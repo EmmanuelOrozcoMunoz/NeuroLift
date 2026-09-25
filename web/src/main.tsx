@@ -7,6 +7,7 @@ import App from "@/App";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { ApiError } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
+import { initAccent } from "@/lib/brand";
 // Efecto secundario: registra el listener de beforeinstallprompt lo antes posible
 import "@/lib/pwa";
 import "@/index.css";
@@ -25,6 +26,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Antes de montar: el acento del box se aplica sin mostrar un instante el color por defecto
+initAccent();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

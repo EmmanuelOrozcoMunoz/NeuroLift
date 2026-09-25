@@ -9,8 +9,8 @@ export default defineConfig({
     ...minimal2023Preset,
     // El fondo del SVG ya es el color de la app: sin padding extra para "any" ni para iOS
     transparent: { ...minimal2023Preset.transparent, padding: 0 },
-    maskable: { ...minimal2023Preset.maskable, padding: 0, resizeOptions: { background: "#0b0f14" } },
-    apple: { ...minimal2023Preset.apple, padding: 0, resizeOptions: { background: "#0b0f14" } },
+    maskable: { ...minimal2023Preset.maskable, padding: 0, resizeOptions: { background: "#121212" } },
+    apple: { ...minimal2023Preset.apple, padding: 0, resizeOptions: { background: "#121212" } },
   },
   images: ["public/icon.svg"],
 });

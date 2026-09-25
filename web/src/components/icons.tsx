@@ -190,3 +190,20 @@ export function IconShare({ className = base }: IconProps) {
     </svg>
   );
 }
+
+/** Logo de NeuroLift (la mancuerna del ícono de la app). Toma el color de acento del box vía
+ *  text-brand; el ícono PNG de la pantalla de inicio sí es fijo. */
+export function Logo({ className = "h-8 w-8" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" aria-hidden>
+      <rect width="32" height="32" rx="8" className="fill-surface" />
+      <path
+        d="M8 12v8M11 9v14M21 9v14M24 12v8M11 16h10"
+        className="stroke-brand"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
