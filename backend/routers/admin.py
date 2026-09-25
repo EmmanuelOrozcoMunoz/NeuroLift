@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend import models, schemas
+from backend.core import billing
 from backend.core.logging import security_logger
 from backend.core.security import require_admin
 from backend.database import get_db
@@ -158,6 +159,12 @@ def list_boxes(
             state=b.state,
             country=b.country,
             status=b.status,
+            kind=b.kind,
+            plan=b.plan,
+            subscription_status=billing.subscription_status(b),
+            trial_ends_at=b.trial_ends_at,
+            paid_until=b.paid_until,
+            max_athletes=billing.max_athletes(b),
             has_logo=b.has_logo,
             owner_name=dueno.full_name if dueno else None,
             owner_email=dueno.email if dueno else None,
@@ -184,9 +191,55 @@ def update_box_status(
     box.status = req.status
     if req.status == "active" and box.approved_at is None:
         box.approved_at = datetime.utcnow()
+        # La prueba gratis de un box empieza al aprobarlo, no al registrarse (mientras está
+        # pendiente no puede usar la app, así que no tendría sentido "gastarle" días de prueba)
+        if box.trial_ends_at is None:
+            box.trial_ends_at = billing.trial_end_from(box.approved_at)
     db.commit()
     security_logger.info(
         "Estado de box: admin=%s cambió '%s' de '%s' a '%s'", current_user.email, box.name, anterior, req.status
     )
     etiqueta = {"active": "activo", "pending": "pendiente", "rejected": "rechazado", "suspended": "suspendido"}
     return {"message": f"El box '{box.name}' ahora está {etiqueta[req.status]}."}
+
+
+@router.put("/boxes/{box_id}/plan", response_model=schemas.MessageResponse)
+def update_box_plan(
+    box_id: UUID,
+    req: schemas.AdminBoxPlanUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Cambia el plan de una cuenta. Bajar a un plan con menos atletas de los que ya tiene NO
+    saca a nadie: solo impide agregar nuevos hasta que vuelvan a estar dentro del límite."""
+    box = db.query(models.Box).filter(models.Box.id == box_id).first()
+    if not box:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+    anterior = box.plan
+    box.plan = req.plan
+    db.commit()
+    security_logger.info("Plan: admin=%s cambió '%s' de '%s' a '%s'", current_user.email, box.name, anterior, req.plan)
+    return {"message": f"'{box.name}' ahora está en el plan {billing.PLANS[req.plan]['name'].lower()}."}
+
+
+@router.post("/boxes/{box_id}/payment", response_model=schemas.MessageResponse)
+def register_box_payment(
+    box_id: UUID,
+    req: schemas.AdminPaymentCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Registra un pago manual (transferencia, Nequi, efectivo...): extiende la suscripción desde
+    el vencimiento actual si sigue vigente, o desde hoy si ya había vencido."""
+    box = db.query(models.Box).filter(models.Box.id == box_id).first()
+    if not box:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+    ahora = datetime.utcnow()
+    desde = box.paid_until if box.paid_until and box.paid_until > ahora else ahora
+    box.paid_until = desde + timedelta(days=billing.PAYMENT_PERIOD_DAYS * req.months)
+    db.commit()
+    security_logger.info(
+        "Pago registrado: admin=%s, cuenta='%s', %s mes(es), pagado hasta %s",
+        current_user.email, box.name, req.months, box.paid_until.date(),
+    )
+    return {"message": f"Pago registrado. '{box.name}' queda pagado hasta el {box.paid_until.strftime('%d/%m/%Y')}."}

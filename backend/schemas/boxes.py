@@ -8,6 +8,9 @@ from backend.schemas.common import SanitizedModel
 
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 BoxStatus = Literal["pending", "active", "rejected", "suspended"]
+BoxKind = Literal["box", "coach"]
+PlanCode = Literal["basic", "pro", "unlimited"]
+SubscriptionStatus = Literal["trial", "active", "expired"]
 
 
 def _luminance(hex_color: str) -> float:
@@ -47,6 +50,13 @@ class BoxRegister(BoxAddress):
     password: str = Field(..., min_length=8, max_length=128)
 
 
+class CoachAccountRegister(SanitizedModel):
+    """Alta pública de un coach independiente (sin box): queda activo con prueba gratis."""
+    full_name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+
+
 class BoxUpdate(BoxAddress):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     # "" o null = volver al acento por defecto de la app
@@ -64,6 +74,7 @@ class BoxSummary(BaseModel):
     name: str
     city: Optional[str] = None
     status: BoxStatus
+    kind: BoxKind = "box"
     accent_color: Optional[str] = None
     has_logo: bool = False
 
@@ -78,6 +89,26 @@ class BoxDetail(BoxSummary):
     country: Optional[str] = None
     invite_code: Optional[str] = None
     created_at: Optional[datetime] = None
+    # Suscripción (solo la recibe el dueño de la cuenta; ver routers/boxes.py:_box_detail)
+    plan: Optional[PlanCode] = None
+    subscription_status: Optional[SubscriptionStatus] = None
+    trial_ends_at: Optional[datetime] = None
+    paid_until: Optional[datetime] = None
+    athletes_count: Optional[int] = None
+    max_athletes: Optional[int] = None
+
+
+class PricingPlan(BaseModel):
+    code: PlanCode
+    name: str
+    max_athletes: Optional[int] = None
+    monthly_price: int
+    currency: str
+
+
+class PricingResponse(BaseModel):
+    trial_days: int
+    plans: list[PricingPlan]
 
 
 class BoxPublicInfo(BaseModel):
@@ -85,6 +116,7 @@ class BoxPublicInfo(BaseModel):
     box se va a unir el atleta — sin dirección, miembros ni nada más."""
     name: str
     city: Optional[str] = None
+    kind: BoxKind = "box"
 
     class Config:
         from_attributes = True
@@ -121,6 +153,12 @@ class AdminBoxRow(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = None
     status: BoxStatus
+    kind: BoxKind = "box"
+    plan: PlanCode = "basic"
+    subscription_status: SubscriptionStatus = "expired"
+    trial_ends_at: Optional[datetime] = None
+    paid_until: Optional[datetime] = None
+    max_athletes: Optional[int] = None
     has_logo: bool = False
     owner_name: Optional[str] = None
     owner_email: Optional[str] = None
@@ -131,3 +169,13 @@ class AdminBoxRow(BaseModel):
 
 class AdminBoxStatusUpdate(SanitizedModel):
     status: BoxStatus
+
+
+class AdminBoxPlanUpdate(SanitizedModel):
+    plan: PlanCode
+
+
+class AdminPaymentCreate(SanitizedModel):
+    """Registra un pago manual: extiende la suscripción `months` periodos de 30 días, contados
+    desde el vencimiento actual si sigue vigente, o desde hoy si ya venció."""
+    months: int = Field(1, ge=1, le=12)

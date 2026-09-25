@@ -1,6 +1,7 @@
 """Boxes (gimnasios cliente): alta pública, perfil, logo, código de invitación y gestión de
 miembros por parte del dueño. La aprobación de boxes nuevos vive en routers/admin.py."""
 import secrets
+from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
+from backend.core import billing
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -22,6 +24,7 @@ from backend.routers.auth import find_active_box_by_code
 
 router = APIRouter(prefix="/boxes", tags=["boxes"])
 
+COACH_REGISTER_MESSAGE = "Si el correo no estaba registrado, tu cuenta de coach fue creada. Ya puedes iniciar sesión."
 BOX_REGISTER_MESSAGE = (
     "Recibimos la solicitud de tu box. Te avisaremos en cuanto esté aprobado; mientras tanto ya "
     "puedes iniciar sesión para completar su perfil."
@@ -38,11 +41,20 @@ def new_invite_code(db: Session) -> str:
             return code
 
 
-def _box_detail(box: models.Box, viewer: models.User) -> schemas.BoxDetail:
+def _box_detail(box: models.Box, viewer: models.User, db: Session) -> schemas.BoxDetail:
     detalle = schemas.BoxDetail.model_validate(box)
     # El código de invitación lo reparten el dueño y los coaches; un atleta no lo necesita
     if viewer.role not in models.COACHING_ROLES:
         detalle.invite_code = None
+    # La suscripción solo le concierne a quien la paga (el dueño de la cuenta)
+    if viewer.role == "owner" and viewer.box_id == box.id:
+        detalle.subscription_status = billing.subscription_status(box)
+        detalle.athletes_count = billing.athletes_count(db, box.id)
+        detalle.max_athletes = billing.max_athletes(box)
+    else:
+        detalle.plan = None
+        detalle.trial_ends_at = None
+        detalle.paid_until = None
     return detalle
 
 
@@ -87,6 +99,56 @@ def register_box(request: Request, req: schemas.BoxRegister, db: Session = Depen
     return {"message": BOX_REGISTER_MESSAGE}
 
 
+@router.post("/register-coach", response_model=schemas.MessageResponse)
+@limiter.limit("3/hour")
+def register_independent_coach(request: Request, req: schemas.CoachAccountRegister, db: Session = Depends(get_db)):
+    """Alta pública de un coach independiente, sin box. Por dentro se le crea su propia cuenta
+    (Box con kind="coach") de la que es dueño: así hereda todo el aislamiento entre cuentas y la
+    suscripción, sin que la interfaz le muestre nunca un "box". Queda activo de inmediato con
+    prueba gratis en el plan básico.
+
+    Igual que /auth/register, responde lo mismo exista o no ya ese correo (no enumera cuentas)."""
+    existente = db.query(models.User).filter(models.User.email == req.email).first()
+    hashed_password = get_password_hash(req.password)
+
+    if not existente:
+        ahora = datetime.utcnow()
+        cuenta = models.Box(
+            name=req.full_name,
+            kind="coach",
+            status="active",
+            approved_at=ahora,
+            plan=billing.DEFAULT_PLAN,
+            trial_ends_at=billing.trial_end_from(ahora),
+            invite_code=new_invite_code(db),
+        )
+        db.add(cuenta)
+        db.flush()
+        db.add(models.User(
+            email=req.email,
+            full_name=req.full_name,
+            hashed_password=hashed_password,
+            role="owner",
+            box_id=cuenta.id,
+        ))
+        db.commit()
+        security_logger.info("Coach independiente registrado: %s desde %s", req.email, _client_ip(request))
+
+    return {"message": COACH_REGISTER_MESSAGE}
+
+
+@router.get("/pricing", response_model=schemas.PricingResponse)
+def get_pricing():
+    """Tabla de planes (pública: la muestra la landing)."""
+    return schemas.PricingResponse(
+        trial_days=billing.TRIAL_DAYS,
+        plans=[
+            schemas.PricingPlan(code=code, currency=billing.CURRENCY, **plan)
+            for code, plan in billing.PLANS.items()
+        ],
+    )
+
+
 @router.get("/by-code/{code}", response_model=schemas.BoxPublicInfo)
 @limiter.limit("30/minute")
 def get_box_by_invite_code(request: Request, code: str, db: Session = Depends(get_db)):
@@ -97,10 +159,10 @@ def get_box_by_invite_code(request: Request, code: str, db: Session = Depends(ge
 # ------------------------------------------------------------- perfil del box
 
 @router.get("/me", response_model=schemas.BoxDetail)
-def get_my_box(current_user: models.User = Depends(get_current_user)):
+def get_my_box(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.box is None:
         raise HTTPException(status_code=404, detail="No perteneces a ningún box")
-    return _box_detail(current_user.box, current_user)
+    return _box_detail(current_user.box, current_user, db)
 
 
 @router.put("/me", response_model=schemas.BoxDetail)
@@ -115,7 +177,7 @@ def update_my_box(
         setattr(box, campo, valor)
     db.commit()
     db.refresh(box)
-    return _box_detail(box, current_user)
+    return _box_detail(box, current_user, db)
 
 
 @router.post("/me/logo", response_model=schemas.BoxDetail)
@@ -138,7 +200,7 @@ async def upload_box_logo(
     db.commit()
     db.refresh(box)
     storage.delete_object(storage.BOX_LOGO_BUCKET, nombre_anterior)
-    return _box_detail(box, current_user)
+    return _box_detail(box, current_user, db)
 
 
 @router.delete("/me/logo", response_model=schemas.MessageResponse)
@@ -171,7 +233,7 @@ def rotate_invite_code(db: Session = Depends(get_db), current_user: models.User 
     box.invite_code = new_invite_code(db)
     db.commit()
     db.refresh(box)
-    return _box_detail(box, current_user)
+    return _box_detail(box, current_user, db)
 
 
 # ---------------------------------------------------------------- miembros
@@ -215,6 +277,8 @@ def create_box_coach(
     """El dueño da de alta a un coach de su box. Aquí SÍ se avisa si el correo ya existe: quien
     llama es el dueño autenticado de un box (no un anónimo), el endpoint va limitado por hora, y
     sin el aviso no tendría forma de saber por qué su coach no puede entrar."""
+    if current_user.box.kind != "box":
+        raise HTTPException(status_code=403, detail="Solo un box puede tener varios coaches.")
     if not current_user.box.is_active:
         raise HTTPException(status_code=403, detail="Podrás agregar coaches cuando tu box esté aprobado.")
     if db.query(models.User.id).filter(models.User.email == req.email).first():
