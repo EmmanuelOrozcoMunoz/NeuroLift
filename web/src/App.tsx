@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
+import { isStandalone } from "@/lib/pwa";
 import type { Role } from "@/lib/types";
 import AdminLogs from "@/routes/admin/Logs";
 import AdminOverview from "@/routes/admin/Overview";
@@ -15,6 +16,7 @@ import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
 import Groups from "@/routes/coach/Groups";
 import Leaderboard from "@/routes/coach/Leaderboard";
+import Landing from "@/routes/Landing";
 import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
 import CoachPlanEditor from "@/routes/coach/PlanEditor";
 import CoachPlans from "@/routes/coach/Plans";
@@ -49,7 +51,12 @@ function RequireAppAccess({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (loading) return <FullScreenLoader />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) {
+    // Quien llega a la raíz sin sesión desde el navegador ve primero la landing (qué es la app,
+    // instalarla, crear cuenta). Si ya la abrió instalada, eso sobra: directo al login.
+    if (location.pathname === "/" && !isStandalone()) return <Navigate to="/bienvenida" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
 
   return <>{children}</>;
 }
@@ -88,6 +95,14 @@ function RootRoute() {
 export default function App() {
   return (
     <Routes>
+      <Route
+        path="/bienvenida"
+        element={
+          <RedirectIfLogged>
+            <Landing />
+          </RedirectIfLogged>
+        }
+      />
       <Route
         path="/login"
         element={

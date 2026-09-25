@@ -10,9 +10,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      // "prompt" y no "autoUpdate": con autoUpdate el SW nuevo toma control y la app se recarga
+      // sola, lo que puede pasar a media sesión (con el WodTimer corriendo o series sin guardar).
+      // Con "prompt" el usuario decide cuándo — ver components/UpdatePrompt.tsx.
+      registerType: "prompt",
+      includeAssets: ["favicon.svg", "favicon.ico", "apple-touch-icon-180x180.png"],
       manifest: {
+        id: "/",
         name: "NeuroLift",
         short_name: "NeuroLift",
         description: "Tus entrenamientos, tus marcas y tu progreso.",
@@ -23,18 +27,34 @@ export default defineConfig({
         orientation: "portrait",
         background_color: "#0b0f14",
         theme_color: "#0b0f14",
+        categories: ["health", "fitness", "sports"],
+        // PNG generados con `npm run pwa-assets` (ver pwa-assets.config.ts)
         icons: [
-          { src: "/icon.svg", sizes: "192x192 512x512", type: "image/svg+xml" },
-          { src: "/icon-maskable.svg", sizes: "192x192 512x512", type: "image/svg+xml", purpose: "maskable" },
+          { src: "/pwa-64x64.png", sizes: "64x64", type: "image/png" },
+          { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
+          { src: "/maskable-icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+        // Accesos directos al mantener presionado el ícono (Android). Son rutas de atleta: a
+        // un coach/admin el RoleGate lo manda a su propio home.
+        shortcuts: [
+          { name: "Hoy", url: "/", icons: [{ src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" }] },
+          {
+            name: "Mis entrenos",
+            url: "/entrenos",
+            icons: [{ src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" }],
+          },
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
         // El shell se sirve desde caché para que la app abra sin red; los datos de la API
         // NUNCA se cachean aquí (van con token y cambian a cada rato) — de eso se encarga
         // TanStack Query en memoria.
         navigateFallback: "/index.html",
         runtimeCaching: [],
+        // Borra los precachés de versiones viejas del SW en vez de dejarlos ocupando espacio
+        cleanupOutdatedCaches: true,
       },
     }),
   ],

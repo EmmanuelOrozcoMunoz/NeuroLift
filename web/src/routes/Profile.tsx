@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { AvatarUploader } from "@/components/AvatarUploader";
+import { InstallAppCard } from "@/components/InstallApp";
 import { IconChevronRight, IconLogout, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { PlateAvailabilityToggle, WeightUnitToggle } from "@/components/WeightUnitToggle";
@@ -133,6 +134,8 @@ export default function Profile() {
           </Button>
         </form>
       </Card>
+
+      <InstallAppCard className="mt-6" />
 
       <Button variant="danger" full className="mt-6" onClick={() => void logout()}>
         <IconLogout className="h-5 w-5" />
