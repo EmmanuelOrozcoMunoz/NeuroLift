@@ -18,9 +18,11 @@ COACHING_ROLES = ("coach", "owner")
 
 
 class Box(Base):
-    """Un gimnasio/box cliente de la plataforma. Todo lo demás (usuarios, grupos, planes) cuelga
-    de un box: es la frontera de aislamiento entre clientes — un coach o atleta nunca ve datos de
-    otro box (ver backend/core/security.py)."""
+    """Una CUENTA cliente de la plataforma: un box (gimnasio), o el espacio personal de un coach
+    independiente (kind="coach"), que para el usuario "no pertenece a ningún box". Todo lo demás
+    (usuarios, grupos, planes) cuelga de una cuenta: es la frontera de aislamiento entre clientes
+    — un coach o atleta nunca ve datos de otra (ver backend/core/security.py). También es la
+    unidad que paga suscripción (ver backend/core/billing.py)."""
     __tablename__ = "boxes"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -43,6 +45,14 @@ class Box(Base):
     invite_code = Column(String(16), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     approved_at = Column(DateTime, nullable=True)
+    # "box" = gimnasio con dueño, coaches y atletas | "coach" = coach independiente: su único
+    # miembro con rol "owner" es el propio coach, y sus atletas son todos los de la cuenta.
+    kind = Column(String(10), nullable=False, default="box", server_default="box")
+    # Suscripción (cobro manual por ahora, ver backend/core/billing.py): plan según el número de
+    # atletas, fin de la prueba gratis y hasta cuándo está pagado.
+    plan = Column(String(20), nullable=False, default="basic", server_default="basic")
+    trial_ends_at = Column(DateTime, nullable=True)
+    paid_until = Column(DateTime, nullable=True)
 
     members = relationship("User", back_populates="box", foreign_keys="User.box_id")
 

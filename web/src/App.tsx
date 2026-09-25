@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { isStandalone } from "@/lib/pwa";
-import type { Role } from "@/lib/types";
+import type { Role, User } from "@/lib/types";
 import AdminBoxes from "@/routes/admin/Boxes";
 import AdminLogs from "@/routes/admin/Logs";
 import AdminOverview from "@/routes/admin/Overview";
@@ -34,6 +34,7 @@ import Plans from "@/routes/Plans";
 import Profile from "@/routes/Profile";
 import Register from "@/routes/Register";
 import RegisterBox from "@/routes/RegisterBox";
+import RegisterCoach from "@/routes/RegisterCoach";
 import SessionDetail from "@/routes/SessionDetail";
 import Today from "@/routes/Today";
 
@@ -68,8 +69,10 @@ function RequireAppAccess({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function homeForRole(role: Role): string {
-  if (role === "coach") return "/coach/atletas";
+function homeForRole(user: User): string {
+  const { role } = user;
+  // El coach independiente (dueño de una cuenta tipo "coach") trabaja como cualquier coach
+  if (role === "coach" || (role === "owner" && user.box?.kind === "coach")) return "/coach/atletas";
   if (role === "owner") return "/box";
   if (role === "admin") return "/admin";
   return "/";
@@ -91,7 +94,7 @@ function RoleGate({
 }) {
   const user = useCurrentUser();
   const allowed = Array.isArray(role) ? role : [role];
-  if (!allowed.includes(user.role)) return <Navigate to={homeForRole(user.role)} replace />;
+  if (!allowed.includes(user.role)) return <Navigate to={homeForRole(user)} replace />;
   if (user.role === "owner" && user.box?.status !== "active" && !allowInactiveBox) {
     return <Navigate to="/box" replace />;
   }
@@ -109,7 +112,7 @@ function RedirectIfLogged({ children }: { children: ReactNode }) {
  *  debe mandar de una vez a su propio home en vez de mostrarle la pantalla de atleta un instante. */
 function RootRoute() {
   const user = useCurrentUser();
-  if (user.role !== "athlete") return <Navigate to={homeForRole(user.role)} replace />;
+  if (user.role !== "athlete") return <Navigate to={homeForRole(user)} replace />;
   return <Today />;
 }
 
@@ -137,6 +140,14 @@ export default function App() {
         element={
           <RedirectIfLogged>
             <Register />
+          </RedirectIfLogged>
+        }
+      />
+      <Route
+        path="/registro-coach"
+        element={
+          <RedirectIfLogged>
+            <RegisterCoach />
           </RedirectIfLogged>
         }
       />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, SectionTitle, Sheet, Toast } from "@/components/ui";
@@ -14,6 +15,13 @@ type ToastState = { message: string; tone: "done" | "danger" } | null;
  * dueño lo incluya.
  */
 export default function BoxTeam() {
+  const me = useCurrentUser();
+  // Un coach independiente no tiene equipo que gestionar (su cuenta no admite más coaches)
+  if (me.box?.kind === "coach") return <Navigate to="/box" replace />;
+  return <BoxTeamContent />;
+}
+
+function BoxTeamContent() {
   const me = useCurrentUser();
   const coaches = useBoxMembers("coach");
   const athletes = useBoxMembers("athlete");

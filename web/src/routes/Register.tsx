@@ -9,6 +9,7 @@ import type { MessageResponse } from "@/lib/types";
 interface BoxPublicInfo {
   name: string;
   city: string | null;
+  kind: "box" | "coach";
 }
 
 type BoxLookup = { state: "idle" } | { state: "loading" } | { state: "ok"; box: BoxPublicInfo } | { state: "error"; message: string };
@@ -57,7 +58,7 @@ export default function Register() {
     setError(null);
 
     if (lookup.state !== "ok") {
-      setError("Escribe un código de box válido para continuar.");
+      setError("Escribe un código de invitación válido para continuar.");
       return;
     }
     if (password.length < 8) {
@@ -96,13 +97,13 @@ export default function Register() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
       <h1 className="mb-1 text-3xl font-bold">Crear cuenta</h1>
       <p className="mb-6 text-sm text-muted">
-        Únete a tu box con el código o el link que te compartió tu coach.
+        Únete con el código o el link que te compartió tu coach o tu box.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Field
-            label="Código de tu box"
+            label="Código de invitación"
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
@@ -118,7 +119,8 @@ export default function Register() {
             <p className="mt-2 flex items-start gap-2 rounded-xl bg-done-soft px-3 py-2 text-sm font-medium text-done">
               <IconCheck className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                Te unirás a <b>{lookup.box.name}</b>
+                {lookup.box.kind === "coach" ? "Entrenarás con " : "Te unirás a "}
+                <b>{lookup.box.name}</b>
                 {lookup.box.city && <span className="text-done/80"> · {lookup.box.city}</span>}
               </span>
             </p>
@@ -179,7 +181,11 @@ export default function Register() {
         </Link>
       </p>
       <p className="mt-2 text-center text-sm text-muted">
-        ¿Eres dueño de un box?{" "}
+        ¿Eres coach?{" "}
+        <Link to="/registro-coach" className="font-semibold text-brand">
+          Crea tu cuenta de coach
+        </Link>
+        {" · "}
         <Link to="/registrar-box" className="font-semibold text-brand">
           Registra tu box
         </Link>

@@ -5,8 +5,10 @@
 from backend.schemas.common import Bloque, Dia, FormatoWod, MessageResponse, SanitizedModel
 from backend.schemas.auth import UserLogin, UserRegister
 from backend.schemas.boxes import (
+    AdminBoxPlanUpdate,
     AdminBoxRow,
     AdminBoxStatusUpdate,
+    AdminPaymentCreate,
     AthleteCoachAssign,
     BoxDetail,
     BoxMember,
@@ -14,7 +16,10 @@ from backend.schemas.boxes import (
     BoxRegister,
     BoxSummary,
     BoxUpdate,
+    CoachAccountRegister,
     CoachCreate,
+    PricingPlan,
+    PricingResponse,
 )
 from backend.schemas.users import (
     AthleteActivityResponse,

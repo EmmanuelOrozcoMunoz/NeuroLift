@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend import models, schemas
+from backend.core import billing
 from backend.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
 from backend.core.logging import security_logger
 from backend.core.security import (
@@ -51,6 +52,14 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
     else:
         box = find_active_box_by_code(db, user.invite_code)
         coach_id = None
+    # En la cuenta de un coach independiente, todo atleta es de ese coach
+    if box.kind == "coach" and coach_id is None:
+        dueno = db.query(models.User.id).filter(models.User.box_id == box.id, models.User.role == "owner").first()
+        coach_id = dueno[0] if dueno else None
+
+    # Límite de atletas del plan / suscripción vencida. Va ANTES de mirar si el correo existe:
+    # así la respuesta depende solo de la cuenta, nunca de si ese correo ya estaba registrado.
+    billing.ensure_can_add_athlete(db, box)
 
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     # Siempre se hashea la contraseña, se use o no, para que ambas rutas tarden lo mismo.

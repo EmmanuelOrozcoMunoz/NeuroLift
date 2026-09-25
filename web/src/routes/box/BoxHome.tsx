@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { PageHeader } from "@/components/AppShell";
 import { BoxLogo } from "@/components/BoxLogo";
+import { SubscriptionCard } from "@/components/Subscription";
 import { IconCamera, IconCheck, IconChevronRight, IconClock, IconShare, IconTrophy, IconUsers } from "@/components/icons";
 import { Badge, Button, Card, ErrorState, Field, LoadingList, SectionTitle, Toast, cx } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -44,10 +45,15 @@ export default function BoxHome() {
 
   const active = box.status === "active";
   const statusCopy = box.status === "active" ? null : STATUS_COPY[box.status];
+  // Coach independiente: la misma pantalla, pero como "su cuenta" (sin dirección ni coaches)
+  const isCoach = box.kind === "coach";
 
   return (
     <>
-      <PageHeader title={box.name} subtitle={[box.city, box.state].filter(Boolean).join(", ") || "Mi box"} />
+      <PageHeader
+        title={isCoach ? "Mi cuenta" : box.name}
+        subtitle={isCoach ? "Coach independiente" : [box.city, box.state].filter(Boolean).join(", ") || "Mi box"}
+      />
 
       {statusCopy && (
         <Card className={cx("mb-4", box.status === "pending" ? "border-warn/40" : "border-danger/40")}>
@@ -65,11 +71,23 @@ export default function BoxHome() {
 
       {active && (
         <>
+          <div className="mb-4">
+            <SubscriptionCard account={box} />
+          </div>
           <InviteCard box={box} onToast={notify} />
           <div className="mt-4 space-y-2">
-            <NavRow to="/box/equipo" icon={<IconUsers />} title="Coaches y atletas" subtitle="Da de alta coaches y asigna atletas" />
-            <NavRow to="/coach/grupos" icon={<IconCheck />} title="Grupos y mesociclos generales" subtitle="Programa a los atletas sin coach" />
-            <NavRow to="/coach/actividad" icon={<IconTrophy />} title="Actividad del box" subtitle="Quién entrenó esta semana" />
+            {!isCoach && (
+              <NavRow to="/box/equipo" icon={<IconUsers />} title="Coaches y atletas" subtitle="Da de alta coaches y asigna atletas" />
+            )}
+            {!isCoach && (
+              <NavRow to="/coach/grupos" icon={<IconCheck />} title="Grupos y mesociclos generales" subtitle="Programa a los atletas sin coach" />
+            )}
+            <NavRow
+              to="/coach/actividad"
+              icon={<IconTrophy />}
+              title={isCoach ? "Actividad de tus atletas" : "Actividad del box"}
+              subtitle="Quién entrenó esta semana"
+            />
           </div>
         </>
       )}
@@ -138,7 +156,9 @@ function LogoCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
         </button>
         <div className="min-w-0">
           <p className="truncate font-bold">{box.name}</p>
-          <p className="text-sm text-muted">La ven tus coaches y atletas en la app.</p>
+          <p className="text-sm text-muted">
+            {box.kind === "coach" ? "La ven tus atletas en la app." : "La ven tus coaches y atletas en la app."}
+          </p>
           <div className="mt-1 flex gap-3 text-xs font-semibold">
             <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="text-brand disabled:opacity-50">
               {box.has_logo ? "Cambiar foto" : "Subir foto"}
@@ -184,7 +204,8 @@ function InviteCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
 
   async function share() {
     try {
-      await navigator.share({ title: `Únete a ${box.name}`, text: `Crea tu cuenta en ${box.name} con este link:`, url: link });
+      const text = box.kind === "coach" ? `Entrena conmigo en NeuroLift:` : `Crea tu cuenta en ${box.name} con este link:`;
+      await navigator.share({ title: `Únete a ${box.name}`, text, url: link });
     } catch {
       /* el usuario canceló */
     }
@@ -193,7 +214,11 @@ function InviteCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
   return (
     <Card>
       <p className="font-bold">Invita a tus atletas</p>
-      <p className="mt-1 text-sm text-muted">Con este link crean su cuenta directo en tu box. También pueden escribir el código.</p>
+      <p className="mt-1 text-sm text-muted">
+        {box.kind === "coach"
+          ? "Con este link crean su cuenta y quedan como tus atletas. También pueden escribir el código."
+          : "Con este link crean su cuenta directo en tu box. También pueden escribir el código."}
+      </p>
       <div className="mt-3 rounded-xl bg-surface-2 p-3 text-center">
         <p className="font-mono text-2xl font-bold tracking-[0.3em] text-brand">{box.invite_code}</p>
         <p className="mt-1 truncate text-xs text-muted select-all">{link}</p>
@@ -226,6 +251,7 @@ function InviteCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
 
 function ProfileForm({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
   const update = useUpdateBox();
+  const isCoach = box.kind === "coach";
   const [form, setForm] = useState({
     name: box.name,
     address: box.address ?? "",
@@ -254,7 +280,7 @@ function ProfileForm({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
         country: optional(form.country),
       },
       {
-        onSuccess: () => onToast("Datos del box guardados."),
+        onSuccess: () => onToast(isCoach ? "Nombre guardado." : "Datos del box guardados."),
         onError: (err) => onToast(err instanceof Error ? err.message : "No se pudo guardar.", "danger"),
       },
     );
@@ -262,16 +288,27 @@ function ProfileForm({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
 
   return (
     <>
-      <SectionTitle>Datos del box</SectionTitle>
+      <SectionTitle>{isCoach ? "Tu nombre de coach" : "Datos del box"}</SectionTitle>
       <Card>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Nombre" required minLength={2} maxLength={100} value={form.name} onChange={set("name")} />
-          <Field label="Calle y número" maxLength={255} value={form.address} onChange={set("address")} />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Ciudad" maxLength={100} value={form.city} onChange={set("city")} />
-            <Field label="Estado" maxLength={100} value={form.state} onChange={set("state")} />
-          </div>
-          <Field label="País" maxLength={100} value={form.country} onChange={set("country")} />
+          <Field
+            label={isCoach ? "Nombre que ven tus atletas" : "Nombre"}
+            required
+            minLength={2}
+            maxLength={100}
+            value={form.name}
+            onChange={set("name")}
+          />
+          {!isCoach && (
+            <>
+              <Field label="Calle y número" maxLength={255} value={form.address} onChange={set("address")} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Ciudad" maxLength={100} value={form.city} onChange={set("city")} />
+                <Field label="Estado" maxLength={100} value={form.state} onChange={set("state")} />
+              </div>
+              <Field label="País" maxLength={100} value={form.country} onChange={set("country")} />
+            </>
+          )}
           <Button type="submit" full disabled={!dirty} loading={update.isPending}>
             Guardar datos
           </Button>
@@ -304,7 +341,11 @@ function AccentPicker({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
     <>
       <SectionTitle>Color de tu marca</SectionTitle>
       <Card>
-        <p className="text-sm text-muted">Se usa en botones, pestañas y resaltados para todos los miembros de tu box.</p>
+        <p className="text-sm text-muted">
+          {box.kind === "coach"
+            ? "Se usa en botones, pestañas y resaltados en la app de tus atletas."
+            : "Se usa en botones, pestañas y resaltados para todos los miembros de tu box."}
+        </p>
         <div className="mt-3 flex flex-wrap gap-2.5">
           {ACCENT_PRESETS.map((color) => (
             <button
