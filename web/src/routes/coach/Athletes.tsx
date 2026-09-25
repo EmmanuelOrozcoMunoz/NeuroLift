@@ -119,7 +119,8 @@ function RegisterAthleteSheet({ open, onClose }: { open: boolean; onClose: () =>
 
 export default function Athletes() {
   const { data, isPending, error, refetch } = useAthletes();
-  const isOwner = useCurrentUser().role === "owner";
+  const me = useCurrentUser();
+  const isOwner = me.role === "owner" && me.box?.kind === "box";
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 

@@ -88,7 +88,8 @@ function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => voi
 export default function Groups() {
   const user = useCurrentUser();
   const isAdmin = user.role === "admin";
-  const isOwner = user.role === "owner";
+  // Dueño de un box (no un coach independiente, que ve "Mis grupos" como cualquier coach)
+  const isOwner = user.role === "owner" && user.box?.kind === "box";
   const { data, isPending, error, refetch } = useGroups();
   const [sheetOpen, setSheetOpen] = useState(false);
 

@@ -19,9 +19,9 @@ PAYMENT_PERIOD_DAYS = 30
 
 # Orden = de menor a mayor. max_athletes None = sin límite.
 PLANS: dict[str, dict] = {
-    "basic": {"name": "Hasta 10 atletas", "max_athletes": 10, "monthly_price": 79_000},
-    "pro": {"name": "Hasta 30 atletas", "max_athletes": 30, "monthly_price": 149_000},
-    "unlimited": {"name": "Más de 30 atletas", "max_athletes": None, "monthly_price": 299_000},
+    "basic": {"name": "Básico", "max_athletes": 10, "monthly_price": 79_000},
+    "pro": {"name": "Pro", "max_athletes": 30, "monthly_price": 149_000},
+    "unlimited": {"name": "Ilimitado", "max_athletes": None, "monthly_price": 299_000},
 }
 DEFAULT_PLAN = "basic"
 

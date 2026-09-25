@@ -41,6 +41,15 @@ const OWNER_NAV = [
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
 
+// Coach independiente: la barra de un coach, con "Cuenta" (plan, link de invitación, marca)
+const INDEPENDENT_COACH_NAV = [
+  { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
+  { to: "/coach/planes", label: "Planes", icon: IconStore },
+  { to: "/box", label: "Cuenta", icon: IconHome },
+  { to: "/coach/perfil", label: "Perfil", icon: IconUser },
+];
+
 // Con el box pendiente o suspendido, el dueño solo tiene su panel y su perfil
 const OWNER_INACTIVE_NAV = [
   { to: "/box", label: "Box", icon: IconHome },
@@ -49,7 +58,7 @@ const OWNER_INACTIVE_NAV = [
 
 const ADMIN_NAV = [
   { to: "/admin", label: "Resumen", icon: IconShield },
-  { to: "/admin/boxes", label: "Boxes", icon: IconHome },
+  { to: "/admin/boxes", label: "Cuentas", icon: IconHome },
   { to: "/admin/usuarios", label: "Usuarios", icon: IconUsers },
   { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
   { to: "/admin/logs", label: "Logs", icon: IconList },
@@ -117,9 +126,11 @@ export function AppShell() {
     user.role === "coach"
       ? COACH_NAV
       : user.role === "owner"
-        ? user.box?.status === "active"
-          ? OWNER_NAV
-          : OWNER_INACTIVE_NAV
+        ? user.box?.status !== "active"
+          ? OWNER_INACTIVE_NAV
+          : user.box.kind === "coach"
+            ? INDEPENDENT_COACH_NAV
+            : OWNER_NAV
         : user.role === "admin"
           ? ADMIN_NAV
           : ATHLETE_NAV;

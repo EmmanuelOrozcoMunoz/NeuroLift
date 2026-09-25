@@ -115,3 +115,12 @@ export function monthGrid(year: number, month: number): CalendarCell[] {
   }
   return cells;
 }
+
+/**
+ * El backend guarda los datetimes en UTC pero SIN zona (ej. "2026-10-09T14:03:00"), y
+ * `new Date()` interpreta ese formato como hora LOCAL: en Colombia (UTC-5) corría todo 5 horas
+ * y "14 días de prueba" se mostraba como 15. Si el texto no trae zona, se le agrega la de UTC.
+ */
+export function parseUtcDateTime(iso: string): Date {
+  return new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`);
+}

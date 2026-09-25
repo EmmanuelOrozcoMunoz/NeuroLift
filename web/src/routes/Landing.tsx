@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { InstallButton } from "@/components/InstallApp";
+import { PricingGrid } from "@/components/Subscription";
 import {
   IconCheck,
   IconClock,
@@ -146,25 +147,33 @@ export default function Landing() {
       <section className="mx-auto max-w-5xl px-5 py-12">
         <div className="grid gap-6 md:grid-cols-2 md:items-center">
           <div>
-            <p className="text-sm font-semibold tracking-[0.2em] text-brand uppercase">Para dueños de box</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">Lleva a todo tu box en una sola app.</h2>
+            <p className="text-sm font-semibold tracking-[0.2em] text-brand uppercase">Para coaches y boxes</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">Programa a tus atletas en una sola app.</h2>
             <p className="mt-3 text-muted">
-              Registra tu box, da de alta a tus coaches y comparte un link para que tus atletas se unan. Cada coach
-              programa a los suyos, y tú asignas mesociclos generales a quien entrena sin coach.
+              ¿Entrenas por tu cuenta? Crea tu cuenta de coach y comparte un link con tus atletas. ¿Tienes un box?
+              Regístralo, da de alta a tus coaches y asigna mesociclos generales a quien entrena sin coach.
             </p>
-            <Link
-              to="/registrar-box"
-              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-line"
-            >
-              Registrar mi box
-            </Link>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                to="/registro-coach"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-brand px-5 font-semibold text-on-brand active:bg-brand/85"
+              >
+                Soy coach
+              </Link>
+              <Link
+                to="/registrar-box"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-line"
+              >
+                Tengo un box
+              </Link>
+            </div>
           </div>
           <ul className="space-y-3">
             {[
-              "Tu logo y el color de tu marca en toda la app",
+              "Tu logo y el color de tu marca en la app de tus atletas",
               "Coaches con sus propios atletas, sin ver los de los demás",
               "Grupos y mesociclos generales para el resto del box",
-              "Tus datos separados de los de cualquier otro box",
+              "Tus datos separados de los de cualquier otro coach o box",
             ].map((item) => (
               <li key={item} className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
@@ -175,6 +184,13 @@ export default function Landing() {
             ))}
           </ul>
         </div>
+      </section>
+
+      {/* ----------------------------------------------------------------- precios */}
+      <section className="mx-auto max-w-5xl px-5 py-12">
+        <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">Planes para coaches y boxes</h2>
+        <p className="mt-2 mb-4 text-muted">Pagas según cuántos atletas entrenas. Tus atletas no pagan por usar la app.</p>
+        <PricingGrid />
       </section>
 
       {/* ------------------------------------------------------------------- footer */}

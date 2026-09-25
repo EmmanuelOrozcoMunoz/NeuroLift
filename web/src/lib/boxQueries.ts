@@ -5,13 +5,33 @@ import { adminKeys } from "@/lib/adminQueries";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { coachKeys } from "@/lib/coachQueries";
-import type { AdminBoxRow, BoxDetail, BoxMember, BoxStatus, BoxUpdatePayload, MessageResponse, Role } from "@/lib/types";
+import type {
+  AdminBoxRow,
+  BoxDetail,
+  BoxMember,
+  BoxStatus,
+  BoxUpdatePayload,
+  MessageResponse,
+  PlanCode,
+  Pricing,
+  Role,
+} from "@/lib/types";
 
 export const boxKeys = {
   mine: ["box", "me"] as const,
   members: (role?: Role) => ["box", "members", role ?? "all"] as const,
   adminBoxes: ["admin", "boxes"] as const,
+  pricing: ["pricing"] as const,
 };
+
+/** Tabla de planes (pública: la usa la landing sin sesión). Cambia muy de vez en cuando. */
+export function usePricing(): UseQueryResult<Pricing> {
+  return useQuery({
+    queryKey: boxKeys.pricing,
+    queryFn: () => apiFetch<Pricing>("/boxes/pricing", { auth: false }),
+    staleTime: 60 * 60 * 1000,
+  });
+}
 
 /** Perfil completo del box del usuario (el código de invitación solo llega a dueño/coaches). */
 export function useMyBox(): UseQueryResult<BoxDetail> {
@@ -105,5 +125,24 @@ export function useUpdateBoxStatus() {
       void queryClient.invalidateQueries({ queryKey: boxKeys.adminBoxes });
       void queryClient.invalidateQueries({ queryKey: adminKeys.overview });
     },
+  });
+}
+
+export function useUpdateBoxPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ boxId, plan }: { boxId: string; plan: PlanCode }) =>
+      apiFetch<MessageResponse>(`/admin/boxes/${boxId}/plan`, { method: "PUT", body: { plan } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: boxKeys.adminBoxes }),
+  });
+}
+
+/** Pago manual (transferencia, Nequi...): extiende la suscripción `months` periodos de 30 días. */
+export function useRegisterPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ boxId, months }: { boxId: string; months: number }) =>
+      apiFetch<MessageResponse>(`/admin/boxes/${boxId}/payment`, { method: "POST", body: { months } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: boxKeys.adminBoxes }),
   });
 }

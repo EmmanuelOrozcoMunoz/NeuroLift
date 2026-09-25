@@ -10,12 +10,32 @@ export const COACHING_ROLES: Role[] = ["coach", "owner"];
 
 export type BoxStatus = "pending" | "active" | "rejected" | "suspended";
 
+/** "box" = gimnasio | "coach" = cuenta de un coach independiente (sin box, para el usuario) */
+export type BoxKind = "box" | "coach";
+export type PlanCode = "basic" | "pro" | "unlimited";
+export type SubscriptionStatus = "trial" | "active" | "expired";
+
+/** GET /boxes/pricing */
+export interface PricingPlan {
+  code: PlanCode;
+  name: string;
+  max_athletes: number | null;
+  monthly_price: number;
+  currency: string;
+}
+
+export interface Pricing {
+  trial_days: number;
+  plans: PricingPlan[];
+}
+
 /** Lo que cualquier miembro ve de su box (viene embebido en /auth/me). */
 export interface BoxSummary {
   id: string;
   name: string;
   city: string | null;
   status: BoxStatus;
+  kind: BoxKind;
   /** "#rrggbb" o null = acento por defecto de la app */
   accent_color: string | null;
   has_logo: boolean;
@@ -29,6 +49,13 @@ export interface BoxDetail extends BoxSummary {
   /** Solo lo reciben el dueño y los coaches */
   invite_code: string | null;
   created_at: string | null;
+  /** Suscripción: solo la recibe el dueño de la cuenta (null para los demás) */
+  plan: PlanCode | null;
+  subscription_status: SubscriptionStatus | null;
+  trial_ends_at: string | null;
+  paid_until: string | null;
+  athletes_count: number | null;
+  max_athletes: number | null;
 }
 
 export interface BoxUpdatePayload {
@@ -72,6 +99,12 @@ export interface AdminBoxRow {
   state: string | null;
   country: string | null;
   status: BoxStatus;
+  kind: BoxKind;
+  plan: PlanCode;
+  subscription_status: SubscriptionStatus;
+  trial_ends_at: string | null;
+  paid_until: string | null;
+  max_athletes: number | null;
   has_logo: boolean;
   owner_name: string | null;
   owner_email: string | null;
