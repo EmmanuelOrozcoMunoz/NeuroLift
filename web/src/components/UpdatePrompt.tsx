@@ -33,8 +33,8 @@ export function UpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
-    // bottom-24: queda encima de la barra de navegación inferior del shell
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4">
+    // Encima de la barra de navegación inferior del shell (ver Toast en ui.tsx)
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom)+0.75rem)] z-50 flex justify-center px-4 lg:bottom-6 lg:left-sidebar">
       <div
         role="status"
         className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border border-line bg-surface p-3 shadow-lg"
