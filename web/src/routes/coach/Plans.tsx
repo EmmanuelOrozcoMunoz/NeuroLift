@@ -7,7 +7,7 @@ import { WeekdayPicker } from "@/components/WeekdayPicker";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
 import { useCreatePlan, useDeletePlan, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
 import { formatPrice } from "@/lib/dates";
-import type { PlanLevel, Weekday } from "@/lib/types";
+import type { PlanLevel, PlanSummary, PlanVisibility, Weekday } from "@/lib/types";
 
 const DISCIPLINAS = ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting", "CrossFit"];
 const NIVELES: PlanLevel[] = ["Principiante", "Intermedio", "Avanzado"];
@@ -136,18 +136,89 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
   );
 }
 
+const VISIBILITY_OPTIONS: { value: PlanVisibility; title: string; description: string }[] = [
+  { value: "box", title: "Solo mi box", description: "Lo ven y adquieren únicamente los atletas de tu box." },
+  {
+    value: "public",
+    title: "Toda la plataforma",
+    description: "Cualquier atleta de NeuroLift, de cualquier box, lo verá en el catálogo.",
+  },
+];
+
+/** Al publicar, el coach decide quién puede ver el plan en el catálogo. */
+function PublishSheet({
+  plan,
+  onClose,
+  onDone,
+}: {
+  plan: PlanSummary | null;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const publish = usePublishPlan();
+  const [visibility, setVisibility] = useState<PlanVisibility>("box");
+
+  return (
+    <Sheet open={plan !== null} onClose={onClose} title="¿Quién puede verlo?">
+      <div className="space-y-2 pb-4">
+        {VISIBILITY_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
+              visibility === option.value ? "border-brand bg-brand-soft" : "border-line bg-surface-2"
+            }`}
+          >
+            <input
+              type="radio"
+              name="visibility"
+              className="mt-1 accent-[var(--color-brand)]"
+              checked={visibility === option.value}
+              onChange={() => setVisibility(option.value)}
+            />
+            <span>
+              <span className="block font-semibold">{option.title}</span>
+              <span className="block text-sm text-muted">{option.description}</span>
+            </span>
+          </label>
+        ))}
+        <Button
+          full
+          className="mt-2"
+          loading={publish.isPending}
+          onClick={() =>
+            plan &&
+            publish.mutate(
+              { planId: plan.id, isPublished: true, visibility },
+              {
+                onSuccess: () => {
+                  onDone(visibility === "public" ? "¡Publicado para toda la plataforma!" : "¡Publicado para tu box!");
+                  onClose();
+                },
+                onError: (err) => onDone(err instanceof Error ? err.message : "No se pudo publicar."),
+              },
+            )
+          }
+        >
+          Publicar
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
 export default function Plans() {
   const { data, isPending, error, refetch } = useMyPlans();
   const publish = usePublishPlan();
   const deletePlan = useDeletePlan();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [publishing, setPublishing] = useState<PlanSummary | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   return (
     <>
       <PageHeader
         title="Mis planes"
-        subtitle="Plantillas que cualquier atleta puede adquirir por su cuenta"
+        subtitle="Plantillas que los atletas adquieren por su cuenta"
         action={
           <button
             type="button"
@@ -181,6 +252,9 @@ export default function Plans() {
                     <Badge tone={plan.is_published ? "done" : "neutral"}>
                       {plan.is_published ? "Publicado" : "Borrador"}
                     </Badge>
+                    {plan.is_published && (
+                      <Badge tone="brand">{plan.visibility === "public" ? "Toda la plataforma" : "Solo mi box"}</Badge>
+                    )}
                   </div>
                   <p className="mt-1 text-sm text-muted">
                     {plan.discipline} · {plan.level} · {plan.weeks_count} sem ({plan.sessions_per_week}/sem) ·{" "}
@@ -200,13 +274,15 @@ export default function Plans() {
                 variant={plan.is_published ? "secondary" : "primary"}
                 loading={publish.isPending}
                 onClick={() =>
-                  publish.mutate(
-                    { planId: plan.id, isPublished: !plan.is_published },
-                    {
-                      onSuccess: () => setToast(plan.is_published ? "Plan despublicado." : "¡Plan publicado!"),
-                      onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo actualizar."),
-                    },
-                  )
+                  plan.is_published
+                    ? publish.mutate(
+                        { planId: plan.id, isPublished: false },
+                        {
+                          onSuccess: () => setToast("Plan despublicado."),
+                          onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo actualizar."),
+                        },
+                      )
+                    : setPublishing(plan)
                 }
               >
                 {plan.is_published ? "Despublicar" : "Publicar"}
@@ -222,6 +298,7 @@ export default function Plans() {
         ))}
       </div>
 
+      <PublishSheet plan={publishing} onClose={() => setPublishing(null)} onDone={setToast} />
       <CreatePlanSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}

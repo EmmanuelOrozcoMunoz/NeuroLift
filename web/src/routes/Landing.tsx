@@ -141,6 +141,41 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* -------------------------------------------------------------- para boxes */}
+      <section className="mx-auto max-w-5xl px-5 py-12">
+        <div className="grid gap-6 md:grid-cols-2 md:items-center">
+          <div>
+            <p className="text-sm font-semibold tracking-[0.2em] text-brand uppercase">Para dueños de box</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">Lleva a todo tu box en una sola app.</h2>
+            <p className="mt-3 text-muted">
+              Registra tu box, da de alta a tus coaches y comparte un link para que tus atletas se unan. Cada coach
+              programa a los suyos, y tú asignas mesociclos generales a quien entrena sin coach.
+            </p>
+            <Link
+              to="/registrar-box"
+              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-line"
+            >
+              Registrar mi box
+            </Link>
+          </div>
+          <ul className="space-y-3">
+            {[
+              "Tu logo y el color de tu marca en toda la app",
+              "Coaches con sus propios atletas, sin ver los de los demás",
+              "Grupos y mesociclos generales para el resto del box",
+              "Tus datos separados de los de cualquier otro box",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+                  <IconCheck className="h-4 w-4" />
+                </span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       {/* ------------------------------------------------------------------- footer */}
       <footer className="pb-safe mx-auto flex max-w-5xl flex-col items-center gap-2 px-5 pt-6 pb-10 text-center text-sm text-muted">
         <div className="flex items-center gap-2">

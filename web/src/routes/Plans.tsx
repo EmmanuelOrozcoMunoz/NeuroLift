@@ -4,11 +4,13 @@ import { PageHeader } from "@/components/AppShell";
 import { CoverThumbnail } from "@/components/CoverImage";
 import { IconChevronRight, IconStore } from "@/components/icons";
 import { Badge, EmptyState, ErrorState, LoadingList } from "@/components/ui";
+import { useCurrentUser } from "@/lib/auth";
 import { formatPrice } from "@/lib/dates";
 import { usePlanCatalog } from "@/lib/queries";
 
 export default function Plans() {
   const { data, isPending, error, refetch } = usePlanCatalog();
+  const myBoxName = useCurrentUser().box?.name;
 
   return (
     <>
@@ -40,7 +42,13 @@ export default function Plans() {
                 <p className="mt-1 text-sm text-muted">
                   {plan.discipline} · {plan.weeks_count} sem · {plan.sessions_per_week}/sem
                 </p>
-                {plan.coach_name && <p className="mt-0.5 text-xs text-muted">Por {plan.coach_name}</p>}
+                {plan.coach_name && (
+                  <p className="mt-0.5 text-xs text-muted">
+                    Por {plan.coach_name}
+                    {/* Un plan público de otro box: se aclara de dónde viene */}
+                    {plan.visibility === "public" && plan.box_name && plan.box_name !== myBoxName && ` · ${plan.box_name}`}
+                  </p>
+                )}
                 <p className="mt-1.5 text-sm font-semibold text-brand">{formatPrice(plan.price)}</p>
               </div>
               <IconChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted" />

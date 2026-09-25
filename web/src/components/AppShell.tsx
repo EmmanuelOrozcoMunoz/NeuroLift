@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   IconBack,
   IconDumbbell,
+  IconHome,
   IconList,
   IconOffline,
   IconShield,
@@ -32,8 +33,23 @@ const COACH_NAV = [
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
 
+const OWNER_NAV = [
+  { to: "/box", label: "Box", icon: IconHome },
+  { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
+  { to: "/coach/planes", label: "Planes", icon: IconStore },
+  { to: "/coach/perfil", label: "Perfil", icon: IconUser },
+];
+
+// Con el box pendiente o suspendido, el dueño solo tiene su panel y su perfil
+const OWNER_INACTIVE_NAV = [
+  { to: "/box", label: "Box", icon: IconHome },
+  { to: "/coach/perfil", label: "Perfil", icon: IconUser },
+];
+
 const ADMIN_NAV = [
   { to: "/admin", label: "Resumen", icon: IconShield },
+  { to: "/admin/boxes", label: "Boxes", icon: IconHome },
   { to: "/admin/usuarios", label: "Usuarios", icon: IconUsers },
   { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
   { to: "/admin/logs", label: "Logs", icon: IconList },
@@ -97,7 +113,16 @@ export function PageHeader({
 export function AppShell() {
   const online = useOnline();
   const user = useCurrentUser();
-  const navItems = user.role === "coach" ? COACH_NAV : user.role === "admin" ? ADMIN_NAV : ATHLETE_NAV;
+  const navItems =
+    user.role === "coach"
+      ? COACH_NAV
+      : user.role === "owner"
+        ? user.box?.status === "active"
+          ? OWNER_NAV
+          : OWNER_INACTIVE_NAV
+        : user.role === "admin"
+          ? ADMIN_NAV
+          : ATHLETE_NAV;
 
   return (
     <div className="mx-auto min-h-dvh max-w-md px-4">
@@ -119,7 +144,7 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end={to === "/" || to === "/admin"}
+              end={to === "/" || to === "/admin" || to === "/box"}
               className={({ isActive }) =>
                 cx(
                   "flex grow flex-col items-center gap-1 pt-2.5 pb-1.5 text-[11px] font-semibold",

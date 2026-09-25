@@ -2,7 +2,83 @@
 // /openapi.json solo fuera de producción, así que generar tipos automáticamente ataría el
 // build del frontend a tener el backend corriendo.
 
-export type Role = "athlete" | "coach" | "admin";
+/** owner = dueño del box: un coach con alcance sobre todo su box. admin = plataforma. */
+export type Role = "athlete" | "coach" | "owner" | "admin";
+
+/** Roles que programan entrenamientos (acceden a las pantallas de coach). */
+export const COACHING_ROLES: Role[] = ["coach", "owner"];
+
+export type BoxStatus = "pending" | "active" | "rejected" | "suspended";
+
+/** Lo que cualquier miembro ve de su box (viene embebido en /auth/me). */
+export interface BoxSummary {
+  id: string;
+  name: string;
+  city: string | null;
+  status: BoxStatus;
+  /** "#rrggbb" o null = acento por defecto de la app */
+  accent_color: string | null;
+  has_logo: boolean;
+}
+
+/** GET /boxes/me */
+export interface BoxDetail extends BoxSummary {
+  address: string | null;
+  state: string | null;
+  country: string | null;
+  /** Solo lo reciben el dueño y los coaches */
+  invite_code: string | null;
+  created_at: string | null;
+}
+
+export interface BoxUpdatePayload {
+  name?: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  /** "" = volver al acento por defecto */
+  accent_color?: string;
+}
+
+export interface BoxRegisterPayload {
+  box_name: string;
+  address: string | null;
+  city: string;
+  state: string | null;
+  country: string | null;
+  owner_name: string;
+  email: string;
+  password: string;
+}
+
+/** GET /boxes/me/members */
+export interface BoxMember {
+  id: string;
+  full_name: string;
+  email: string;
+  role: Role;
+  has_avatar: boolean;
+  coach_id: string | null;
+  coach_name: string | null;
+  created_at: string | null;
+}
+
+/** GET /admin/boxes */
+export interface AdminBoxRow {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  status: BoxStatus;
+  has_logo: boolean;
+  owner_name: string | null;
+  owner_email: string | null;
+  coaches_count: number;
+  athletes_count: number;
+  created_at: string | null;
+}
 
 export type WeightUnit = "kg" | "lb";
 
@@ -21,6 +97,10 @@ export interface User {
   sex: "male" | "female" | null;
   /** Si su box tiene discos de 25kg. null = true (por defecto sí tiene). */
   has_25kg_plates: boolean | null;
+  /** Coach directo (atletas). null = atleta "del box", sin coach. */
+  coach_id: string | null;
+  /** Box al que pertenece. null solo para el admin de plataforma. */
+  box: BoxSummary | null;
 }
 
 /** Respuesta mínima de GET /users/search -- a propósito no es un User completo, ver
@@ -242,7 +322,13 @@ export interface PlanSummary {
   /** true -> el cliente puede pedir GET /plans/{id}/cover */
   has_cover_image: boolean;
   created_at: string;
+  /** "box" = solo atletas del box del autor; "public" = toda la plataforma */
+  visibility: PlanVisibility;
+  /** Box del autor (el catálogo lo muestra en planes públicos de otro box) */
+  box_name: string | null;
 }
+
+export type PlanVisibility = "box" | "public";
 
 export type FitCategory = "halterofilia" | "gimnasia" | "metcon";
 
@@ -549,6 +635,8 @@ export interface AdminOverview {
   total_coaches: number;
   total_athletes: number;
   total_admins: number;
+  total_boxes: number;
+  boxes_pending: number;
   total_groups: number;
   total_mesocycles: number;
   total_sessions: number;

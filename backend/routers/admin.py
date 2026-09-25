@@ -188,4 +188,5 @@ def update_box_status(
     security_logger.info(
         "Estado de box: admin=%s cambió '%s' de '%s' a '%s'", current_user.email, box.name, anterior, req.status
     )
-    return {"message": f"El box '{box.name}' ahora está {req.status}."}
+    etiqueta = {"active": "activo", "pending": "pendiente", "rejected": "rechazado", "suspended": "suspendido"}
+    return {"message": f"El box '{box.name}' ahora está {etiqueta[req.status]}."}

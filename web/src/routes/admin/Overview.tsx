@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { PageHeader } from "@/components/AppShell";
 import { Card, ErrorState, LoadingList, SectionTitle } from "@/components/ui";
 import { useAdminOverview } from "@/lib/adminQueries";
@@ -23,6 +25,22 @@ export default function AdminOverview() {
 
       {data && (
         <>
+          <SectionTitle
+            action={
+              data.boxes_pending > 0 && (
+                <Link to="/admin/boxes" className="text-xs font-semibold text-warn">
+                  {data.boxes_pending} por aprobar
+                </Link>
+              )
+            }
+          >
+            Boxes
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-3">
+            <Stat label="Boxes activos" value={data.total_boxes} />
+            <Stat label="Solicitudes pendientes" value={data.boxes_pending} />
+          </div>
+
           <SectionTitle>Usuarios</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
             <Stat label="Usuarios totales" value={data.total_users} />

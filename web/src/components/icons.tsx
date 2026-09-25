@@ -207,3 +207,13 @@ export function Logo({ className = "h-8 w-8" }: IconProps) {
     </svg>
   );
 }
+
+/** Box/gimnasio: una nave con techo a dos aguas */
+export function IconHome({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9.5Z" strokeLinejoin="round" />
+      <path d="M9 21v-6h6v6" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -9,15 +9,17 @@
  * De dónde sale el acento, en orden de prioridad:
  *  1. `?acento=RRGGBB` en la URL — para demos: enseñarle a un box cómo se vería la app con su
  *     color sin tocar nada. Dura lo que la pestaña (sessionStorage), no se guarda para siempre.
- *  2. `VITE_BRAND_ACCENT` al compilar — una instalación por box.
- *  3. El naranja por defecto de index.css.
- * Cuando el acento viva en el backend (configuración del box), `applyAccent` es el punto de
- * entrada: se llama con el valor que devuelva la API.
+ *  2. El acento del box del usuario (configurado por el dueño, llega en /auth/me). Se guarda en
+ *     localStorage para pintarlo desde el primer frame en el siguiente arranque, antes de que
+ *     responda la API — ver setBoxAccent, llamado desde AuthProvider.
+ *  3. `VITE_BRAND_ACCENT` al compilar.
+ *  4. El naranja por defecto de index.css.
  */
 
 export const DEFAULT_ACCENT = "#ff4700";
 const INK = "#121212"; // --color-ink: fondo de la app
 const DEMO_KEY = "neurolift_demo_accent";
+const BOX_KEY = "neurolift_box_accent";
 
 function normalizeHex(value: string | null | undefined): string | null {
   const match = value?.trim().match(/^#?([0-9a-f]{6})$/i);
@@ -46,6 +48,14 @@ function textOn(accent: string): string {
   return contrast(accent, "#ffffff") >= 3 ? "#ffffff" : INK;
 }
 
+/** Variables CSS para previsualizar un acento SOLO dentro de un contenedor (style={...}), sin
+ *  aplicarlo a toda la app. null si el color no sirve (formato o contraste, igual que applyAccent). */
+export function accentPreviewVars(value: string): Record<string, string> | null {
+  const accent = normalizeHex(value);
+  if (!accent || contrast(accent, INK) < 3) return null;
+  return { "--color-brand": accent, "--color-on-brand": textOn(accent) };
+}
+
 /**
  * Aplica un acento a toda la app. Devuelve false (y deja el actual) si el color no sirve:
  * formato inválido, o tan oscuro que sobre el fondo carbón no se distinguiría — el acento
@@ -62,6 +72,26 @@ export function applyAccent(value: string): boolean {
   root.setProperty("--color-brand", accent);
   root.setProperty("--color-on-brand", textOn(accent));
   return true;
+}
+
+/** Vuelve al acento por defecto (el de VITE_BRAND_ACCENT o el naranja de index.css). */
+function resetAccent() {
+  const root = document.documentElement.style;
+  root.removeProperty("--color-brand");
+  root.removeProperty("--color-on-brand");
+  const envAccent = normalizeHex(import.meta.env.VITE_BRAND_ACCENT as string | undefined);
+  if (envAccent && envAccent !== DEFAULT_ACCENT) applyAccent(envAccent);
+}
+
+/**
+ * Aplica el acento del box del usuario (o lo quita con null: logout, box sin acento propio) y
+ * lo recuerda para el próximo arranque. Una demo con ?acento= activa en la pestaña manda.
+ */
+export function setBoxAccent(value: string | null) {
+  const accent = normalizeHex(value);
+  safeSession(() => (accent ? localStorage.setItem(BOX_KEY, accent) : localStorage.removeItem(BOX_KEY)));
+  if (safeSession(() => sessionStorage.getItem(DEMO_KEY))) return;
+  if (!accent || !applyAccent(accent)) resetAccent();
 }
 
 function safeSession<T>(fn: () => T): T | null {
@@ -82,6 +112,7 @@ export function initAccent() {
   }
   const candidates = [
     safeSession(() => sessionStorage.getItem(DEMO_KEY)),
+    safeSession(() => localStorage.getItem(BOX_KEY)),
     import.meta.env.VITE_BRAND_ACCENT as string | undefined,
   ];
   for (const candidate of candidates) {

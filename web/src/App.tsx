@@ -7,10 +7,13 @@ import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { isStandalone } from "@/lib/pwa";
 import type { Role } from "@/lib/types";
+import AdminBoxes from "@/routes/admin/Boxes";
 import AdminLogs from "@/routes/admin/Logs";
 import AdminOverview from "@/routes/admin/Overview";
 import AdminUsers from "@/routes/admin/Users";
 import AthleteDetail from "@/routes/coach/AthleteDetail";
+import BoxHome from "@/routes/box/BoxHome";
+import BoxTeam from "@/routes/box/BoxTeam";
 import Athletes from "@/routes/coach/Athletes";
 import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
@@ -30,12 +33,16 @@ import PlanDetail from "@/routes/PlanDetail";
 import Plans from "@/routes/Plans";
 import Profile from "@/routes/Profile";
 import Register from "@/routes/Register";
+import RegisterBox from "@/routes/RegisterBox";
 import SessionDetail from "@/routes/SessionDetail";
 import Today from "@/routes/Today";
 
 // La calculadora de Fit Level es la pantalla más pesada (14 campos + tablas de baremos) y
 // la que menos se abre: va en su propio chunk.
 const FitLevel = lazy(() => import("@/routes/FitLevel"));
+
+// Coach y dueño del box comparten todas las pantallas de programación
+const COACH_ROLES: Role[] = ["coach", "owner"];
 
 function FullScreenLoader() {
   return (
@@ -63,6 +70,7 @@ function RequireAppAccess({ children }: { children: ReactNode }) {
 
 function homeForRole(role: Role): string {
   if (role === "coach") return "/coach/atletas";
+  if (role === "owner") return "/box";
   if (role === "admin") return "/admin";
   return "/";
 }
@@ -70,11 +78,24 @@ function homeForRole(role: Role): string {
 /** Dentro del shell, separa el árbol de rutas de atleta/coach/admin: si el rol no coincide
  *  con ninguno de los aceptados, manda al home del rol correcto en vez de mostrar un 404 o
  *  la pantalla equivocada. */
-function RoleGate({ role, children }: { role: Role | Role[]; children: ReactNode }) {
+function RoleGate({
+  role,
+  allowInactiveBox = false,
+  children,
+}: {
+  role: Role | Role[];
+  /** El dueño con el box pendiente/suspendido solo puede entrar a las rutas que lo permitan
+   *  (su panel y su perfil); el resto de pantallas de coach le responderían 403. */
+  allowInactiveBox?: boolean;
+  children: ReactNode;
+}) {
   const user = useCurrentUser();
   const allowed = Array.isArray(role) ? role : [role];
-  if (allowed.includes(user.role)) return <>{children}</>;
-  return <Navigate to={homeForRole(user.role)} replace />;
+  if (!allowed.includes(user.role)) return <Navigate to={homeForRole(user.role)} replace />;
+  if (user.role === "owner" && user.box?.status !== "active" && !allowInactiveBox) {
+    return <Navigate to="/box" replace />;
+  }
+  return <>{children}</>;
 }
 
 function RedirectIfLogged({ children }: { children: ReactNode }) {
@@ -116,6 +137,14 @@ export default function App() {
         element={
           <RedirectIfLogged>
             <Register />
+          </RedirectIfLogged>
+        }
+      />
+      <Route
+        path="/registrar-box"
+        element={
+          <RedirectIfLogged>
+            <RegisterBox />
           </RedirectIfLogged>
         }
       />
@@ -200,7 +229,7 @@ export default function App() {
         <Route
           path="/coach/atletas"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <Athletes />
             </RoleGate>
           }
@@ -208,7 +237,7 @@ export default function App() {
         <Route
           path="/coach/actividad"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <Leaderboard />
             </RoleGate>
           }
@@ -216,7 +245,7 @@ export default function App() {
         <Route
           path="/coach/atletas/:athleteId"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <AthleteDetail />
             </RoleGate>
           }
@@ -224,7 +253,7 @@ export default function App() {
         <Route
           path="/coach/grupos"
           element={
-            <RoleGate role={["coach", "admin"]}>
+            <RoleGate role={[...COACH_ROLES, "admin"]}>
               <Groups />
             </RoleGate>
           }
@@ -232,7 +261,7 @@ export default function App() {
         <Route
           path="/coach/grupos/:groupId"
           element={
-            <RoleGate role={["coach", "admin"]}>
+            <RoleGate role={[...COACH_ROLES, "admin"]}>
               <GroupDetail />
             </RoleGate>
           }
@@ -240,7 +269,7 @@ export default function App() {
         <Route
           path="/coach/grupos/:groupId/programas/:programName/:startDate"
           element={
-            <RoleGate role={["coach", "admin"]}>
+            <RoleGate role={[...COACH_ROLES, "admin"]}>
               <GroupProgramDetail />
             </RoleGate>
           }
@@ -248,7 +277,7 @@ export default function App() {
         <Route
           path="/coach/mesociclos/:mesocycleId"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <CoachMesocycleEditor />
             </RoleGate>
           }
@@ -256,7 +285,7 @@ export default function App() {
         <Route
           path="/coach/mesociclos/:mesocycleId/sesion/:sessionId"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <CoachSessionEditor />
             </RoleGate>
           }
@@ -264,7 +293,7 @@ export default function App() {
         <Route
           path="/coach/planes"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <CoachPlans />
             </RoleGate>
           }
@@ -272,7 +301,7 @@ export default function App() {
         <Route
           path="/coach/planes/:planId"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES}>
               <CoachPlanEditor />
             </RoleGate>
           }
@@ -280,8 +309,26 @@ export default function App() {
         <Route
           path="/coach/perfil"
           element={
-            <RoleGate role="coach">
+            <RoleGate role={COACH_ROLES} allowInactiveBox>
               <CoachProfile />
+            </RoleGate>
+          }
+        />
+
+        {/* ------------------------------------------------------ dueño del box */}
+        <Route
+          path="/box"
+          element={
+            <RoleGate role="owner" allowInactiveBox>
+              <BoxHome />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/box/equipo"
+          element={
+            <RoleGate role="owner">
+              <BoxTeam />
             </RoleGate>
           }
         />
@@ -292,6 +339,14 @@ export default function App() {
           element={
             <RoleGate role="admin">
               <AdminOverview />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/admin/boxes"
+          element={
+            <RoleGate role="admin">
+              <AdminBoxes />
             </RoleGate>
           }
         />

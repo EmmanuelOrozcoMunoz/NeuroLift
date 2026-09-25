@@ -88,17 +88,20 @@ function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => voi
 export default function Groups() {
   const user = useCurrentUser();
   const isAdmin = user.role === "admin";
+  const isOwner = user.role === "owner";
   const { data, isPending, error, refetch } = useGroups();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <>
       <PageHeader
-        title={isAdmin ? "Todos los grupos" : "Mis grupos"}
+        title={isAdmin ? "Todos los grupos" : isOwner ? "Grupos del box" : "Mis grupos"}
         subtitle={
           isAdmin
             ? "Grupos de todos los coaches de la app"
-            : "Programa mesociclos para varios atletas a la vez"
+            : isOwner
+              ? "Tus grupos generales y los de tus coaches"
+              : "Programa mesociclos para varios atletas a la vez"
         }
         action={
           !isAdmin && (
@@ -137,7 +140,7 @@ export default function Groups() {
               <p className="truncate font-bold">{group.name}</p>
               <p className="text-sm text-muted">
                 {group.member_count} atleta(s)
-                {isAdmin && group.coach_name && ` · coach: ${group.coach_name}`}
+                {(isAdmin || isOwner) && group.coach_name && ` · coach: ${group.coach_name}`}
               </p>
             </div>
             <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />

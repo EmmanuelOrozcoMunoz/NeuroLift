@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { InstallAppCard } from "@/components/InstallApp";
+import { MyBoxCard } from "@/components/MyBoxCard";
 import { IconChevronRight, IconLogout, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { PlateAvailabilityToggle, WeightUnitToggle } from "@/components/WeightUnitToggle";
@@ -57,6 +58,8 @@ export default function Profile() {
       <Card className="mb-4">
         <AvatarUploader />
       </Card>
+
+      <MyBoxCard className="mb-4" />
 
       <Card className="mb-4 space-y-4">
         <WeightUnitToggle />
