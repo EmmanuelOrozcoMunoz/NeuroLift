@@ -23,18 +23,20 @@ export default function BoxTeam() {
 
 function BoxTeamContent() {
   const me = useCurrentUser();
-  const coaches = useBoxMembers("coach");
-  const athletes = useBoxMembers("athlete");
+  // Una sola consulta con todos los miembros: coaches y dueños salen de la misma lista
+  const members = useBoxMembers();
   const assign = useAssignCoach();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
-  // El dueño también puede atender atletas directamente (es un coach con más alcance)
-  const coachOptions: { id: string; name: string }[] = [
-    { id: me.id, name: `${me.full_name} (tú)` },
-    ...(coaches.data ?? []).map((c) => ({ id: c.id, name: c.full_name })),
-  ];
-  const withoutCoach = (athletes.data ?? []).filter((a) => !a.coach_id).length;
+  // El dueño también es coach (con más alcance) y puede tener atletas propios: va en la lista de
+  // coaches, primero y marcado como "Dueño".
+  const coaches = (members.data ?? [])
+    .filter((m) => m.role === "owner" || m.role === "coach")
+    .sort((a, b) => Number(b.role === "owner") - Number(a.role === "owner"));
+  const athletes = (members.data ?? []).filter((m) => m.role === "athlete");
+  const coachOptions = coaches.map((c) => ({ id: c.id, name: c.id === me.id ? `${c.full_name} (tú)` : c.full_name }));
+  const withoutCoach = athletes.filter((a) => !a.coach_id).length;
 
   function handleAssign(athlete: BoxMember, coachId: string | null) {
     assign.mutate(
@@ -69,23 +71,21 @@ function BoxTeamContent() {
       />
 
       <SectionTitle>Coaches</SectionTitle>
-      {coaches.isPending && <LoadingList rows={2} />}
-      {coaches.error && <ErrorState error={coaches.error} onRetry={() => void coaches.refetch()} />}
-      {coaches.data?.length === 0 && (
-        <EmptyState
-          title="Todavía no tienes coaches"
-          action={<Button onClick={() => setSheetOpen(true)}>Agregar coach</Button>}
-        >
-          Agrégalos para que programen a sus propios atletas.
-        </EmptyState>
-      )}
+      {members.isPending && <LoadingList rows={3} />}
+      {members.error && <ErrorState error={members.error} onRetry={() => void members.refetch()} />}
       <div className="space-y-2">
-        {coaches.data?.map((coach) => {
-          const count = (athletes.data ?? []).filter((a) => a.coach_id === coach.id).length;
+        {coaches.map((coach) => {
+          const count = athletes.filter((a) => a.coach_id === coach.id).length;
           return (
             <Card key={coach.id} className="flex items-center justify-between gap-3 p-3">
               <div className="min-w-0">
-                <p className="truncate font-semibold">{coach.full_name}</p>
+                <p className="flex items-center gap-2">
+                  <span className="truncate font-semibold">
+                    {coach.full_name}
+                    {coach.id === me.id && <span className="font-normal text-muted"> (tú)</span>}
+                  </span>
+                  {coach.role === "owner" && <Badge tone="neutral">Dueño</Badge>}
+                </p>
                 <p className="truncate text-sm text-muted">{coach.email}</p>
               </div>
               <Badge tone="brand">{count === 1 ? "1 atleta" : `${count} atletas`}</Badge>
@@ -93,21 +93,27 @@ function BoxTeamContent() {
           );
         })}
       </div>
+      {members.data && !coaches.some((c) => c.role === "coach") && (
+        <EmptyState
+          title="Todavía no tienes otros coaches"
+          action={<Button onClick={() => setSheetOpen(true)}>Agregar coach</Button>}
+        >
+          Agrégalos para que programen a sus propios atletas.
+        </EmptyState>
+      )}
 
       <SectionTitle
         action={withoutCoach > 0 && <span className="text-xs font-semibold text-warn">{withoutCoach} sin coach</span>}
       >
         Atletas
       </SectionTitle>
-      {athletes.isPending && <LoadingList rows={3} />}
-      {athletes.error && <ErrorState error={athletes.error} onRetry={() => void athletes.refetch()} />}
-      {athletes.data?.length === 0 && (
+      {members.data && athletes.length === 0 && (
         <EmptyState title="Todavía no hay atletas">
           Comparte el link de invitación de tu box para que se registren.
         </EmptyState>
       )}
       <div className="space-y-2">
-        {athletes.data?.map((athlete) => (
+        {athletes.map((athlete) => (
           <Card key={athlete.id} className="p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
