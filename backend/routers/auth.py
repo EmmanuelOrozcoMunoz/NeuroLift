@@ -25,35 +25,64 @@ REGISTER_GENERIC_MESSAGE = "Si el correo no estaba registrado, tu cuenta fue cre
 @router.post("/register", response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 def register_user(request: Request, user: schemas.UserRegister, db: Session = Depends(get_db)):
-    """Misma respuesta (mismo status, mismo cuerpo, mismo tiempo aproximado) exista o no ya
-    una cuenta con ese correo — evita que alguien use este endpoint para enumerar qué correos
-    están registrados en el sistema (ni por el contenido de la respuesta ni por temporización,
-    ya que el hasheo bcrypt, intencionalmente lento, se ejecuta siempre)."""
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    """Alta de un atleta. Misma respuesta (mismo status, mismo cuerpo, mismo tiempo aproximado)
+    exista o no ya una cuenta con ese correo — evita que alguien use este endpoint para enumerar
+    qué correos están registrados en el sistema (ni por el contenido de la respuesta ni por
+    temporización, ya que el hasheo bcrypt, intencionalmente lento, se ejecuta siempre).
 
+    El box al que se une sale de:
+    - quien lo registra, si es un coach/dueño YA autenticado (p. ej. "Registrar atleta" en su
+      panel). Si es un coach, el atleta queda además ligado a él; si es el dueño, queda como
+      atleta "del box" (sin coach) y el dueño le asigna coach después si quiere.
+    - el código de invitación del box, si es un autoregistro. Un código inválido o de un box
+      no activo SÍ se rechaza con un error explícito: el código es público (va en el link que
+      comparte el box), así que decir "ese código no existe" no filtra nada de nadie."""
+    creador = _optional_current_user(request, db)
+    es_de_coach = (
+        creador is not None
+        and creador.role in models.COACHING_ROLES
+        and creador.box is not None
+        and creador.box.is_active
+    )
+
+    if es_de_coach:
+        box = creador.box
+        coach_id = creador.id if creador.role == "coach" else None
+    else:
+        box = find_active_box_by_code(db, user.invite_code)
+        coach_id = None
+
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
     # Siempre se hashea la contraseña, se use o no, para que ambas rutas tarden lo mismo.
     hashed_password = get_password_hash(user.password)
 
     if not db_user:
-        # Si quien llama es un coach YA autenticado (p. ej. desde "Registrar atleta" en su
-        # propio panel), el atleta nuevo queda vinculado a él automáticamente — así aparece de
-        # inmediato entre "sus" atletas. Si es un registro anónimo (el atleta se dio de alta
-        # solo), queda sin coach hasta que alguno lo agregue a un grupo o lo reclame.
-        creador = _optional_current_user(request, db)
-        coach_id = creador.id if (user.role == "athlete" and creador is not None and creador.role == "coach") else None
-
-        nuevo_usuario = models.User(
+        db.add(models.User(
             email=user.email,
             full_name=user.full_name,
             hashed_password=hashed_password,
-            role=user.role,
+            role="athlete",
             body_weight=user.body_weight,
             coach_id=coach_id,
-        )
-        db.add(nuevo_usuario)
+            box_id=box.id,
+        ))
         db.commit()
 
     return {"message": REGISTER_GENERIC_MESSAGE}
+
+
+def find_active_box_by_code(db: Session, code: str | None) -> models.Box:
+    """Box activo con ese código de invitación, o 400. Compartido con GET /boxes/by-code."""
+    normalizado = (code or "").strip().upper()
+    if not normalizado:
+        raise HTTPException(
+            status_code=400,
+            detail="Necesitas el código de tu box para crear tu cuenta. Pídeselo a tu coach.",
+        )
+    box = db.query(models.Box).filter(models.Box.invite_code == normalizado).first()
+    if not box or not box.is_active:
+        raise HTTPException(status_code=400, detail="Ese código de box no es válido o el box no está activo.")
+    return box
 
 
 @router.post("/login")
@@ -66,6 +95,15 @@ def login_user(request: Request, credentials: schemas.UserLogin, db: Session = D
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
+        )
+
+    # Solo el dueño entra con el box pendiente/rechazado/suspendido (ve el estado de su
+    # solicitud); a sus coaches y atletas se les explica en vez de dejarlos entrar a una app
+    # que les respondería 403 en cada pantalla (ver get_current_user).
+    if usuario.box is not None and not usuario.box.is_active and usuario.role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu box no está activo en este momento. Contacta a su administrador.",
         )
 
     security_logger.info("Login exitoso: %s (rol=%s) desde %s", usuario.email, usuario.role, _client_ip(request))

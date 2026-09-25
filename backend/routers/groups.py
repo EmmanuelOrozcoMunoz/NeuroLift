@@ -20,7 +20,7 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 def create_group(
     req: schemas.GroupCreate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
 ):
-    nuevo_grupo = models.Group(coach_id=current_user.id, name=req.name)
+    nuevo_grupo = models.Group(coach_id=current_user.id, box_id=current_user.box_id, name=req.name)
     if req.athlete_ids:
         atletas = db.query(models.User).filter(
             models.User.id.in_(req.athlete_ids), models.User.role == "athlete"
@@ -35,10 +35,12 @@ def create_group(
 
 @router.get("/", response_model=List[schemas.GroupSummaryResponse])
 def list_my_groups(db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)):
-    """Panel del coach: todos sus grupos con el número de atletas en cada uno.
-    Si quien pregunta es admin, devuelve TODOS los grupos de TODOS los coaches."""
+    """Panel del coach: todos sus grupos con el número de atletas en cada uno. El dueño del box
+    ve todos los grupos de su box; el admin de plataforma, todos los de todos los boxes."""
     query = db.query(models.Group).options(joinedload(models.Group.coach))
-    if current_user.role != "admin":
+    if current_user.role == "owner":
+        query = query.filter(models.Group.box_id == current_user.box_id)
+    elif current_user.role != "admin":
         query = query.filter(models.Group.coach_id == current_user.id)
     grupos = query.all()
     return [

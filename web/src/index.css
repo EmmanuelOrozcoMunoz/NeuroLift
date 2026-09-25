@@ -5,14 +5,20 @@
    gimnasio, muchas veces con poca luz y el celular en la mano.
    ========================================================================== */
 @theme {
-  --color-ink: #0b0f14; /* fondo de la app */
-  --color-surface: #141a22; /* tarjetas */
-  --color-surface-2: #1b2430; /* inputs, filas dentro de tarjetas */
-  --color-line: #263140; /* bordes */
-  --color-fg: #e8eef5; /* texto principal */
-  --color-muted: #8fa0b3; /* texto secundario */
-  --color-brand: #7c5cff; /* violeta: acciones primarias */
-  --color-brand-soft: #2a2350;
+  /* Paleta "Dark Energy": neutros sin tinte para que el acento sea lo único con color */
+  --color-ink: #121212; /* fondo de la app — negro carbón */
+  --color-surface: #1e1e1e; /* tarjetas */
+  --color-surface-2: #282828; /* inputs, filas dentro de tarjetas */
+  --color-line: #2e2e2e; /* bordes: sutiles, la jerarquía la dan las superficies */
+  --color-fg: #f3f4f6; /* texto principal — blanco humo */
+  --color-muted: #9ca3af; /* texto secundario — gris pizarra */
+
+  /* Acento: CTAs, pestaña activa, progreso. Es PERSONALIZABLE por box: lib/brand.ts lo
+     sobreescribe en tiempo de ejecución en <html>, y los dos tokens de abajo se derivan de él
+     solos (por eso no llevan un hex fijo). */
+  --color-brand: #ff4700; /* naranja eléctrico (valor por defecto) */
+  --color-brand-soft: color-mix(in oklab, var(--color-brand) 18%, var(--color-ink));
+  --color-on-brand: #ffffff; /* texto sobre el acento: brand.ts lo cambia a oscuro si el acento es claro */
   --color-done: #a3e635; /* lima: completado */
   --color-done-soft: #26350f;
   --color-warn: #fbbf24;
@@ -75,7 +81,7 @@
 
   ::selection {
     background-color: var(--color-brand);
-    color: white;
+    color: var(--color-on-brand);
   }
 }
 

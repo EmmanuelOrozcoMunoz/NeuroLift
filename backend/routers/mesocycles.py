@@ -41,7 +41,7 @@ def listar_mesociclos(db: Session = Depends(get_db), current_user: models.User =
     de sus propios atletas."""
     query = db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False)
     if current_user.role != "admin":
-        ids = _coach_athlete_ids(db, current_user.id)
+        ids = _coach_athlete_ids(db, current_user)
         if not ids:
             return []
         query = query.filter(models.Mesocycle.user_id.in_(ids))

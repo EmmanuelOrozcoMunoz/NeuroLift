@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend import models
 from backend.core.config import ALGORITHM, SECRET_KEY
@@ -57,7 +57,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except jwt.PyJWTError:  # Atrapa tokens expirados o falsificados
         raise credentials_exception
 
-    user = db.query(models.User).filter(models.User.email == email).first()
+    # joinedload del box: se consulta en CADA petición (estado del box, aislamiento), así que
+    # se trae en la misma ida a la base de datos en vez de una consulta extra perezosa.
+    user = (
+        db.query(models.User)
+        .options(joinedload(models.User.box))
+        .filter(models.User.email == email)
+        .first()
+    )
     if user is None:
         raise credentials_exception
 
@@ -66,6 +73,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     # aunque no haya expirado.
     if token_version != user.token_version:
         raise revoked_exception
+
+    # Box no activo (pendiente de aprobación, rechazado o suspendido): sus atletas y coaches no
+    # pueden usar la app. El dueño SÍ entra — necesita ver el estado de su solicitud y completar
+    # el perfil del box —, pero require_coach le cierra todo lo que es programar entrenamientos.
+    if user.box is not None and not user.box.is_active and user.role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu box no está activo en este momento. Contacta a su administrador.",
+        )
 
     return user
 
@@ -93,10 +109,26 @@ def _optional_current_user(request: Request, db: Session) -> models.User | None:
 
 
 def require_coach(current_user: models.User = Depends(get_current_user)) -> models.User:
-    """Dependencia para endpoints de gestión de coach (el rol 'admin' también pasa: tiene
-    visibilidad y control total sobre la app)."""
-    if current_user.role not in ("coach", "admin"):
+    """Dependencia para endpoints de gestión de coach. Pasan coach y owner (dueño del box, que es
+    un coach con más alcance) de un box ACTIVO, y el admin de plataforma (visibilidad total)."""
+    if current_user.role == "admin":
+        return current_user
+    if current_user.role not in models.COACHING_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada para coaches")
+    if current_user.box is None or not current_user.box.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu box todavía no está activo: podrás programar en cuanto lo aprueben.",
+        )
+    return current_user
+
+
+def require_owner(current_user: models.User = Depends(get_current_user)) -> models.User:
+    """Dueño de un box (cualquier estado del box: un dueño con el box pendiente sí puede editar
+    su perfil, subir la foto, etc.). NO incluye al admin de plataforma: la gestión de un box se
+    hace desde dentro del box; el admin tiene sus propios endpoints en /admin/boxes."""
+    if current_user.role != "owner" or current_user.box_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada al dueño del box")
     return current_user
 
 
@@ -107,29 +139,50 @@ def require_admin(current_user: models.User = Depends(get_current_user)) -> mode
     return current_user
 
 
-def _coach_athlete_ids(db: Session, coach_id: UUID) -> set[UUID]:
-    """IDs de los atletas que este coach puede gestionar: los que él registró directamente
-    (User.coach_id) más los que son miembros de alguno de sus grupos. Es la definición única
-    de "mis atletas" — úsala en vez de reimplementar el criterio en cada endpoint."""
-    directos = db.query(models.User.id).filter(models.User.coach_id == coach_id)
+def _coach_athlete_ids(db: Session, coach: models.User) -> set[UUID]:
+    """IDs de los atletas que este coach puede gestionar. Es la definición única de "mis
+    atletas" — úsala en vez de reimplementar el criterio en cada endpoint.
+
+    - owner: TODOS los atletas de su box (con o sin coach).
+    - coach: los que él registró directamente (User.coach_id) más los miembros de sus grupos.
+    Siempre acotado al box de quien pregunta: aunque por algún dato inconsistente un atleta de
+    otro box quedara ligado a este coach, nunca se cruza la frontera entre boxes."""
+    if coach.box_id is None:
+        return set()
+    if coach.role == "owner":
+        return {
+            row[0]
+            for row in db.query(models.User.id).filter(
+                models.User.box_id == coach.box_id, models.User.role == "athlete"
+            ).all()
+        }
+    directos = db.query(models.User.id).filter(
+        models.User.coach_id == coach.id, models.User.box_id == coach.box_id
+    )
     de_grupos = (
         db.query(models.User.id)
         .join(models.group_members, models.group_members.c.user_id == models.User.id)
         .join(models.Group, models.Group.id == models.group_members.c.group_id)
-        .filter(models.Group.coach_id == coach_id)
+        .filter(models.Group.coach_id == coach.id, models.User.box_id == coach.box_id)
     )
     return {row[0] for row in directos.union(de_grupos).all()}
 
 
 def ensure_owner_or_coach(db: Session, owner_id: UUID | None, current_user: models.User):
-    """Verifica que el usuario autenticado sea el dueño del recurso, un admin, o un coach que
-    tenga a `owner_id` entre sus propios atletas (ver _coach_athlete_ids) — ya NO basta con
-    "ser coach": cada coach queda limitado a sus propios atletas/grupos."""
+    """Verifica que el usuario autenticado sea el dueño del recurso, un admin, o un coach/owner
+    que tenga a `owner_id` entre sus propios atletas (ver _coach_athlete_ids) — ya NO basta con
+    "ser coach": cada coach queda limitado a sus propios atletas/grupos, y el owner a su box."""
     if current_user.role == "admin":
         return
     if owner_id is not None and current_user.id == owner_id:
         return
-    if owner_id is not None and current_user.role == "coach" and owner_id in _coach_athlete_ids(db, current_user.id):
+    if (
+        owner_id is not None
+        and current_user.role in models.COACHING_ROLES
+        and current_user.box is not None
+        and current_user.box.is_active
+        and owner_id in _coach_athlete_ids(db, current_user)
+    ):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
 

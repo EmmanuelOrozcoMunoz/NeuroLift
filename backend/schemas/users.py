@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from backend.schemas.boxes import BoxSummary
 from backend.schemas.common import SanitizedModel
 
 
@@ -22,6 +23,11 @@ class UserResponse(BaseModel):
     sex: str | None = None
     # Si su box tiene discos de 25kg — null se trata como True en el frontend.
     has_25kg_plates: bool | None = None
+    # Coach directo (solo atletas). null = atleta "del box", sin coach asignado.
+    coach_id: UUID | None = None
+    # Box al que pertenece (null solo para el admin de plataforma). El frontend lo usa para
+    # aplicar el color de acento del box y mostrar su nombre/logo.
+    box: BoxSummary | None = None
 
     class Config:
         from_attributes = True

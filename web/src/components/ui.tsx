@@ -18,7 +18,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white active:bg-brand/85 disabled:bg-brand/40",
+  primary: "bg-brand text-on-brand active:bg-brand/85 disabled:bg-brand/40",
   secondary: "bg-surface-2 text-fg border border-line active:bg-line",
   ghost: "bg-transparent text-muted active:bg-surface-2",
   danger: "bg-transparent text-danger border border-danger/40 active:bg-danger/10",
@@ -223,7 +223,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           className={cx(
             "min-h-10 grow rounded-lg px-3 text-sm font-semibold transition-colors",
-            option.value === value ? "bg-brand text-white" : "text-muted active:bg-line",
+            option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
           )}
         >
           {option.label}

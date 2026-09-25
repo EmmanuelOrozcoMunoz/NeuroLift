@@ -26,6 +26,7 @@ import type {
   PlanSetCreatePayload,
   PlanSummary,
   PlanUpdatePayload,
+  PlanVisibility,
   RegisterAthletePayload,
   SetCreatePayload,
   SetUpdatePayload,
@@ -370,8 +371,20 @@ export function useUpdatePlan(planId: string) {
 export function usePublishPlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ planId, isPublished }: { planId: string; isPublished: boolean }) =>
-      apiFetch<PlanSummary>(`/plans/${planId}/publish`, { method: "PUT", body: { is_published: isPublished } }),
+    mutationFn: ({
+      planId,
+      isPublished,
+      visibility,
+    }: {
+      planId: string;
+      isPublished: boolean;
+      /** Solo al publicar: quién lo ve en el catálogo. Sin valor, se conserva el que tenía. */
+      visibility?: PlanVisibility;
+    }) =>
+      apiFetch<PlanSummary>(`/plans/${planId}/publish`, {
+        method: "PUT",
+        body: { is_published: isPublished, visibility },
+      }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
   });
 }

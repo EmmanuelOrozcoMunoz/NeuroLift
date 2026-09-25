@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Button, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { isStandalone } from "@/lib/pwa";
 
 export default function Login() {
   const { login, notice, clearNotice } = useAuth();
@@ -85,6 +86,14 @@ export default function Login() {
           Créala aquí
         </Link>
       </p>
+
+      {!isStandalone() && (
+        <p className="mt-3 text-center text-sm">
+          <Link to="/bienvenida" className="text-muted underline-offset-4 active:underline">
+            ¿Qué es NeuroLift?
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

@@ -99,7 +99,7 @@ export function AvatarUploader() {
 
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand text-white ring-2 ring-ink"
+          className="pointer-events-none absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand text-on-brand ring-2 ring-ink"
         >
           <IconCamera className="h-4 w-4" />
         </div>

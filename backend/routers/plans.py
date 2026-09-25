@@ -3,6 +3,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
@@ -31,6 +32,24 @@ def _get_owned_plan(db: Session, plan_id: UUID, current_user: models.User) -> mo
     return plan
 
 
+def _can_see_plan(plan: models.Mesocycle, user: models.User) -> bool:
+    """El autor y el admin ven cualquier plan suyo (borradores incluidos). Los demás, solo
+    planes publicados y visibles para ellos: públicos, o "del box" si es su mismo box."""
+    if user.role == "admin" or plan.created_by_coach_id == user.id:
+        return True
+    if not plan.is_published:
+        return False
+    return plan.plan_visibility == "public" or (plan.box_id is not None and plan.box_id == user.box_id)
+
+
+def _ensure_can_see_plan(plan: models.Mesocycle, user: models.User) -> None:
+    if _can_see_plan(plan, user):
+        return
+    if not plan.is_published:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan es exclusivo de otro box")
+
+
 def _plan_summary(db: Session, plan: models.Mesocycle) -> schemas.PlanSummaryResponse:
     sesiones = db.query(models.Session).filter(models.Session.mesocycle_id == plan.id).all()
     dias_distintos = {s.day_offset for s in sesiones if s.day_offset is not None}
@@ -49,6 +68,8 @@ def _plan_summary(db: Session, plan: models.Mesocycle) -> schemas.PlanSummaryRes
         is_published=plan.is_published,
         has_cover_image=plan.has_cover_image,
         created_at=plan.created_at,
+        visibility=plan.plan_visibility,
+        box_name=plan.box.name if plan.box else None,
     )
 
 
@@ -63,6 +84,8 @@ def create_plan(
         is_template=True,
         is_published=False,
         created_by_coach_id=current_user.id,
+        box_id=current_user.box_id,
+        plan_visibility="box",
         name=req.name,
         description=req.description,
         discipline=req.discipline,
@@ -142,16 +165,13 @@ def delete_plan_cover(
 def get_plan_cover(
     plan_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    """Mismo criterio de visibilidad que GET /plans/{id}: el autor/admin ve la portada de
-    borradores, cualquiera autenticado ve la de planes ya publicados."""
+    """Mismo criterio de visibilidad que GET /plans/{id} (ver _can_see_plan)."""
     plan = db.query(models.Mesocycle).filter(
         models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True
     ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
-    es_autor = plan.created_by_coach_id == current_user.id or current_user.role == "admin"
-    if not plan.is_published and not es_autor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
+    _ensure_can_see_plan(plan, current_user)
     return storage.redirect_to_image(storage.PLAN_COVER_BUCKET, plan.cover_image_filename)
 
 
@@ -168,14 +188,19 @@ def list_my_plans(db: Session = Depends(get_db), current_user: models.User = Dep
 
 @router.get("/catalog", response_model=List[schemas.PlanSummaryResponse])
 def list_plan_catalog(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """Catálogo público (para cualquier usuario autenticado): solo planes publicados."""
-    planes = (
+    """Catálogo (para cualquier usuario autenticado): planes publicados de su propio box más
+    los que algún coach de la plataforma publicó como públicos. El admin ve todos."""
+    query = (
         db.query(models.Mesocycle)
-        .options(joinedload(models.Mesocycle.created_by_coach))
+        .options(joinedload(models.Mesocycle.created_by_coach), joinedload(models.Mesocycle.box))
         .filter(models.Mesocycle.is_template == True, models.Mesocycle.is_published == True)
-        .order_by(models.Mesocycle.created_at.desc())
-        .all()
     )
+    if current_user.role != "admin":
+        visibles = models.Mesocycle.plan_visibility == "public"
+        if current_user.box_id is not None:
+            visibles = or_(visibles, models.Mesocycle.box_id == current_user.box_id)
+        query = query.filter(visibles)
+    planes = query.order_by(models.Mesocycle.created_at.desc()).all()
     return [_plan_summary(db, p) for p in planes]
 
 
@@ -195,8 +220,7 @@ def get_plan_detail(
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
     es_autor = plan.created_by_coach_id == current_user.id or current_user.role == "admin"
-    if not plan.is_published and not es_autor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este plan todavía no está publicado")
+    _ensure_can_see_plan(plan, current_user)
 
     plan.sessions.sort(key=lambda s: (s.day_offset if s.day_offset is not None else 0))
     for sesion in plan.sessions:
@@ -275,6 +299,8 @@ def publish_plan(
                 detail="No puedes publicar un plan sin ejercicios. Agrégalos primero.",
             )
     plan.is_published = req.is_published
+    if req.visibility is not None:
+        plan.plan_visibility = req.visibility
     db.commit()
     db.refresh(plan)
     return _plan_summary(db, plan)
@@ -415,6 +441,7 @@ def acquire_plan(
         raise HTTPException(status_code=404, detail="Plan no encontrado")
     if not plan.is_published:
         raise HTTPException(status_code=400, detail="Este plan todavía no está disponible")
+    _ensure_can_see_plan(plan, current_user)
 
     prs = get_athlete_prs(db, current_user.id)
 

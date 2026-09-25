@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { IconChevronRight, IconUser } from "@/components/icons";
 import { Button, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
+import { useCurrentUser } from "@/lib/auth";
 import { useAthletes, useRegisterAthlete } from "@/lib/coachQueries";
 
 function RegisterAthleteSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -118,18 +119,20 @@ function RegisterAthleteSheet({ open, onClose }: { open: boolean; onClose: () =>
 
 export default function Athletes() {
   const { data, isPending, error, refetch } = useAthletes();
+  const isOwner = useCurrentUser().role === "owner";
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   return (
     <>
       <PageHeader
-        title="Atletas"
+        title={isOwner ? "Atletas del box" : "Atletas"}
+        subtitle={isOwner ? "Todos, con y sin coach" : undefined}
         action={
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white active:bg-brand/85"
+            className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
           >
             + Nuevo
           </button>

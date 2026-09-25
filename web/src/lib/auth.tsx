@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 
 import { apiFetch, setUnauthorizedHandler, tokenStore } from "@/lib/api";
+import { setBoxAccent } from "@/lib/brand";
 import type { LoginResponse, User } from "@/lib/types";
 
 interface AuthState {
@@ -36,6 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [queryClient],
   );
+
+  // El color de acento sigue al box del usuario: se aplica al entrar, cambia si el dueño lo
+  // edita (refreshUser) y vuelve al de la app al cerrar sesión. Mientras se rehidrata la
+  // sesión no se toca: initAccent ya pintó el acento guardado del último box.
+  const boxAccent = user?.box?.accent_color ?? null;
+  useEffect(() => {
+    if (loading) return;
+    setBoxAccent(boxAccent);
+  }, [boxAccent, loading]);
 
   // Un 401 en CUALQUIER llamada significa que el token ya no sirve: en vez de que cada
   // pantalla muestre su propio error, se cierra la sesión aquí una sola vez.
