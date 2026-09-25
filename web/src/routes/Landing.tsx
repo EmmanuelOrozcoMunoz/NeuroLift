@@ -14,6 +14,7 @@ import {
   Logo,
 } from "@/components/icons";
 import { cx } from "@/components/ui";
+import { PLATE_COLORS } from "@/lib/plates";
 import { useInstallPrompt } from "@/lib/pwa";
 
 /**
@@ -254,11 +255,12 @@ function PhonePreview() {
                   </div>
                 ))}
               </div>
-              {/* discos por lado: 100 kg = barra de 20 + 40 por lado */}
+              {/* discos por lado: 100 kg = barra de 20 + 40 por lado. Colores oficiales IWF
+                  (PLATE_COLORS), nunca el acento del box: un disco de 15 kg siempre es amarillo. */}
               <div className="mt-2.5 flex items-center justify-center gap-0.5">
                 <div className="h-2 w-8 rounded-l bg-muted/50" />
-                <div className="h-10 w-2.5 rounded-sm bg-danger" />
-                <div className="h-8 w-2 rounded-sm bg-brand" />
+                <div className="h-10 w-2.5 rounded-sm" style={{ backgroundColor: PLATE_COLORS[25] }} />
+                <div className="h-8 w-2 rounded-sm" style={{ backgroundColor: PLATE_COLORS[15] }} />
                 <div className="h-2 w-10 bg-muted/50" />
               </div>
               <p className="mt-1 text-center text-[10px] text-muted">25 + 15 kg por lado</p>
