@@ -47,3 +47,29 @@ def ensure_athletes_addable(atletas: list[models.User], current_user: models.Use
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Uno o más atletas ya pertenecen a otro coach y no pueden agregarse a este grupo",
         )
+
+
+def claim_athletes_for_group(atletas: list[models.User], current_user: models.User) -> None:
+    """Los grupos son de atletas con coach personal (los mesociclos son exclusivos de ellos; el
+    resto del box entrena con las clases). Por eso, al meter a un atleta a un grupo:
+    - un coach que agrega a un atleta sin coach de su box lo toma como suyo (coach_id), igual
+      que cuando lo registra él mismo;
+    - el dueño solo puede agregar atletas que ya tengan coach: a uno sin coach primero se le
+      asigna (en Equipo), para no convertirlo en "atleta del dueño" sin querer.
+    Llamar DESPUÉS de ensure_athletes_addable (que ya validó box y pertenencia)."""
+    if current_user.role == "admin":
+        return
+    sin_coach = [a for a in atletas if a.coach_id is None]
+    if not sin_coach:
+        return
+    if current_user.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Estos atletas no tienen coach personal: "
+                + ", ".join(a.full_name for a in sin_coach)
+                + ". Asígnales uno en Equipo, o entrenan con las clases del box."
+            ),
+        )
+    for atleta in sin_coach:
+        atleta.coach_id = current_user.id

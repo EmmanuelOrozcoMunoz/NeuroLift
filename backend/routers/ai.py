@@ -7,7 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend import models, schemas
-from backend.core.security import _ip_and_user_key, ensure_owner_or_coach, limiter, require_coach
+from backend.core.security import (
+    _ip_and_user_key,
+    ensure_can_manage_mesocycle,
+    ensure_has_personal_coach,
+    ensure_owner_or_coach,
+    limiter,
+    require_coach,
+)
 from backend.database import SessionLocal, get_db
 from backend.routers.exercise_helpers import clean_ai_block
 from backend.routers.group_helpers import get_owned_group
@@ -25,11 +32,12 @@ def generate_and_save_session(
     meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == req.mesocycle_id).first()
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
-    ensure_owner_or_coach(db, meso.user_id, current_user)
+    ensure_can_manage_mesocycle(db, meso, current_user)
 
     from backend.ai_agent import generate_workout_session
     rutina_ai = generate_workout_session(
-        athlete_name=meso.user.full_name,
+        # La programación de una clase no tiene atleta: la IA la arma para el grupo de la clase
+        athlete_name=meso.user.full_name if meso.user else f"la clase {meso.box_class.name}",
         discipline=meso.discipline,
         experience_notes=req.context,
     )
@@ -346,6 +354,7 @@ def generate_and_save_smart_mesocycle(
     if not atleta:
         raise HTTPException(status_code=404, detail="Atleta no encontrado")
     ensure_owner_or_coach(db, atleta.id, current_user)
+    ensure_has_personal_coach([atleta])
 
     try:
         _build_smart_mesocycle(
@@ -372,6 +381,7 @@ def generate_and_save_smart_mesocycle_for_group(
     grupo = get_owned_group(db, req.group_id, current_user)
     if not grupo.members:
         raise HTTPException(status_code=400, detail="El grupo no tiene atletas asignados")
+    ensure_has_personal_coach(grupo.members)
     if len(grupo.members) > MAX_ATLETAS_POR_GENERACION_GRUPAL:
         raise HTTPException(
             status_code=400,

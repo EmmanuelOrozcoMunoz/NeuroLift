@@ -13,11 +13,13 @@ export default function CoachSessionEditor() {
   const [toast, setToast] = useState<string | null>(null);
 
   const session = data?.sessions.find((s) => s.id === sessionId);
+  // La programación de una clase vuelve al horario de clases, no a un mesociclo de atleta
+  const backTo = data?.class_id ? "/clases" : `/coach/mesociclos/${mesocycleId}`;
 
   if (isPending) {
     return (
       <>
-        <PageHeader title="Sesión" back={`/coach/mesociclos/${mesocycleId}`} />
+        <PageHeader title="Sesión" back={backTo} />
         <LoadingList rows={3} />
       </>
     );
@@ -25,7 +27,7 @@ export default function CoachSessionEditor() {
   if (error) {
     return (
       <>
-        <PageHeader title="Sesión" back={`/coach/mesociclos/${mesocycleId}`} />
+        <PageHeader title="Sesión" back={backTo} />
         <ErrorState error={error} onRetry={() => void refetch()} />
       </>
     );
@@ -33,7 +35,7 @@ export default function CoachSessionEditor() {
   if (!session) {
     return (
       <>
-        <PageHeader title="Sesión" back={`/coach/mesociclos/${mesocycleId}`} />
+        <PageHeader title="Sesión" back={backTo} />
         <EmptyState title="No encontramos esta sesión" />
       </>
     );
@@ -43,8 +45,8 @@ export default function CoachSessionEditor() {
     <>
       <PageHeader
         title={longDate(session.scheduled_date)}
-        subtitle={data?.name ?? "Mesociclo"}
-        back={`/coach/mesociclos/${mesocycleId}`}
+        subtitle={data?.class_id ? `Clase · ${data.name}` : (data?.name ?? "Mesociclo")}
+        back={backTo}
       />
 
       <SessionSetsEditor

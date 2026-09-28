@@ -187,16 +187,78 @@ def ensure_owner_or_coach(db: Session, owner_id: UUID | None, current_user: mode
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
 
 
+def can_program_class(user: models.User, box_class: models.BoxClass) -> bool:
+    """Programar el contenido de una clase: su profesor o el dueño del box (de un box activo), y
+    el admin de plataforma."""
+    if user.role == "admin":
+        return True
+    if user.box_id is None or user.box_id != box_class.box_id or user.box is None or not user.box.is_active:
+        return False
+    return user.role == "owner" or (user.role == "coach" and box_class.coach_id == user.id)
+
+
+def ensure_can_program_class(user: models.User, box_class: models.BoxClass) -> None:
+    if not can_program_class(user, box_class):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el profesor de esta clase o el dueño del box pueden programarla",
+        )
+
+
+def ensure_can_manage_mesocycle(db: Session, mesocycle: models.Mesocycle, current_user: models.User) -> None:
+    """Como ensure_owner_or_coach, pero entiende la programación de una clase (sin atleta dueño):
+    ahí manda ensure_can_program_class. Úsala en todo endpoint que modifique un mesociclo."""
+    if mesocycle.class_id is not None:
+        ensure_can_program_class(current_user, mesocycle.box_class)
+        return
+    ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+
+
+def ensure_can_view_mesocycle(db: Session, mesocycle: models.Mesocycle, current_user: models.User) -> None:
+    """Ver un mesociclo: el de una clase lo ve cualquier miembro del box (los atletas necesitan
+    saber de qué se trata la clase); el de un atleta, él y sus coaches."""
+    if mesocycle.class_id is not None:
+        if current_user.role == "admin" or current_user.box_id == mesocycle.box_class.box_id:
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esta clase es de otro box")
+    ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+
+
+def ensure_has_personal_coach(atletas: list[models.User]) -> None:
+    """Los mesociclos son exclusivos de los atletas con coach personal: un atleta del box sin
+    coach entrena con las clases del box (ver routers/classes.py). Aplica a todo lo que
+    PROGRAME un mesociclo para un atleta (manual, con IA, para un grupo); no a lo que el propio
+    atleta hace por su cuenta (sesiones personales, planes que adquiere)."""
+    sin_coach = [a.full_name for a in atletas if a.coach_id is None]
+    if sin_coach:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Los mesociclos son para atletas con coach personal. Sin coach: "
+                + ", ".join(sin_coach)
+                + ". Asígnales uno en Equipo, o entrenan con las clases del box."
+            ),
+        )
+
+
 def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, current_user: models.User):
     """Como ensure_owner_or_coach, pero además: si quien edita ES el propio atleta (no su coach
     ni un admin), solo puede hacerlo sobre un mesociclo que él mismo creó a mano
     (is_self_managed) -- uno que le prescribió su coach sigue siendo editable solo por el
     coach, aunque el atleta sea su "dueño" en el sentido de a quién pertenece."""
+    if mesocycle.class_id is not None:
+        # Programación de una clase: la editan su profesor y el dueño, nunca un atleta
+        ensure_can_program_class(current_user, mesocycle.box_class)
+        return
     ensure_owner_or_coach(db, mesocycle.user_id, current_user)
     if current_user.role == "athlete" and not mesocycle.is_self_managed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Esta sesión la prescribió tu coach — solo tu coach puede editarla",
+            detail=(
+                "Esta sesión es la de la clase: puedes registrar lo que hiciste, pero no cambiar lo programado"
+                if mesocycle.is_class_log
+                else "Esta sesión la prescribió tu coach — solo tu coach puede editarla"
+            ),
         )
 
 

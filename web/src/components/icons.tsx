@@ -217,3 +217,13 @@ export function IconHome({ className = base }: IconProps) {
     </svg>
   );
 }
+
+/** Horario de clases: calendario con marcas de hora */
+export function IconCalendar({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3" y="5" width="18" height="16" rx="3" strokeLinejoin="round" />
+      <path d="M8 3v4M16 3v4M3 10h18M8 14h2M14 14h2M8 17.5h2" strokeLinecap="round" />
+    </svg>
+  );
+}

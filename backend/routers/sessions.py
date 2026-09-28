@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import ai_agent, models, schemas
 from backend.core.security import (
     _ip_and_user_key,
+    ensure_can_manage_mesocycle,
     ensure_owner_or_coach,
     ensure_owner_or_coach_editable,
     get_current_user,
@@ -26,7 +27,7 @@ def create_session(
     db_meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == session.mesocycle_id).first()
     if not db_meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
-    ensure_owner_or_coach(db, db_meso.user_id, current_user)
+    ensure_can_manage_mesocycle(db, db_meso, current_user)
 
     new_session = models.Session(
         mesocycle_id=session.mesocycle_id,
