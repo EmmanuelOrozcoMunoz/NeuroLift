@@ -137,8 +137,7 @@ def _admin(client) -> Cuenta:
     return _login(client, email)
 
 
-@pytest.fixture
-def dueno_de_box(client) -> Cuenta:
+def crear_box_activo(client) -> Cuenta:
     """Dueño de un box ya aprobado (el registro público lo deja pendiente hasta que un admin lo activa)."""
     email = _email("dueno")
     r = client.post(
@@ -153,8 +152,12 @@ def dueno_de_box(client) -> Cuenta:
 
 
 @pytest.fixture
-def atleta_de_box(client, dueno_de_box) -> Cuenta:
-    codigo = dueno_de_box.get("/boxes/me").json()["invite_code"]
+def dueno_de_box(client) -> Cuenta:
+    return crear_box_activo(client)
+
+
+def crear_atleta_de_box(client, dueno) -> Cuenta:
+    codigo = dueno.get("/boxes/me").json()["invite_code"]
     email = _email("atletabox")
     r = client.post(
         "/auth/register",
@@ -162,3 +165,8 @@ def atleta_de_box(client, dueno_de_box) -> Cuenta:
     )
     assert r.status_code == 200, r.text
     return _login(client, email)
+
+
+@pytest.fixture
+def atleta_de_box(client, dueno_de_box) -> Cuenta:
+    return crear_atleta_de_box(client, dueno_de_box)
