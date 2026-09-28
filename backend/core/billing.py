@@ -53,6 +53,8 @@ def ensure_can_add_athlete(db: Session, box: models.Box) -> None:
     """Se llama en TODO camino por el que un atleta nuevo entra a una cuenta (autoregistro con
     código o alta hecha por un coach). Los atletas que ya están nunca se bloquean: el límite solo
     frena a los nuevos."""
+    if box.kind == "athlete":
+        return  # cuenta personal de un atleta solo: gratis y sin límite (tiene un único miembro)
     es_coach = box.kind == "coach"
     if subscription_status(box) == "expired":
         raise HTTPException(

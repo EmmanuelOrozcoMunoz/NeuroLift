@@ -1,6 +1,5 @@
 """Boxes (gimnasios cliente): alta pública, perfil, logo, código de invitación y gestión de
 miembros por parte del dueño. La aprobación de boxes nuevos vive en routers/admin.py."""
-import secrets
 from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 from uuid import UUID
@@ -11,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
 from backend.core import billing
+from backend.core.invite import new_invite_code
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -30,17 +30,6 @@ BOX_REGISTER_MESSAGE = (
     "Recibimos la solicitud de tu box. Te avisaremos en cuanto esté aprobado; mientras tanto ya "
     "puedes iniciar sesión para completar su perfil."
 )
-# Sin 0/O ni 1/I: el código se dicta en voz alta o se copia de una pantalla
-_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-
-def new_invite_code(db: Session) -> str:
-    """Código de 8 caracteres (32^8 ≈ 10^12 combinaciones: no se adivina probando)."""
-    while True:
-        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
-        if not db.query(models.Box.id).filter(models.Box.invite_code == code).first():
-            return code
-
 
 def _box_detail(box: models.Box, viewer: models.User, db: Session) -> schemas.BoxDetail:
     detalle = schemas.BoxDetail.model_validate(box)
@@ -436,3 +425,43 @@ def get_owner_dashboard(db: Session = Depends(get_db), current_user: models.User
         ],
         attention=atencion[:8],
     )
+
+
+# ------------------------------------------------- atleta solo -> box/coach
+
+@router.post("/join", response_model=schemas.BoxSummary)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+def join_box(
+    request: Request,
+    req: schemas.BoxJoinRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Un atleta que se registró solo (cuenta personal) se une a un box o a un coach
+    independiente con su código. Se lleva todo lo suyo (sesiones, planes adquiridos, marcas,
+    Fit Level: cuelga del usuario, no de la cuenta) y su cuenta personal, ya vacía, se borra.
+
+    Solo desde una cuenta personal: cambiar de un box a otro no se hace por aquí (un box no
+    debe perder atletas porque alguien conozca el código de otro)."""
+    if current_user.role != "athlete" or current_user.box is None or current_user.box.kind != "athlete":
+        raise HTTPException(status_code=400, detail="Ya perteneces a un box o a un coach.")
+
+    destino = find_active_box_by_code(db, req.invite_code)
+    billing.ensure_can_add_athlete(db, destino)
+
+    coach_id = None
+    if destino.kind == "coach":
+        dueno = db.query(models.User.id).filter(models.User.box_id == destino.id, models.User.role == "owner").first()
+        coach_id = dueno[0] if dueno else None
+
+    personal_id = current_user.box_id
+    current_user.box_id = destino.id
+    current_user.coach_id = coach_id
+    db.flush()
+    # Borrado por consulta, no con db.delete(): la relación Box.members en memoria todavía
+    # tendría al atleta y el ORM le pondría box_id = NULL al "desvincularlo".
+    db.query(models.Box).filter(models.Box.id == personal_id, models.Box.kind == "athlete").delete(synchronize_session=False)
+    db.commit()
+    db.refresh(current_user)
+    security_logger.info("Atleta solo %s se unió a la cuenta '%s'", current_user.email, destino.name)
+    return destino

@@ -22,6 +22,7 @@ from backend.schemas.boxes import (
     AdminPaymentCreate,
     AthleteCoachAssign,
     BoxDetail,
+    BoxJoinRequest,
     BoxMember,
     BoxPublicInfo,
     BoxRegister,

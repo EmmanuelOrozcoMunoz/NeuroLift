@@ -22,7 +22,9 @@ def get_admin_overview(db: Session = Depends(get_db), current_user: models.User 
     total_coaches = db.query(models.User).filter(models.User.role == "coach").count()
     total_athletes = db.query(models.User).filter(models.User.role == "athlete").count()
     total_admins = db.query(models.User).filter(models.User.role == "admin").count()
-    total_boxes = db.query(models.Box).filter(models.Box.status == "active").count()
+    # Clientes que pagan: boxes y coaches independientes (las cuentas personales de atletas
+    # solos son gratuitas y se cuentan como atletas)
+    total_boxes = db.query(models.Box).filter(models.Box.status == "active", models.Box.kind != "athlete").count()
     boxes_pending = db.query(models.Box).filter(models.Box.status == "pending").count()
     total_groups = db.query(models.Group).count()
     total_mesocycles = db.query(models.Mesocycle).filter(models.Mesocycle.is_template == False).count()
@@ -59,6 +61,11 @@ def update_user_role(
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    if req.role in models.COACHING_ROLES and usuario.box is not None and usuario.box.kind == "athlete":
+        raise HTTPException(
+            status_code=400,
+            detail="Es un atleta solo: para ser coach debe registrarse como coach o unirse a un box.",
+        )
     if req.role == "admin":
         # El admin de plataforma no pertenece a ningún box
         usuario.box_id = None
@@ -131,7 +138,8 @@ def list_boxes(
 ):
     """Todos los boxes de la plataforma (los pendientes primero), con su dueño y cuántos
     coaches/atletas tiene cada uno."""
-    query = db.query(models.Box)
+    # Las cuentas personales de atletas solos no son clientes: no se listan aquí
+    query = db.query(models.Box).filter(models.Box.kind != "athlete")
     if status:
         query = query.filter(models.Box.status == status)
     boxes = query.order_by((models.Box.status == "pending").desc(), models.Box.created_at.desc()).all()

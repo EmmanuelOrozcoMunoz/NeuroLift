@@ -33,8 +33,9 @@ def _hhmm(value) -> str:
 
 
 def _ensure_box_member(user: models.User) -> models.Box:
-    """Las clases son de un box activo; el admin de plataforma no pertenece a ninguno."""
-    if user.box is None or not user.box.is_active:
+    """Las clases son de un box activo (no de un coach independiente ni de la cuenta personal
+    de un atleta solo); el admin de plataforma no pertenece a ninguno."""
+    if user.box is None or not user.box.is_active or user.box.kind != "box":
         raise HTTPException(status_code=403, detail="Las clases son de un box activo")
     return user.box
 

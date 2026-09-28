@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend import models, schemas
 from backend.core import billing
 from backend.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.core.invite import new_invite_code
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -37,7 +38,11 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
       atleta "del box" (sin coach) y el dueño le asigna coach después si quiere.
     - el código de invitación del box, si es un autoregistro. Un código inválido o de un box
       no activo SÍ se rechaza con un error explícito: el código es público (va en el link que
-      comparte el box), así que decir "ese código no existe" no filtra nada de nadie."""
+      comparte el box), así que decir "ese código no existe" no filtra nada de nadie.
+    - sin código ni coach: es un ATLETA SOLO. Se le crea su propia cuenta personal gratuita
+      (Box kind="athlete"), igual que a un coach independiente: así conserva el aislamiento
+      entre cuentas (nunca queda "sin cuenta"). Luego puede unirse a un box o a un coach con
+      su código (POST /boxes/join)."""
     creador = _optional_current_user(request, db)
     es_de_coach = (
         creador is not None
@@ -46,26 +51,41 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
         and creador.box.is_active
     )
 
+    solo = not es_de_coach and not (user.invite_code or "").strip()
     if es_de_coach:
         box = creador.box
         coach_id = creador.id if creador.role == "coach" else None
+    elif solo:
+        box = None
+        coach_id = None
     else:
         box = find_active_box_by_code(db, user.invite_code)
         coach_id = None
     # En la cuenta de un coach independiente, todo atleta es de ese coach
-    if box.kind == "coach" and coach_id is None:
+    if box is not None and box.kind == "coach" and coach_id is None:
         dueno = db.query(models.User.id).filter(models.User.box_id == box.id, models.User.role == "owner").first()
         coach_id = dueno[0] if dueno else None
 
     # Límite de atletas del plan / suscripción vencida. Va ANTES de mirar si el correo existe:
     # así la respuesta depende solo de la cuenta, nunca de si ese correo ya estaba registrado.
-    billing.ensure_can_add_athlete(db, box)
+    if box is not None:
+        billing.ensure_can_add_athlete(db, box)
 
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     # Siempre se hashea la contraseña, se use o no, para que ambas rutas tarden lo mismo.
     hashed_password = get_password_hash(user.password)
 
     if not db_user:
+        if box is None:
+            box = models.Box(
+                name=user.full_name,
+                kind="athlete",
+                status="active",
+                approved_at=datetime.utcnow(),
+                invite_code=new_invite_code(db),
+            )
+            db.add(box)
+            db.flush()
         db.add(models.User(
             email=user.email,
             full_name=user.full_name,
@@ -89,7 +109,8 @@ def find_active_box_by_code(db: Session, code: str | None) -> models.Box:
             detail="Necesitas el código de tu box para crear tu cuenta. Pídeselo a tu coach.",
         )
     box = db.query(models.Box).filter(models.Box.invite_code == normalizado).first()
-    if not box or not box.is_active:
+    # La cuenta personal de un atleta solo no admite a nadie más (su código es interno)
+    if not box or not box.is_active or box.kind == "athlete":
         raise HTTPException(status_code=400, detail="Ese código de box no es válido o el box no está activo.")
     return box
 
