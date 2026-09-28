@@ -24,7 +24,11 @@ function UserRow({ user, onToast }: { user: User; onToast: ToastFn }) {
         <div className="min-w-0">
           <p className="truncate font-semibold">{user.full_name}</p>
           <p className="truncate text-sm text-muted">{user.email}</p>
-          {user.box && <p className="truncate text-xs text-muted">{user.box.name}</p>}
+          {user.box && (
+            <p className="truncate text-xs text-muted">
+              {user.box.kind === "athlete" ? "Atleta solo" : user.box.kind === "coach" ? `Coach independiente · ${user.box.name}` : user.box.name}
+            </p>
+          )}
         </div>
         <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
       </div>

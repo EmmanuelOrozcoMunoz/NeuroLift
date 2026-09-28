@@ -217,7 +217,8 @@ function SideItem({ item }: { item: NavItem }) {
 
 /** Identidad de la cuenta en el sidebar: el box / coach del usuario, o NeuroLift para el admin. */
 function SidebarBrand({ user }: { user: User }) {
-  if (!user.box) {
+  // El admin no tiene cuenta y el atleta solo tiene una personal: ninguno "tiene box" que mostrar
+  if (!user.box || user.box.kind === "athlete") {
     return (
       <div className="flex items-center gap-3">
         <Logo className="h-10 w-10" />
