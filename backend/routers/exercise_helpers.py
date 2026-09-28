@@ -28,3 +28,9 @@ def clean_ai_block(value) -> str | None:
         return None
     limpio = value.strip().lower()
     return limpio if limpio in _BLOQUES_VALIDOS else None
+
+
+def clean_coach_note(value: str | None) -> str | None:
+    """Nota del coach para un ejercicio: recortada; vacía = sin nota (None)."""
+    limpio = (value or "").strip()
+    return limpio or None

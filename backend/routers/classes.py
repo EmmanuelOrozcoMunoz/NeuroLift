@@ -465,6 +465,7 @@ def join_class_session(session_id: UUID, db: Session = Depends(get_db), current_
             prescribed_percentage=serie.prescribed_percentage,
             reference_exercise=serie.reference_exercise,
             rpe=serie.rpe,
+            coach_note=serie.coach_note,
         ))
     db.commit()
     return schemas.ClassJoinResponse(mesocycle_id=registro.id, session_id=copia.id, missing_prs=sorted(sin_marca))

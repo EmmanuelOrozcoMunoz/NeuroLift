@@ -353,6 +353,10 @@ class Set(Base):
     video_url = Column(String(255))
     technique_score = Column(Float)
     technique_feedback = Column(Text)
+    # Nota del coach para ESTE ejercicio ("codos arriba en la recepción", "si duele el hombro,
+    # cambia a landmine"...). Se guarda igual en todas las series del ejercicio y se muestra una
+    # sola vez; viaja en todas las copias (grupos, planes, clases, sesiones adaptadas).
+    coach_note = Column(Text, nullable=True)
     is_pr_attempt = Column(Boolean, default=False)
     # En los planes las cargas se prescriben en % de 1RM (el autor no conoce las marcas del
     # comprador). Al adquirir el plan se resuelve a kg usando el PR del atleta para

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.exercise_helpers import get_or_create_exercise
+from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
 from backend.routers.group_helpers import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
@@ -150,6 +150,7 @@ def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user
                 prescribed_percentage=set_ref.prescribed_percentage,
                 reference_exercise=set_ref.reference_exercise,
                 rpe=set_ref.rpe,
+                coach_note=set_ref.coach_note,
             ))
 
     return nuevo_meso
@@ -416,6 +417,7 @@ def add_exercise_to_group_session(
                 prescribed_percentage=req.prescribed_percentage,
                 reference_exercise=req.reference_exercise,
                 block=req.block,
+                coach_note=clean_coach_note(req.coach_note),
             ))
         resultados.append({"full_name": meso.user.full_name, "status": "añadido"})
 
@@ -469,6 +471,8 @@ def update_exercise_in_group_session(
             sets_existentes[i].reference_exercise = req.reference_exercise
             if req.block is not None:
                 sets_existentes[i].block = req.block
+            if "coach_note" in req.model_fields_set:
+                sets_existentes[i].coach_note = clean_coach_note(req.coach_note)
 
         if req.prescribed_sets < num_original:
             for extra in sets_existentes[req.prescribed_sets:]:
@@ -486,6 +490,11 @@ def update_exercise_in_group_session(
                     prescribed_percentage=req.prescribed_percentage,
                     reference_exercise=req.reference_exercise,
                     block=bloque_nuevas,
+                    coach_note=(
+                        clean_coach_note(req.coach_note)
+                        if "coach_note" in req.model_fields_set
+                        else sets_existentes[0].coach_note
+                    ),
                 ))
 
         resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})

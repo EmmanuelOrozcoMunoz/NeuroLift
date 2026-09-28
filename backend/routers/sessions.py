@@ -16,6 +16,7 @@ from backend.core.security import (
 )
 from backend.database import get_db
 from backend.routers.exercise_helpers import clean_ai_block, get_or_create_exercise
+from backend.routers.pr_helpers import normalize_exercise_name
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -282,10 +283,18 @@ def adapt_session_to_available_time(
         "athlete_notes", f"Versión adaptada a {req.available_minutes} minutos."
     )
 
+    # La versión corta la arma la IA: las notas del coach se conservan por ejercicio (mismo
+    # nombre, sin importar cómo lo escriba) para que no se pierdan al recortar la sesión
+    notas_por_ejercicio = {
+        normalize_exercise_name(s.exercise.name): s.coach_note
+        for s in original.sets
+        if s.coach_note and s.exercise
+    }
     orden = 1
     for ej_data in rutina_ai.get("exercises", []):
         ejercicio = get_or_create_exercise(db, ej_data.get("exercise_name", "Ejercicio Desconocido"))
         db.add(models.Set(
+            coach_note=notas_por_ejercicio.get(normalize_exercise_name(ejercicio.name)),
             session_id=adaptada.id,
             exercise_id=ejercicio.id,
             set_order=orden,

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models, schemas
 from backend.core.security import ensure_owner_or_coach, ensure_owner_or_coach_editable, get_current_user
 from backend.database import get_db
+from backend.routers.exercise_helpers import clean_coach_note
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(tags=["sets"])
@@ -48,6 +49,10 @@ def update_set(
         db_set.prescribed_weight = set_update.prescribed_weight
     if set_update.block is not None:
         db_set.block = set_update.block
+    # Solo si vino en la petición: una edición que no la manda (p. ej. un cliente viejo) no
+    # debe borrar la nota que ya tenía el ejercicio
+    if "coach_note" in set_update.model_fields_set:
+        db_set.coach_note = clean_coach_note(set_update.coach_note)
 
     if set_update.exercise_name:
         ejercicio = db.query(models.Exercise).filter(models.Exercise.name == set_update.exercise_name).first()
@@ -105,6 +110,7 @@ def agregar_serie(
         prescribed_percentage=req.prescribed_percentage,
         reference_exercise=req.reference_exercise,
         block=req.block,
+        coach_note=clean_coach_note(req.coach_note),
     )
     db.add(nuevo_set)
     db.commit()
