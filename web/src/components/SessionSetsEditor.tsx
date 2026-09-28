@@ -577,7 +577,7 @@ export function SessionSetsEditor({
           onClick={() => setForzarMetcon(true)}
           className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
         >
-          🔥 Añadir bloque metabólico (WOD)
+          🔥 Añadir WOD
         </button>
       )}
     </div>

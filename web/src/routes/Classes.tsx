@@ -175,7 +175,7 @@ function ClassesAdmin({ isOwner, onFeedback }: { isOwner: boolean; onFeedback: (
                 onClick={() => setProgramming(c)}
                 className="press mt-3 flex min-h-touch w-full items-center justify-between rounded-xl bg-surface-2 px-4 text-sm font-semibold"
               >
-                Programar un bloque de semanas
+                Programar por semanas
                 <IconChevronRight className="h-5 w-5" />
               </button>
             )}
