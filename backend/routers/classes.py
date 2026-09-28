@@ -18,6 +18,7 @@ from backend import models, schemas
 from backend.core.security import can_program_class, ensure_can_program_class, get_current_user, require_owner
 from backend.database import get_db
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.sets import clonar_set
 
 router = APIRouter(prefix="/classes", tags=["classes"])
 
@@ -455,18 +456,7 @@ def join_class_session(session_id: UUID, db: Session = Depends(get_db), current_
         peso = resolve_weight_from_percentage(serie.prescribed_percentage, serie.prescribed_weight, referencia, prs)
         if serie.prescribed_percentage is not None and peso is None and referencia:
             sin_marca.add(referencia)
-        db.add(models.Set(
-            session_id=copia.id,
-            exercise_id=serie.exercise_id,
-            set_order=serie.set_order,
-            block=serie.block,
-            prescribed_reps=serie.prescribed_reps,
-            prescribed_weight=peso,
-            prescribed_percentage=serie.prescribed_percentage,
-            reference_exercise=serie.reference_exercise,
-            rpe=serie.rpe,
-            coach_note=serie.coach_note,
-        ))
+        db.add(clonar_set(serie, copia.id, prescribed_weight=peso))
     db.commit()
     return schemas.ClassJoinResponse(mesocycle_id=registro.id, session_id=copia.id, missing_prs=sorted(sin_marca))
 

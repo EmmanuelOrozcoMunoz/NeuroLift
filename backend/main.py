@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,14 +15,24 @@ from backend.database import engine, get_db
 from backend import models, storage
 from backend.routers import admin, ai, auth, boxes, classes, fitness, groups, mesocycles, plans, sessions, sets, users
 
-# Esto crea las tablas si por alguna razón no existieran en la BD
-models.Base.metadata.create_all(bind=engine)
-# Ídem para los buckets de Storage (avatares, portadas) — ver backend/storage.py.
-storage.ensure_buckets()
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Preparación que antes corría al IMPORTAR este módulo (y por eso importar `backend.main`
+    exigía Postgres y red). Ahora solo corre al arrancar el servidor.
+
+    - create_all: crea las tablas que falten. Las migraciones de Alembic asumen que el esquema
+      base ya existe (no hay una migración inicial que lo cree), así que un ambiente nuevo lo
+      sigue necesitando. Si una migración crea una tabla, debe tolerar que ya exista (ver
+      a3b4c5d6e7f8).
+    - ensure_buckets: buckets de Supabase Storage (avatares, portadas), idempotente."""
+    models.Base.metadata.create_all(bind=engine)
+    storage.ensure_buckets()
+    yield
 
 
 app = FastAPI(
     title="NeuroLift API",
+    lifespan=lifespan,
     docs_url="/docs" if DOCS_ENABLED else None,
     redoc_url="/redoc" if DOCS_ENABLED else None,
     openapi_url="/openapi.json" if DOCS_ENABLED else None,
