@@ -2,11 +2,10 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
-import { BlockSelect } from "@/components/BlockSelect";
-import { CoachNoteField } from "@/components/CoachNote";
+import { ExerciseFormFields, PesosWodFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast, cx } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
 import {
   useDeleteGroupProgram,
   useGroupBulkAdd,
@@ -17,9 +16,9 @@ import {
   useGroupMesocycles,
 } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
+import { camposComunes, draftDeEjercicio, esMetcon, nuevoDraft, pesosWodParaEnviar } from "@/lib/exerciseDraft";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
-import { useWeightUnit, WeightStepper } from "@/lib/units";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
@@ -191,24 +190,9 @@ function BulkExerciseBlock({
 }) {
   const bulkUpdate = useGroupBulkUpdate(groupId);
   const bulkDelete = useGroupBulkDelete(groupId);
-  const unit = useWeightUnit();
 
-  const first = group.sets[0];
-  const [name, setName] = useState(group.name);
-  const [series, setSeries] = useState(group.sets.length);
-  const [reps, setReps] = useState(first.prescribed_reps);
-  const [rpe, setRpe] = useState(first.rpe ?? 0);
-  const [tipoCarga, setTipoCarga] = useState<"kg" | "porcentaje">(first.prescribed_percentage ? "porcentaje" : "kg");
-  const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
-  const [porcentaje, setPorcentaje] = useState(first.prescribed_percentage ?? 75);
-  const [referencia, setReferencia] = useState(first.reference_exercise ?? "");
-  const [wRxMale, setWRxMale] = useState(0);
-  const [wRxFemale, setWRxFemale] = useState(0);
-  const [wScaledMale, setWScaledMale] = useState(0);
-  const [wScaledFemale, setWScaledFemale] = useState(0);
-  const [block, setBlock] = useState(first.block ?? "");
-  const [nota, setNota] = useState(group.sets.find((s) => s.coach_note)?.coach_note ?? "");
-  const esMetcon = block === "metcon";
+  const [draft, cambiar] = useExerciseDraft(() => draftDeEjercicio(group, false));
+  const metcon = esMetcon(draft);
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
 
@@ -232,87 +216,13 @@ function BulkExerciseBlock({
         </button>
       </div>
 
-      <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
-      <BlockSelect value={block} onChange={setBlock} />
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
-          <Stepper value={series} onChange={setSeries} min={1} max={20} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Reps</span>
-          <Stepper value={reps} onChange={setReps} min={1} max={100} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
-          <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
-        </div>
-      </div>
-
-      {!esMetcon && (
-        <div className="mt-3 border-t border-line pt-3">
-          <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
-          <Segmented<"kg" | "porcentaje">
-            value={tipoCarga}
-            onChange={setTipoCarga}
-            options={[
-              { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
-              { value: "porcentaje", label: "% de 1RM" },
-            ]}
-          />
-          <div className="mt-2">
-            {tipoCarga === "porcentaje" ? (
-              <>
-                <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
-                <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-              </>
-            ) : (
-              <>
-                <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
-                <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
-              </>
-            )}
-          </div>
-          {tipoCarga === "porcentaje" && (
-            <Field
-              label="1RM de referencia (opcional)"
-              placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
-              value={referencia}
-              onChange={(e) => setReferencia(e.target.value)}
-              className="mt-2"
-            />
-          )}
-          <p className="mt-2 text-xs text-muted">
-            Cada atleta recibe su propio peso, calculado con sus marcas ya registradas.
-          </p>
-        </div>
-      )}
-
-      {esMetcon && (
-        <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD ({unit}) — por categoría y género</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
-              <WeightStepper valueKg={wRxMale} onChangeKg={setWRxMale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
-              <WeightStepper valueKg={wRxFemale} onChangeKg={setWRxFemale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
-              <WeightStepper valueKg={wScaledMale} onChangeKg={setWScaledMale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
-              <WeightStepper valueKg={wScaledFemale} onChangeKg={setWScaledFemale} compact />
-            </div>
-          </div>
-        </div>
-      )}
-
-      <CoachNoteField value={nota} onChange={setNota} />
+      <ExerciseFormFields
+        draft={draft}
+        onChange={cambiar}
+        tipos={["kg", "porcentaje"]}
+        avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
+        cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
+      />
 
       <Button
         variant="secondary"
@@ -324,20 +234,12 @@ function BulkExerciseBlock({
             {
               ...base,
               exercise_name: group.name,
-              new_exercise_name: name.trim() || group.name,
-              prescribed_sets: series,
-              prescribed_reps: reps,
-              rpe: rpe > 0 ? rpe : null,
-              prescribed_weight: !esMetcon && tipoCarga === "kg" && weight > 0 ? weight : null,
-              prescribed_percentage: !esMetcon && tipoCarga === "porcentaje" ? porcentaje : null,
-              reference_exercise:
-                !esMetcon && tipoCarga === "porcentaje" && referencia.trim() ? referencia.trim() : null,
-              prescribed_weight_rx_male: esMetcon && wRxMale > 0 ? wRxMale : null,
-              prescribed_weight_rx_female: esMetcon && wRxFemale > 0 ? wRxFemale : null,
-              prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
-              prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
-              block: block || null,
-              coach_note: nota.trim(),
+              new_exercise_name: draft.name.trim() || group.name,
+              prescribed_sets: draft.series,
+              prescribed_reps: draft.reps,
+              ...camposComunes(draft, metcon),
+              ...pesosWodParaEnviar(draft, metcon),
+              coach_note: draft.nota.trim(),
             },
             { onSuccess: (r) => onFeedback(r.message) },
           )
@@ -363,136 +265,41 @@ function BulkAddForm({
   onFeedback: (message: string) => void;
 }) {
   const bulkAdd = useGroupBulkAdd(groupId);
-  const unit = useWeightUnit();
-  const [name, setName] = useState("");
-  const [series, setSeries] = useState(3);
-  const [reps, setReps] = useState(8);
-  const [rpe, setRpe] = useState(7);
-  const [tipoCarga, setTipoCarga] = useState<"kg" | "porcentaje">("kg");
-  const [weight, setWeight] = useState(0);
-  const [porcentaje, setPorcentaje] = useState(75);
-  const [referencia, setReferencia] = useState("");
-  const [wRxMale, setWRxMale] = useState(0);
-  const [wRxFemale, setWRxFemale] = useState(0);
-  const [wScaledMale, setWScaledMale] = useState(0);
-  const [wScaledFemale, setWScaledFemale] = useState(0);
-  const [block, setBlock] = useState("");
-  const [nota, setNota] = useState("");
+  const [draft, cambiar] = useExerciseDraft(() => nuevoDraft());
   const [error, setError] = useState<string | null>(null);
-  const esMetcon = block === "metcon";
+  const metcon = esMetcon(draft);
 
   return (
     <Card className="border-dashed">
       <p className="mb-3 font-bold">➕ Añadir para TODO el grupo</p>
-      <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
-      <BlockSelect value={block} onChange={setBlock} />
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
-          <Stepper value={series} onChange={setSeries} min={1} max={20} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Reps</span>
-          <Stepper value={reps} onChange={setReps} min={1} max={100} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
-          <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
-        </div>
-      </div>
-
-      {!esMetcon && (
-        <div className="mt-3 border-t border-line pt-3">
-          <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
-          <Segmented<"kg" | "porcentaje">
-            value={tipoCarga}
-            onChange={setTipoCarga}
-            options={[
-              { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
-              { value: "porcentaje", label: "% de 1RM" },
-            ]}
-          />
-          <div className="mt-2">
-            {tipoCarga === "porcentaje" ? (
-              <>
-                <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
-                <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-              </>
-            ) : (
-              <>
-                <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
-                <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
-              </>
-            )}
-          </div>
-          {tipoCarga === "porcentaje" && (
-            <Field
-              label="1RM de referencia (opcional)"
-              placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
-              value={referencia}
-              onChange={(e) => setReferencia(e.target.value)}
-              className="mt-2"
-            />
-          )}
-          <p className="mt-2 text-xs text-muted">
-            Cada atleta recibe su propio peso, calculado con sus marcas ya registradas.
-          </p>
-        </div>
-      )}
-
-      {esMetcon && (
-        <div className="mt-3 border-t border-line pt-3">
-          <p className="mb-2 text-xs font-medium text-muted">Pesos del WOD ({unit}) — por categoría y género</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">RX Hombres</span>
-              <WeightStepper valueKg={wRxMale} onChangeKg={setWRxMale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">RX Mujeres</span>
-              <WeightStepper valueKg={wRxFemale} onChangeKg={setWRxFemale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">Scaled Hombres</span>
-              <WeightStepper valueKg={wScaledMale} onChangeKg={setWScaledMale} compact />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] text-muted">Scaled Mujeres</span>
-              <WeightStepper valueKg={wScaledFemale} onChangeKg={setWScaledFemale} compact />
-            </div>
-          </div>
-        </div>
-      )}
-      <CoachNoteField value={nota} onChange={setNota} />
+      <ExerciseFormFields
+        draft={draft}
+        onChange={cambiar}
+        tipos={["kg", "porcentaje"]}
+        avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
+        cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
+      />
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button
         full
         className="mt-3"
         loading={bulkAdd.isPending}
         onClick={() => {
-          if (!name.trim()) return setError("Escribe el nombre del ejercicio.");
+          if (!draft.name.trim()) return setError("Escribe el nombre del ejercicio.");
           setError(null);
           bulkAdd.mutate(
             {
               program_name: programName,
               program_start_date: programStartDate,
               scheduled_date: scheduledDate,
-              exercise_name: name.trim(),
-              prescribed_sets: series,
-              prescribed_reps: reps,
-              rpe: rpe > 0 ? rpe : null,
-              prescribed_weight: !esMetcon && tipoCarga === "kg" && weight > 0 ? weight : null,
-              prescribed_percentage: !esMetcon && tipoCarga === "porcentaje" ? porcentaje : null,
-              reference_exercise:
-                !esMetcon && tipoCarga === "porcentaje" && referencia.trim() ? referencia.trim() : null,
-              prescribed_weight_rx_male: esMetcon && wRxMale > 0 ? wRxMale : null,
-              prescribed_weight_rx_female: esMetcon && wRxFemale > 0 ? wRxFemale : null,
-              prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
-              prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
-              block: block || null,
-              coach_note: nota.trim() || null,
+              exercise_name: draft.name.trim(),
+              prescribed_sets: draft.series,
+              prescribed_reps: draft.reps,
+              ...camposComunes(draft, metcon),
+              ...pesosWodParaEnviar(draft, metcon),
+              coach_note: draft.nota.trim() || null,
             },
-            { onSuccess: (r) => { onFeedback(r.message); setName(""); setNota(""); } },
+            { onSuccess: (r) => { onFeedback(r.message); cambiar({ name: "", nota: "" }); } },
           );
         }}
       >
