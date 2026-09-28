@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import models, schemas
 from backend.core.security import can_program_class
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 from backend.services.sets import clonar_set
 
 CLASS_LOG_NAME = "Clases del box"

@@ -19,7 +19,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.pr_helpers import find_personal_record, fit_level_lift_for
+from backend.services.prs import find_personal_record, fit_level_lift_for
 from backend.wod_scoring import format_wod_summary
 
 # Mezcla rutas /users/* y /coach/* (el leaderboard general es "del coach", no "de un usuario"),
@@ -188,7 +188,7 @@ def search_athlete_by_email(
     A propósito NO devuelve atletas que ya tienen coach (aunque sea otro coach distinto de
     quien busca): sin este filtro, cualquier coach podía ubicar el ID de CUALQUIER atleta de la
     plataforma y luego agregarlo a un grupo propio para heredar acceso a su mesociclo, marcas y
-    fitness level (ver ensure_athletes_addable en group_helpers.py, que ahora bloquea ese
+    fitness level (ver ensure_athletes_addable en services/group_access.py, que ahora bloquea ese
     agregado, pero este endpoint tampoco debe servir de reconocimiento previo). Tampoco se
     reutiliza UserResponse como schema de respuesta: ver AthleteLookupResponse."""
     filtros = [

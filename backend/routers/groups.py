@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.group_helpers import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
+from backend.services.group_access import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
 from backend.services.groups import (
     actualizar_ejercicio,
     agregar_ejercicio,

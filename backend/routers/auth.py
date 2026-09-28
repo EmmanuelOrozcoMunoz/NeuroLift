@@ -18,6 +18,7 @@ from backend.core.security import (
     verify_password,
 )
 from backend.database import get_db
+from backend.services.boxes import find_active_box_by_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -98,21 +99,6 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
         db.commit()
 
     return {"message": REGISTER_GENERIC_MESSAGE}
-
-
-def find_active_box_by_code(db: Session, code: str | None) -> models.Box:
-    """Box activo con ese código de invitación, o 400. Compartido con GET /boxes/by-code."""
-    normalizado = (code or "").strip().upper()
-    if not normalizado:
-        raise HTTPException(
-            status_code=400,
-            detail="Necesitas el código de tu box para crear tu cuenta. Pídeselo a tu coach.",
-        )
-    box = db.query(models.Box).filter(models.Box.invite_code == normalizado).first()
-    # La cuenta personal de un atleta solo no admite a nadie más (su código es interno)
-    if not box or not box.is_active or box.kind == "athlete":
-        raise HTTPException(status_code=400, detail="Ese código de box no es válido o el box no está activo.")
-    return box
 
 
 @router.post("/login")

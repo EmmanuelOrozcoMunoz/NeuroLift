@@ -16,8 +16,8 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.group_helpers import get_owned_group
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.group_access import get_owned_group
+from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/mesocycles", tags=["mesocycles"])
 

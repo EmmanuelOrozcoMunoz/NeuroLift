@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from backend import models
 from backend.database import SessionLocal
-from backend.routers.exercise_helpers import clean_ai_block
-from backend.routers.pr_helpers import get_athlete_prs, normalize_exercise_name, resolve_weight_from_percentage
+from backend.services.exercises import clean_ai_block
+from backend.services.prs import get_athlete_prs, normalize_exercise_name, resolve_weight_from_percentage
 
 _NOMBRE_DIA_SEMANA = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
 
