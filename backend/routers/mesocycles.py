@@ -6,7 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models, schemas
-from backend.core.security import _coach_athlete_ids, ensure_owner_or_coach, get_current_user, require_coach
+from backend.core.security import (
+    _coach_athlete_ids,
+    ensure_can_manage_mesocycle,
+    ensure_can_view_mesocycle,
+    ensure_has_personal_coach,
+    ensure_owner_or_coach,
+    get_current_user,
+    require_coach,
+)
 from backend.database import get_db
 from backend.routers.group_helpers import get_owned_group
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
@@ -22,6 +30,7 @@ def create_mesocycle(
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     ensure_owner_or_coach(db, db_user.id, current_user)
+    ensure_has_personal_coach([db_user])
 
     new_meso = models.Mesocycle(
         user_id=mesocycle.user_id,
@@ -62,7 +71,7 @@ def get_full_mesocycle(
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
 
-    ensure_owner_or_coach(db, meso.user_id, current_user)
+    ensure_can_view_mesocycle(db, meso, current_user)
 
     # Ordenamos sesiones por fecha y series por su set_order
     meso.sessions.sort(key=lambda s: s.scheduled_date)
@@ -148,7 +157,7 @@ def delete_mesocycle(
     ).first()
     if not meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
-    ensure_owner_or_coach(db, meso.user_id, current_user)
+    ensure_can_manage_mesocycle(db, meso, current_user)
 
     db.delete(meso)
     db.commit()
@@ -164,6 +173,7 @@ def create_manual_mesocycle(
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     ensure_owner_or_coach(db, db_user.id, current_user)
+    ensure_has_personal_coach([db_user])
 
     resultado = _build_manual_mesocycle(
         db, req.user_id, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days
@@ -181,6 +191,7 @@ def create_manual_mesocycle_for_group(
     grupo = get_owned_group(db, req.group_id, current_user)
     if not grupo.members:
         raise HTTPException(status_code=400, detail="El grupo no tiene atletas asignados")
+    ensure_has_personal_coach(grupo.members)
 
     resultados = []
     for atleta in grupo.members:

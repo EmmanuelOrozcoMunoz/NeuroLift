@@ -1,11 +1,12 @@
 """Boxes (gimnasios cliente): alta pública, perfil, logo, código de invitación y gestión de
 miembros por parte del dueño. La aprobación de boxes nuevos vive en routers/admin.py."""
 import secrets
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
@@ -338,4 +339,100 @@ def assign_athlete_coach(
         coach_id=atleta.coach_id,
         coach_name=coach.full_name if coach else None,
         created_at=atleta.created_at,
+    )
+
+
+# ------------------------------------------------------------- tablero
+
+INACTIVE_DAYS = 14
+
+
+@router.get("/me/dashboard", response_model=schemas.OwnerDashboard)
+def get_owner_dashboard(db: Session = Depends(get_db), current_user: models.User = Depends(require_owner)):
+    """Inicio del dueño: atletas frente al límite del plan, quién entrenó esta semana, carga de
+    cada coach, clases sin programar y atletas que requieren atención."""
+    box = current_user.box
+    hoy = date.today()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    hace_una_semana = datetime.utcnow() - timedelta(days=7)
+    limite_inactivo = datetime.utcnow() - timedelta(days=INACTIVE_DAYS)
+
+    miembros = db.query(models.User).filter(models.User.box_id == box.id).all()
+    atletas = [m for m in miembros if m.role == "athlete"]
+    coaches = [m for m in miembros if m.role in models.COACHING_ROLES]
+    ids_atletas = [a.id for a in atletas]
+
+    # Última sesión completada y sesiones completadas esta semana, por atleta (una consulta)
+    ultima: dict = {}
+    semana: dict = {}
+    if ids_atletas:
+        for user_id, ultima_fecha, esta_semana in (
+            db.query(
+                models.Mesocycle.user_id,
+                func.max(models.Session.completed_date),
+                func.count(models.Session.id).filter(models.Session.completed_date >= datetime.combine(lunes, datetime.min.time())),
+            )
+            .join(models.Session, models.Session.mesocycle_id == models.Mesocycle.id)
+            .filter(models.Mesocycle.user_id.in_(ids_atletas), models.Session.status == "completed")
+            .group_by(models.Mesocycle.user_id)
+            .all()
+        ):
+            ultima[user_id] = ultima_fecha
+            semana[user_id] = esta_semana or 0
+
+    clases = db.query(models.BoxClass).filter(
+        models.BoxClass.box_id == box.id, models.BoxClass.is_active == True  # noqa: E712
+    ).all()
+    clases_por_coach: dict = {}
+    for c in clases:
+        clases_por_coach[c.coach_id] = clases_por_coach.get(c.coach_id, 0) + 1
+
+    proximos = [hoy + timedelta(days=i) for i in range(7)]
+    programadas = set()
+    if clases:
+        programadas = {
+            (cid, d)
+            for cid, d in db.query(models.Mesocycle.class_id, models.Session.scheduled_date)
+            .join(models.Session, models.Session.mesocycle_id == models.Mesocycle.id)
+            .filter(
+                models.Mesocycle.class_id.in_([c.id for c in clases]),
+                models.Session.scheduled_date >= hoy,
+                models.Session.scheduled_date <= proximos[-1],
+            )
+            .all()
+        }
+    sin_programar = sum(
+        1 for c in clases for d in proximos if d.weekday() in c.weekday_list and (c.id, d) not in programadas
+    )
+
+    atencion: list[schemas.AttentionAthlete] = []
+    for a in sorted(atletas, key=lambda x: x.full_name):
+        if a.created_at and a.created_at >= hace_una_semana:
+            atencion.append(schemas.AttentionAthlete(id=a.id, full_name=a.full_name, reason="nuevo"))
+        elif ultima.get(a.id) is None or ultima[a.id] < limite_inactivo:
+            atencion.append(schemas.AttentionAthlete(
+                id=a.id, full_name=a.full_name, reason="inactivo", last_completed_at=ultima.get(a.id)
+            ))
+
+    return schemas.OwnerDashboard(
+        athletes_total=len(atletas),
+        max_athletes=billing.max_athletes(box),
+        athletes_trained_this_week=sum(1 for a in atletas if semana.get(a.id, 0) > 0),
+        sessions_completed_this_week=sum(semana.values()),
+        athletes_without_coach=sum(1 for a in atletas if a.coach_id is None),
+        new_athletes_this_week=sum(1 for a in atletas if a.created_at and a.created_at >= hace_una_semana),
+        classes_today=sum(1 for c in clases if hoy.weekday() in c.weekday_list),
+        unprogrammed_classes_next_7_days=sin_programar,
+        coaches=[
+            schemas.CoachLoad(
+                id=c.id,
+                full_name=c.full_name,
+                role=c.role,
+                athletes=sum(1 for a in atletas if a.coach_id == c.id),
+                trained_this_week=sum(1 for a in atletas if a.coach_id == c.id and semana.get(a.id, 0) > 0),
+                classes=clases_por_coach.get(c.id, 0),
+            )
+            for c in sorted(coaches, key=lambda x: (x.role != "owner", x.full_name))
+        ],
+        attention=atencion[:8],
     )

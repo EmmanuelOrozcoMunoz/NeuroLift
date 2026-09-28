@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, ForeignKey, Text, Table, UniqueConstraint, Index
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, Time, ForeignKey, Text, Table, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -154,6 +154,37 @@ class Group(Base):
     def has_cover_image(self) -> bool:
         return self.cover_image_filename is not None
 
+class BoxClass(Base):
+    """Una clase recurrente del box (ej. "CrossFit 6:00 am", lunes a viernes) con el profesor que
+    la dicta. La crea el dueño; el CONTENIDO de cada día lo programa el profesor, en mesociclos
+    ligados a la clase (Mesocycle.class_id): un bloque de varias semanas o sesión por sesión. Es
+    como entrenan los atletas del box que no tienen coach personal (ver routers/classes.py)."""
+    __tablename__ = "box_classes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    box_id = Column(UUID(as_uuid=True), ForeignKey("boxes.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    # Profesor que la dicta (coach o dueño del box). SET NULL: si el coach se va, la clase queda
+    # "sin profesor" hasta que el dueño asigne otro, en vez de desaparecer con su programación.
+    coach_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Días de la semana en que se dicta, como texto "0,2,4" (0 = lunes ... 6 = domingo)
+    weekdays = Column(String(20), nullable=False)
+    start_time = Column(Time, nullable=False)  # hora local del box
+    duration_minutes = Column(Integer, nullable=False, default=60, server_default="60")
+    # Borrado lógico: una clase que ya no se dicta conserva su programación y los registros que
+    # los atletas ya hicieron en ella.
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    box = relationship("Box")
+    coach = relationship("User", foreign_keys=[coach_id])
+
+    @property
+    def weekday_list(self) -> list[int]:
+        return [int(d) for d in self.weekdays.split(",") if d.strip() != ""]
+
+
 class Mesocycle(Base):
     __tablename__ = "mesocycles"
 
@@ -171,6 +202,15 @@ class Mesocycle(Base):
     # el dueño puede agregar/editar/borrar series de un mesociclo así -- uno prescrito por un
     # coach sigue siendo editable solo por el coach (ver ensure_owner_or_coach_editable).
     is_self_managed = Column(Boolean, default=False, nullable=False, server_default="false")
+
+    # --- CLASES DEL BOX (ver BoxClass) ---
+    # Programación de una clase: user_id=None y class_id=la clase. Sus sesiones son el contenido
+    # de cada día que se dicta. La editan el profesor de la clase y el dueño del box; la ve
+    # cualquier miembro del box.
+    class_id = Column(UUID(as_uuid=True), ForeignKey("box_classes.id", ondelete="CASCADE"), nullable=True, index=True)
+    # Mesociclo personal de un atleta que junta SUS registros de clases ("Clases del box"): cada
+    # sesión es su copia de la clase de un día (Session.class_session_id), donde anota lo que hizo.
+    is_class_log = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # --- PLANES (plantillas vendibles, sin dueño) ---
     # Un "plan" es un Mesocycle con is_template=True y user_id=None: no pertenece a ningún
@@ -193,6 +233,7 @@ class Mesocycle(Base):
     plan_visibility = Column(String(10), nullable=False, default="box", server_default="box")
 
     user = relationship("User", back_populates="mesocycles", foreign_keys=[user_id])
+    box_class = relationship("BoxClass")
     created_by_coach = relationship("User", foreign_keys=[created_by_coach_id])
     box = relationship("Box")
     group = relationship("Group")
@@ -264,6 +305,9 @@ class Session(Base):
     wod_calories = Column(Float, nullable=True)
     wod_distance_meters = Column(Float, nullable=True)
     wod_watts = Column(Float, nullable=True)
+    # Solo en el registro de clases de un atleta: la sesión de la clase (la del profesor) de la
+    # que esta es su copia. Sirve para no duplicarla y para mostrar "ya registraste esta clase".
+    class_session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
     # Mismo motivo que Mesocycle.sessions: deja que la base de datos borre las series en cascada

@@ -45,6 +45,9 @@ class MesocycleSummaryResponse(BaseModel):
     description: Optional[str] = None
     level: Optional[str] = None
     is_self_managed: bool = False
+    # Registro de clases del atleta ("Clases del box") y programación de una clase
+    is_class_log: bool = False
+    class_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
@@ -64,6 +67,9 @@ class MesocycleFullResponse(BaseModel):
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     is_preview: bool = False  # ver PlanPreviewResponse: esta es SIEMPRE la versión completa
     is_self_managed: bool = False
+    # Registro de clases del atleta ("Clases del box") y programación de una clase
+    is_class_log: bool = False
+    class_id: Optional[UUID] = None
     sessions: List[SessionResponse] = []  # ¡Aquí anidamos las sesiones!
 
     class Config:
