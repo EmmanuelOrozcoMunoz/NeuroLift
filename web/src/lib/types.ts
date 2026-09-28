@@ -10,8 +10,9 @@ export const COACHING_ROLES: Role[] = ["coach", "owner"];
 
 export type BoxStatus = "pending" | "active" | "rejected" | "suspended";
 
-/** "box" = gimnasio | "coach" = cuenta de un coach independiente (sin box, para el usuario) */
-export type BoxKind = "box" | "coach";
+/** "box" = gimnasio | "coach" = cuenta de un coach independiente | "athlete" = cuenta personal
+ *  de un atleta solo (gratis). Para el usuario, ni el coach ni el atleta solo "tienen box". */
+export type BoxKind = "box" | "coach" | "athlete";
 export type PlanCode = "basic" | "pro" | "unlimited";
 export type SubscriptionStatus = "trial" | "active" | "expired";
 

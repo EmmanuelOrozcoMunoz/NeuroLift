@@ -10,6 +10,7 @@ import type {
   BoxDetail,
   BoxMember,
   BoxStatus,
+  BoxSummary,
   BoxUpdatePayload,
   MessageResponse,
   PlanCode,
@@ -144,5 +145,20 @@ export function useRegisterPayment() {
     mutationFn: ({ boxId, months }: { boxId: string; months: number }) =>
       apiFetch<MessageResponse>(`/admin/boxes/${boxId}/payment`, { method: "POST", body: { months } }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: boxKeys.adminBoxes }),
+  });
+}
+
+/** Un atleta solo se une a un box o a un coach con su código (se lleva su historial). */
+export function useJoinBox() {
+  const queryClient = useQueryClient();
+  const { refreshUser } = useAuth();
+  return useMutation({
+    mutationFn: (inviteCode: string) =>
+      apiFetch<BoxSummary>("/boxes/join", { method: "POST", body: { invite_code: inviteCode } }),
+    onSuccess: async () => {
+      await refreshUser();
+      // Cambia todo lo que depende de la cuenta: clases, planes visibles, su box
+      void queryClient.invalidateQueries();
+    },
   });
 }

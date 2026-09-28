@@ -8,7 +8,7 @@ from backend.schemas.common import SanitizedModel
 
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 BoxStatus = Literal["pending", "active", "rejected", "suspended"]
-BoxKind = Literal["box", "coach"]
+BoxKind = Literal["box", "coach", "athlete"]
 PlanCode = Literal["basic", "pro", "unlimited"]
 SubscriptionStatus = Literal["trial", "active", "expired"]
 
@@ -139,6 +139,11 @@ class CoachCreate(SanitizedModel):
     full_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+
+
+class BoxJoinRequest(SanitizedModel):
+    """Un atleta solo se une a un box o a un coach independiente con su código de invitación."""
+    invite_code: str = Field(..., min_length=1, max_length=16)
 
 
 class AthleteCoachAssign(SanitizedModel):

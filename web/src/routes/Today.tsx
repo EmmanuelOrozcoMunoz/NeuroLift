@@ -120,7 +120,9 @@ export default function Today() {
         >
           {hasClasses
             ? "Hoy no hay clases en tu box. Revisa el horario de la semana, o adquiere un plan y entrena por tu cuenta."
-            : "Pídele a tu coach que te programe un mesociclo, o adquiere un plan hecho por un entrenador y empieza por tu cuenta."}
+            : user.box?.kind === "athlete"
+              ? "Adquiere un plan hecho por un entrenador, o registra tus propias sesiones en Entrenos. Si te unes a un box o a un coach (en Perfil), verás aquí lo que te programen."
+              : "Pídele a tu coach que te programe un mesociclo, o adquiere un plan hecho por un entrenador y empieza por tu cuenta."}
         </EmptyState>
       )}
 

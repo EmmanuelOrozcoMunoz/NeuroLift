@@ -46,7 +46,9 @@ class Box(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     approved_at = Column(DateTime, nullable=True)
     # "box" = gimnasio con dueño, coaches y atletas | "coach" = coach independiente: su único
-    # miembro con rol "owner" es el propio coach, y sus atletas son todos los de la cuenta.
+    # miembro con rol "owner" es el propio coach, y sus atletas son todos los de la cuenta |
+    # "athlete" = atleta solo (sin box ni coach): cuenta personal gratuita, sin dueño, con un
+    # único miembro. Su código de invitación no sirve para unirse a ella (ver find_active_box_by_code).
     kind = Column(String(10), nullable=False, default="box", server_default="box")
     # Suscripción (cobro manual por ahora, ver backend/core/billing.py): plan según el número de
     # atletas, fin de la prueba gratis y hasta cuándo está pagado.
