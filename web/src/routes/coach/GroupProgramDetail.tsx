@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
+import { CoachNoteField } from "@/components/CoachNote";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Stepper, Toast, cx } from "@/components/ui";
@@ -206,6 +207,7 @@ function BulkExerciseBlock({
   const [wScaledMale, setWScaledMale] = useState(0);
   const [wScaledFemale, setWScaledFemale] = useState(0);
   const [block, setBlock] = useState(first.block ?? "");
+  const [nota, setNota] = useState(group.sets.find((s) => s.coach_note)?.coach_note ?? "");
   const esMetcon = block === "metcon";
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
@@ -310,6 +312,8 @@ function BulkExerciseBlock({
         </div>
       )}
 
+      <CoachNoteField value={nota} onChange={setNota} />
+
       <Button
         variant="secondary"
         full
@@ -333,6 +337,7 @@ function BulkExerciseBlock({
               prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
               prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
               block: block || null,
+              coach_note: nota.trim(),
             },
             { onSuccess: (r) => onFeedback(r.message) },
           )
@@ -372,6 +377,7 @@ function BulkAddForm({
   const [wScaledMale, setWScaledMale] = useState(0);
   const [wScaledFemale, setWScaledFemale] = useState(0);
   const [block, setBlock] = useState("");
+  const [nota, setNota] = useState("");
   const [error, setError] = useState<string | null>(null);
   const esMetcon = block === "metcon";
 
@@ -457,6 +463,7 @@ function BulkAddForm({
           </div>
         </div>
       )}
+      <CoachNoteField value={nota} onChange={setNota} />
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button
         full
@@ -483,8 +490,9 @@ function BulkAddForm({
               prescribed_weight_scaled_male: esMetcon && wScaledMale > 0 ? wScaledMale : null,
               prescribed_weight_scaled_female: esMetcon && wScaledFemale > 0 ? wScaledFemale : null,
               block: block || null,
+              coach_note: nota.trim() || null,
             },
-            { onSuccess: (r) => { onFeedback(r.message); setName(""); } },
+            { onSuccess: (r) => { onFeedback(r.message); setName(""); setNota(""); } },
           );
         }}
       >

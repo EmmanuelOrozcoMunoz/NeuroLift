@@ -113,11 +113,16 @@ export function ClassCard({
           {grupos.length > 0 && (
             <ul className="space-y-1">
               {grupos.map((g, i) => (
-                <li key={`${g.name}-${i}`} className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate">{g.name}</span>
-                  <span className="num shrink-0 font-bold">
-                    {g.sets.length}×{[...new Set(g.sets.map((s) => s.prescribed_reps))].join("/")}
-                  </span>
+                <li key={`${g.name}-${i}`}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate">{g.name}</span>
+                    <span className="num shrink-0 font-bold">
+                      {g.sets.length}×{[...new Set(g.sets.map((s) => s.prescribed_reps))].join("/")}
+                    </span>
+                  </div>
+                  {g.sets.some((s) => s.coach_note) && (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted">📝 {g.sets.find((s) => s.coach_note)?.coach_note}</p>
+                  )}
                 </li>
               ))}
             </ul>

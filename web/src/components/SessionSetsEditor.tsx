@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { BlockSelect } from "@/components/BlockSelect";
+import { CoachNoteField } from "@/components/CoachNote";
 import { blockLabel } from "@/lib/blocks";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, Field, Segmented, Stepper, cx } from "@/components/ui";
@@ -44,6 +45,7 @@ function ExerciseBlock({
   const [porcentaje, setPorcentaje] = useState(first.prescribed_percentage ?? 75);
   const [referencia, setReferencia] = useState(first.reference_exercise ?? "");
   const [block, setBlock] = useState(first.block ?? "");
+  const [nota, setNota] = useState(group.sets.find((s) => s.coach_note)?.coach_note ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const busy = updateSet.isPending || addSet.isPending || deleteSet.isPending;
@@ -59,6 +61,7 @@ function ExerciseBlock({
       prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
       reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
       block: block || null,
+      coach_note: nota.trim(),
     };
 
     try {
@@ -154,6 +157,8 @@ function ExerciseBlock({
         )}
       </div>
 
+      <CoachNoteField value={nota} onChange={setNota} />
+
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
 
       <Button variant="secondary" full className="mt-3" loading={busy} onClick={() => void handleSave()}>
@@ -183,6 +188,7 @@ function AddExerciseForm({
   const [porcentaje, setPorcentaje] = useState(75);
   const [referencia, setReferencia] = useState("");
   const [block, setBlock] = useState("");
+  const [nota, setNota] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function handleAdd() {
@@ -196,6 +202,7 @@ function AddExerciseForm({
       prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
       reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
       block: block || null,
+      coach_note: nota.trim(),
     };
     try {
       for (let i = 0; i < series; i++) {
@@ -203,6 +210,7 @@ function AddExerciseForm({
         await addSet.mutateAsync({ sessionId, body });
       }
       setName("");
+      setNota("");
       onAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo añadir el ejercicio.");
@@ -262,6 +270,8 @@ function AddExerciseForm({
           />
         )}
       </div>
+
+      <CoachNoteField value={nota} onChange={setNota} />
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button full className="mt-3" loading={addSet.isPending} onClick={() => void handleAdd()}>

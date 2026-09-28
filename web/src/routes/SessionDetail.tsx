@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoachNoteCallout } from "@/components/CoachNote";
 import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
 import { SetRow } from "@/components/SetRow";
 import { WodTimer } from "@/components/WodTimer";
@@ -289,6 +290,7 @@ export default function SessionDetail() {
                     <div className="mb-2.5 px-1">
                       <p className="leading-tight font-bold">{grupo.name}</p>
                       <p className="text-xs text-muted">{groupSummary(grupo, unit)}</p>
+                      <CoachNoteCallout note={grupo.sets.find((st) => st.coach_note)?.coach_note} />
                     </div>
                     <div className="space-y-2">
                       {grupo.sets.map((set, indiceSerie) => (

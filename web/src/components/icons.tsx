@@ -227,3 +227,12 @@ export function IconCalendar({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function IconNote({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 4h14a1 1 0 0 1 1 1v10.5L15.5 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+      <path d="M8 9h8M8 12.5h5M15 20v-4.5h5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

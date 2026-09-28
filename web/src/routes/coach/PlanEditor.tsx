@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { BlockSelect } from "@/components/BlockSelect";
+import { CoachNoteField } from "@/components/CoachNote";
 import { CoverUploader } from "@/components/CoverImage";
 import { IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast, cx } from "@/components/ui";
@@ -305,6 +306,7 @@ function DayEditor({
   const [valor, setValor] = useState(75);
   const [referencia, setReferencia] = useState("");
   const [block, setBlock] = useState("");
+  const [nota, setNota] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleAdd() {
@@ -323,6 +325,7 @@ function DayEditor({
           prescribed_percentage: tipo === "porcentaje" ? valor : null,
           reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
           block: block || null,
+          coach_note: nota.trim() || null,
         },
       },
       {
@@ -330,6 +333,7 @@ function DayEditor({
           onFeedback(response.message ?? "Ejercicio agregado.");
           setName("");
           setReferencia("");
+          setNota("");
         },
         onError: (err) => setError(err instanceof Error ? err.message : "No se pudo agregar."),
       },
@@ -366,6 +370,9 @@ function DayEditor({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
                       <p className="truncate text-xs text-muted">{groupSummary(group, unit)}</p>
+                      {group.sets.some((s) => s.coach_note) && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-brand">📝 {group.sets.find((s) => s.coach_note)?.coach_note}</p>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -453,6 +460,8 @@ function DayEditor({
             onChange={(e) => setReferencia(e.target.value)}
           />
         )}
+
+        <CoachNoteField value={nota} onChange={setNota} className="block" />
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <Button full loading={addSet.isPending} onClick={handleAdd}>
