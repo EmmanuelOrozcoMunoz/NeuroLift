@@ -169,6 +169,8 @@ export interface SetItem {
   actual_reps: number | null;
   actual_weight: number | null;
   technique_feedback: string | null;
+  /** Anotación del coach para el ejercicio (la misma en todas sus series). */
+  coach_note?: string | null;
   exercise: Exercise;
 }
 
@@ -562,6 +564,8 @@ export interface SetCreatePayload {
   prescribed_percentage?: number | null;
   reference_exercise?: string | null;
   block?: string | null;
+  /** Nota del coach para el atleta; "" la borra. */
+  coach_note?: string | null;
 }
 
 export interface SetUpdatePayload {
@@ -572,6 +576,8 @@ export interface SetUpdatePayload {
   prescribed_percentage?: number | null;
   reference_exercise?: string | null;
   block?: string | null;
+  /** Nota del coach para el atleta; "" la borra. */
+  coach_note?: string | null;
 }
 
 export interface GroupBulkAddPayload {
@@ -595,6 +601,8 @@ export interface GroupBulkAddPayload {
   prescribed_percentage?: number | null;
   reference_exercise?: string | null;
   block?: string | null;
+  /** Nota del coach para el atleta; "" la borra. */
+  coach_note?: string | null;
 }
 
 export interface GroupBulkUpdatePayload {
@@ -614,6 +622,8 @@ export interface GroupBulkUpdatePayload {
   prescribed_percentage?: number | null;
   reference_exercise?: string | null;
   block?: string | null;
+  /** Nota del coach para el atleta; "" la borra. */
+  coach_note?: string | null;
 }
 
 export interface GroupProgramDeletePayload {
@@ -669,6 +679,8 @@ export interface PlanSetCreatePayload {
   prescribed_percentage: number | null;
   reference_exercise: string | null;
   block?: string | null;
+  /** Nota del coach para el atleta; "" la borra. */
+  coach_note?: string | null;
 }
 
 // ------------------------------------------------------------------- admin

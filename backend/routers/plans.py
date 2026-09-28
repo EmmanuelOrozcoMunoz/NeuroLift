@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.exercise_helpers import get_or_create_exercise
+from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -346,6 +346,7 @@ def add_set_to_plan_session(
             prescribed_percentage=req.prescribed_percentage,
             reference_exercise=req.reference_exercise,
             block=req.block,
+            coach_note=clean_coach_note(req.coach_note),
         ))
 
     db.commit()
@@ -496,6 +497,7 @@ def acquire_plan(
                 prescribed_weight=peso,
                 prescribed_percentage=set_plan.prescribed_percentage,
                 reference_exercise=set_plan.reference_exercise,
+                coach_note=set_plan.coach_note,
             ))
 
     nuevo_meso.end_date = req.start_date + timedelta(days=max_offset)
