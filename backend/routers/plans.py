@@ -11,6 +11,7 @@ from backend.core.security import _ip_and_user_key, get_current_user, limiter, r
 from backend.database import get_db
 from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.sets import clonar_set
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -487,18 +488,7 @@ def acquire_plan(
             if set_plan.prescribed_percentage and peso is None and referencia:
                 sin_marca.add(referencia)
 
-            db.add(models.Set(
-                session_id=nueva_sesion.id,
-                exercise_id=set_plan.exercise_id,
-                set_order=set_plan.set_order,
-                block=set_plan.block,
-                prescribed_reps=set_plan.prescribed_reps,
-                rpe=set_plan.rpe,
-                prescribed_weight=peso,
-                prescribed_percentage=set_plan.prescribed_percentage,
-                reference_exercise=set_plan.reference_exercise,
-                coach_note=set_plan.coach_note,
-            ))
+            db.add(clonar_set(set_plan, nueva_sesion.id, prescribed_weight=peso))
 
     nuevo_meso.end_date = req.start_date + timedelta(days=max_offset)
     db.commit()

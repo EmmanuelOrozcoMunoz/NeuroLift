@@ -12,6 +12,7 @@ from backend.database import get_db
 from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
 from backend.routers.group_helpers import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
 from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.sets import clonar_set
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -140,18 +141,7 @@ def _clone_mesocycle_for_athlete(db: Session, referencia: models.Mesocycle, user
         db.add(nueva_sesion)
         db.flush()
         for set_ref in sesion_ref.sets:
-            db.add(models.Set(
-                session_id=nueva_sesion.id,
-                exercise_id=set_ref.exercise_id,
-                set_order=set_ref.set_order,
-                block=set_ref.block,
-                prescribed_reps=set_ref.prescribed_reps,
-                prescribed_weight=set_ref.prescribed_weight,
-                prescribed_percentage=set_ref.prescribed_percentage,
-                reference_exercise=set_ref.reference_exercise,
-                rpe=set_ref.rpe,
-                coach_note=set_ref.coach_note,
-            ))
+            db.add(clonar_set(set_ref, nueva_sesion.id))
 
     return nuevo_meso
 
