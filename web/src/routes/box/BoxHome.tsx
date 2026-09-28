@@ -5,9 +5,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { PageHeader } from "@/components/AppShell";
 import { BoxLogo } from "@/components/BoxLogo";
 import { SubscriptionCard } from "@/components/Subscription";
-import { IconCamera, IconCheck, IconChevronRight, IconClock, IconShare, IconTrophy, IconUsers } from "@/components/icons";
+import { IconCamera, IconCheck, IconChevronRight, IconClock, IconLogout, IconShare, IconTrophy, IconUsers } from "@/components/icons";
 import { Badge, Button, Card, ErrorState, Field, LoadingList, SectionTitle, Toast, cx } from "@/components/ui";
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { accentPreviewVars, DEFAULT_ACCENT } from "@/lib/brand";
 import { useDeleteBoxLogo, useMyBox, useRotateInviteCode, useUpdateBox, useUploadBoxLogo } from "@/lib/boxQueries";
 import type { BoxDetail, BoxStatus } from "@/lib/types";
@@ -36,6 +37,7 @@ const STATUS_COPY: Record<Exclude<BoxStatus, "active">, { title: string; body: s
 type ToastState = { message: string; tone: "done" | "danger" } | null;
 
 export default function BoxHome() {
+  const { logout } = useAuth();
   const { data: box, isPending, error, refetch } = useMyBox();
   const [toast, setToast] = useState<ToastState>(null);
   const notify = (message: string, tone: "done" | "danger" = "done") => setToast({ message, tone });
@@ -95,12 +97,18 @@ export default function BoxHome() {
       {/* El dueño de un box no tiene "Perfil" en su barra (la ocupa "Box"): se llega desde aquí */}
       {!isCoach && (
         <div className="mt-2">
-          <NavRow to="/coach/perfil" icon={<IconUsers />} title="Mi perfil" subtitle="Tu foto, unidades y cerrar sesión" />
+          <NavRow to="/coach/perfil" icon={<IconUsers />} title="Mi perfil" subtitle="Tu foto y unidades de peso" />
         </div>
       )}
 
       <ProfileForm box={box} onToast={notify} />
       <AccentPicker box={box} onToast={notify} />
+
+      {/* El dueño no tiene "Perfil" en su barra: cerrar sesión va aquí, al final y separado */}
+      <Button variant="danger" full className="mt-10" onClick={() => void logout()}>
+        <IconLogout className="h-5 w-5" />
+        Cerrar sesión
+      </Button>
 
       {toast && <Toast message={toast.message} tone={toast.tone} onDismiss={() => setToast(null)} />}
     </>
