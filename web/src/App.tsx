@@ -12,9 +12,12 @@ import AdminLogs from "@/routes/admin/Logs";
 import AdminOverview from "@/routes/admin/Overview";
 import AdminUsers from "@/routes/admin/Users";
 import AthleteDetail from "@/routes/coach/AthleteDetail";
+import BoxDashboard from "@/routes/box/BoxDashboard";
 import BoxHome from "@/routes/box/BoxHome";
 import BoxTeam from "@/routes/box/BoxTeam";
 import Athletes from "@/routes/coach/Athletes";
+import Programming from "@/routes/coach/Programming";
+import Classes from "@/routes/Classes";
 import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
 import Groups from "@/routes/coach/Groups";
@@ -110,6 +113,14 @@ function RedirectIfLogged({ children }: { children: ReactNode }) {
 
 /** "/" no tiene un componente único: es el home de atleta, pero un coach o admin logueado
  *  debe mandar de una vez a su propio home en vez de mostrarle la pantalla de atleta un instante. */
+/** "/box": el tablero para el dueño de un box activo; para la cuenta de un coach independiente
+ *  (o un box todavía sin aprobar) es directamente la configuración de la cuenta. */
+function BoxRoot() {
+  const user = useCurrentUser();
+  if (user.box?.kind === "box" && user.box.status === "active") return <BoxDashboard />;
+  return <BoxHome />;
+}
+
 function RootRoute() {
   const user = useCurrentUser();
   if (user.role !== "athlete") return <Navigate to={homeForRole(user)} replace />;
@@ -326,9 +337,35 @@ export default function App() {
           }
         />
 
+        {/* ------------------------------------------------ clases y programación */}
+        <Route
+          path="/clases"
+          element={
+            <RoleGate role={["athlete", ...COACH_ROLES]}>
+              <Classes />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/programacion"
+          element={
+            <RoleGate role={COACH_ROLES}>
+              <Programming />
+            </RoleGate>
+          }
+        />
+
         {/* ------------------------------------------------------ dueño del box */}
         <Route
           path="/box"
+          element={
+            <RoleGate role="owner" allowInactiveBox>
+              <BoxRoot />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/box/ajustes"
           element={
             <RoleGate role="owner" allowInactiveBox>
               <BoxHome />

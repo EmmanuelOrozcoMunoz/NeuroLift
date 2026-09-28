@@ -279,6 +279,10 @@ export interface MesocycleSummary {
   level: string | null;
   /** true = lo creó el propio atleta a mano (sin coach), para su registro personal. */
   is_self_managed: boolean;
+  /** Mesociclo "Clases del box" del atleta: junta sus registros de clases */
+  is_class_log: boolean;
+  /** Programación de una clase del box (sin atleta) */
+  class_id: string | null;
 }
 
 /** GET /mesocycles/{id} y GET /plans/{id} */
@@ -301,6 +305,10 @@ export interface MesocycleFull {
   is_preview?: false;
   /** true = el propio atleta lo creó a mano (sin coach), para su registro personal. */
   is_self_managed: boolean;
+  /** Mesociclo "Clases del box" del atleta: junta sus registros de clases */
+  is_class_log: boolean;
+  /** Programación de una clase del box (sin atleta) */
+  class_id: string | null;
   sessions: TrainingSession[];
 }
 
@@ -688,4 +696,100 @@ export interface AuditLog {
   created_at: string | null;
   level: string;
   message: string;
+}
+
+// ------------------------------------------------------------ clases del box
+
+/** GET /classes/ */
+export interface BoxClass {
+  id: string;
+  name: string;
+  description: string | null;
+  coach_id: string | null;
+  coach_name: string | null;
+  /** 0 = lunes ... 6 = domingo */
+  weekdays: number[];
+  /** "HH:MM", hora local del box */
+  start_time: string;
+  duration_minutes: number;
+  is_active: boolean;
+  /** Quien pregunta puede programar su contenido (su profesor o el dueño) */
+  can_program: boolean;
+}
+
+export interface BoxClassPayload {
+  name: string;
+  description: string | null;
+  coach_id: string | null;
+  weekdays: number[];
+  start_time: string;
+  duration_minutes: number;
+}
+
+/** GET /classes/schedule — una clase en un día concreto */
+export interface ClassOccurrence {
+  class_id: string;
+  class_name: string;
+  description: string | null;
+  date: string; // YYYY-MM-DD
+  start_time: string;
+  duration_minutes: number;
+  coach_id: string | null;
+  coach_name: string | null;
+  can_program: boolean;
+  /** Contenido programado para ese día (null = todavía sin programar) */
+  session: TrainingSession | null;
+  program_mesocycle_id: string | null;
+  program_name: string | null;
+  /** Registro del atleta que pregunta, si ya registró esta clase */
+  my_session_id: string | null;
+  my_mesocycle_id: string | null;
+  my_status: string | null;
+}
+
+export interface ClassProgram {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string | null;
+  sessions_count: number;
+  skipped_dates: string[];
+}
+
+export interface ClassJoinResponse {
+  mesocycle_id: string;
+  session_id: string;
+  missing_prs: string[];
+}
+
+// ------------------------------------------------------ tablero del dueño
+
+export interface CoachLoad {
+  id: string;
+  full_name: string;
+  role: Role;
+  athletes: number;
+  trained_this_week: number;
+  classes: number;
+}
+
+export interface AttentionAthlete {
+  id: string;
+  full_name: string;
+  reason: "sin_coach" | "inactivo" | "nuevo";
+  last_completed_at: string | null;
+}
+
+/** GET /boxes/me/dashboard */
+export interface OwnerDashboard {
+  athletes_total: number;
+  max_athletes: number | null;
+  athletes_trained_this_week: number;
+  sessions_completed_this_week: number;
+  athletes_without_coach: number;
+  new_athletes_this_week: number;
+  classes_today: number;
+  unprogrammed_classes_next_7_days: number;
+  coaches: CoachLoad[];
+  attention: AttentionAthlete[];
 }

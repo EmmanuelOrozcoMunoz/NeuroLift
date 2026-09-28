@@ -217,7 +217,8 @@ export default function AthleteDetail() {
 
       <div className="mb-2 flex items-baseline justify-between">
         <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>
-        {!myGroup && <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>}
+        {/* Los mesociclos son exclusivos de atletas con coach personal (sin coach = clases) */}
+        {!myGroup && athlete?.coach_id && <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>}
       </div>
 
       {myGroup ? (
@@ -236,7 +237,13 @@ export default function AthleteDetail() {
           {!mesocycles.isPending && mesocycles.error && (
             <ErrorState error={mesocycles.error} onRetry={() => void mesocycles.refetch()} />
           )}
-          {!mesocycles.isPending && !mesocycles.error && (mesocycles.data?.length ?? 0) === 0 && (
+          {athlete && !athlete.coach_id && (
+            <p className="mb-3 rounded-2xl bg-surface p-4 text-sm text-muted">
+              No tiene coach personal: entrena con las clases del box. Para programarle mesociclos, asígnale un coach
+              en Equipo.
+            </p>
+          )}
+          {!mesocycles.isPending && !mesocycles.error && (mesocycles.data?.length ?? 0) === 0 && athlete?.coach_id && (
             <EmptyState title="Todavía no tiene mesociclos">
               Créale uno con el botón de arriba.
             </EmptyState>

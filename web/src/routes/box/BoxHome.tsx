@@ -51,8 +51,8 @@ export default function BoxHome() {
   return (
     <>
       <PageHeader
-        title={isCoach ? "Mi cuenta" : box.name}
-        subtitle={isCoach ? "Coach independiente" : [box.city, box.state].filter(Boolean).join(", ") || "Mi box"}
+        title={isCoach ? "Mi cuenta" : "Ajustes del box"}
+        subtitle={isCoach ? "Coach independiente" : box.name}
       />
 
       {statusCopy && (
@@ -80,7 +80,7 @@ export default function BoxHome() {
               <NavRow to="/box/equipo" icon={<IconUsers />} title="Coaches y atletas" subtitle="Da de alta coaches y asigna atletas" />
             )}
             {!isCoach && (
-              <NavRow to="/coach/grupos" icon={<IconCheck />} title="Grupos y mesociclos generales" subtitle="Programa a los atletas sin coach" />
+              <NavRow to="/clases" icon={<IconCheck />} title="Clases y horarios" subtitle="Crea clases y asigna profesores" />
             )}
             <NavRow
               to="/coach/actividad"
@@ -90,6 +90,13 @@ export default function BoxHome() {
             />
           </div>
         </>
+      )}
+
+      {/* El dueño de un box no tiene "Perfil" en su barra (la ocupa "Box"): se llega desde aquí */}
+      {!isCoach && (
+        <div className="mt-2">
+          <NavRow to="/coach/perfil" icon={<IconUsers />} title="Mi perfil" subtitle="Tu foto, unidades y cerrar sesión" />
+        </div>
       )}
 
       <ProfileForm box={box} onToast={notify} />
