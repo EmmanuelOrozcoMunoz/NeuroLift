@@ -4,7 +4,8 @@ Revision ID: a3b4c5d6e7f8
 Revises: f2a3b4c5d6e7
 Create Date: 2026-09-27
 
-Solo agrega estructura: no mueve ni cambia datos existentes.
+Solo agrega estructura: no mueve ni cambia datos existentes. Tolera que box_classes ya exista
+(creada por create_all() de main.py antes de correr la migración).
 """
 import sqlalchemy as sa
 from alembic import op
@@ -18,6 +19,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # main.py llama a Base.metadata.create_all() al arrancar: si un backend con este código se
+    # levantó antes de migrar, box_classes ya existe (idéntica y vacía) pero las columnas nuevas
+    # de mesocycles/sessions no — create_all no altera tablas existentes. En ese caso solo se
+    # salta la creación de la tabla.
+    if not sa.inspect(op.get_bind()).has_table("box_classes"):
+        _create_box_classes()
+
+    _add_class_columns()
+
+
+def _create_box_classes() -> None:
     op.create_table(
         "box_classes",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -34,6 +46,8 @@ def upgrade() -> None:
     op.create_index("ix_box_classes_box_id", "box_classes", ["box_id"])
     op.create_index("ix_box_classes_coach_id", "box_classes", ["coach_id"])
 
+
+def _add_class_columns() -> None:
     op.add_column("mesocycles", sa.Column("class_id", UUID(as_uuid=True), nullable=True))
     op.create_foreign_key(
         "fk_mesocycles_class_id", "mesocycles", "box_classes", ["class_id"], ["id"], ondelete="CASCADE"
