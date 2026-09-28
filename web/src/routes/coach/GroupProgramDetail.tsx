@@ -685,6 +685,7 @@ export default function GroupProgramDetail() {
   const deleteProgram = useDeleteGroupProgram(groupId!);
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("grupo");
+  const [filtro, setFiltro] = useState("");
 
   if (programs.isPending) {
     return (
@@ -715,6 +716,13 @@ export default function GroupProgramDetail() {
 
   const referenceId = program.athletes[0]?.mesocycle_id;
   const selectedAthlete = program.athletes.find((a) => a.user_id === tab);
+  // Todos visibles (en varias filas), en orden alfabético; con grupos grandes, un buscador.
+  const conBuscador = program.athletes.length > 8;
+  const sinTildes = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const q = sinTildes(filtro.trim());
+  const atletas = [...program.athletes]
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, "es", { sensitivity: "base" }))
+    .filter((a) => !q || sinTildes(a.full_name).includes(q) || a.user_id === tab);
 
   function handleDeleteProgram() {
     const confirmado = window.confirm(
@@ -750,28 +758,39 @@ export default function GroupProgramDetail() {
         }
       />
 
-      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      {conBuscador && (
+        <Field
+          label={`Atletas (${program.athletes.length})`}
+          placeholder="Buscar atleta"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          className="mb-3"
+        />
+      )}
+      <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setTab("grupo")}
-          className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
+          className={`min-h-touch rounded-full px-4 py-2 text-sm font-semibold ${
             tab === "grupo" ? "bg-brand text-on-brand" : "bg-surface-2 text-muted"
           }`}
         >
           👥 Grupo completo
         </button>
-        {program.athletes.map((athlete) => (
+        {atletas.map((athlete) => (
           <button
             key={athlete.user_id}
             type="button"
             onClick={() => setTab(athlete.user_id)}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
+            title={athlete.full_name}
+            className={`min-h-touch max-w-full truncate rounded-full px-4 py-2 text-sm font-semibold ${
               tab === athlete.user_id ? "bg-brand text-on-brand" : "bg-surface-2 text-muted"
             }`}
           >
             {athlete.full_name}
           </button>
         ))}
+        {atletas.length === 0 && <p className="self-center text-sm text-muted">Ningún atleta coincide.</p>}
       </div>
 
       {tab === "grupo" && referenceId && (
