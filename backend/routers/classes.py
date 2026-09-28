@@ -17,21 +17,15 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models, schemas
 from backend.core.security import can_program_class, ensure_can_program_class, get_current_user, require_owner
 from backend.database import get_db
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
-from backend.services.sets import clonar_set
+from backend.services.classes import armar_horario, hhmm, registrar_clase
 
 router = APIRouter(prefix="/classes", tags=["classes"])
 
 DAILY_PROGRAM_NAME = "Programación diaria"
-CLASS_LOG_NAME = "Clases del box"
 MAX_SCHEDULE_DAYS = 31
 
 
 # ---------------------------------------------------------------- helpers
-
-def _hhmm(value) -> str:
-    return value.strftime("%H:%M")
-
 
 def _ensure_box_member(user: models.User) -> models.Box:
     """Las clases son de un box activo (no de un coach independiente ni de la cuenta personal
@@ -75,7 +69,7 @@ def _class_response(clase: models.BoxClass, user: models.User) -> schemas.ClassR
         coach_id=clase.coach_id,
         coach_name=clase.coach.full_name if clase.coach else None,
         weekdays=clase.weekday_list,
-        start_time=_hhmm(clase.start_time),
+        start_time=hhmm(clase.start_time),
         duration_minutes=clase.duration_minutes,
         is_active=clase.is_active,
         can_program=can_program_class(user, clase),
@@ -182,80 +176,7 @@ def get_schedule(
     """Clases del box día por día entre `start` y `start + days`, con el profesor, el contenido
     programado de cada una y, si quien pregunta es atleta, si ya la registró."""
     box = _ensure_box_member(current_user)
-    fin = start + timedelta(days=days - 1)
-
-    clases = (
-        db.query(models.BoxClass)
-        .options(joinedload(models.BoxClass.coach))
-        .filter(models.BoxClass.box_id == box.id, models.BoxClass.is_active == True)  # noqa: E712
-        .all()
-    )
-    if not clases:
-        return []
-    por_id = {c.id: c for c in clases}
-
-    sesiones = (
-        db.query(models.Session)
-        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
-        .options(joinedload(models.Session.sets).joinedload(models.Set.exercise), joinedload(models.Session.mesocycle))
-        .filter(
-            models.Mesocycle.class_id.in_(list(por_id)),
-            models.Session.scheduled_date >= start,
-            models.Session.scheduled_date <= fin,
-            models.Session.parent_session_id.is_(None),
-        )
-        .order_by(models.Session.created_at)
-        .all()
-    )
-    contenido: dict[tuple, models.Session] = {}
-    for s in sesiones:
-        contenido.setdefault((s.mesocycle.class_id, s.scheduled_date), s)
-
-    mis_registros: dict[UUID, models.Session] = {}
-    if current_user.role == "athlete" and sesiones:
-        for copia in (
-            db.query(models.Session)
-            .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
-            .filter(
-                models.Mesocycle.user_id == current_user.id,
-                models.Mesocycle.is_class_log == True,  # noqa: E712
-                models.Session.class_session_id.in_([s.id for s in sesiones]),
-            )
-            .all()
-        ):
-            mis_registros[copia.class_session_id] = copia
-
-    resultado: list[schemas.ClassOccurrence] = []
-    for i in range(days):
-        dia = start + timedelta(days=i)
-        for clase in clases:
-            sesion = contenido.get((clase.id, dia))
-            # Días de la clase, más cualquier fecha que ya tenga contenido aunque el horario
-            # haya cambiado después (lo programado no desaparece)
-            if dia.weekday() not in clase.weekday_list and sesion is None:
-                continue
-            if sesion:
-                sesion.sets.sort(key=lambda x: x.set_order)
-            mio = mis_registros.get(sesion.id) if sesion else None
-            resultado.append(schemas.ClassOccurrence(
-                class_id=clase.id,
-                class_name=clase.name,
-                description=clase.description,
-                date=dia,
-                start_time=_hhmm(clase.start_time),
-                duration_minutes=clase.duration_minutes,
-                coach_id=clase.coach_id,
-                coach_name=clase.coach.full_name if clase.coach else None,
-                can_program=can_program_class(current_user, clase),
-                session=schemas.SessionResponse.model_validate(sesion) if sesion else None,
-                program_mesocycle_id=sesion.mesocycle_id if sesion else None,
-                program_name=sesion.mesocycle.name if sesion else None,
-                my_session_id=mio.id if mio else None,
-                my_mesocycle_id=mio.mesocycle_id if mio else None,
-                my_status=mio.status if mio else None,
-            ))
-    resultado.sort(key=lambda o: (o.date, o.start_time, o.class_name))
-    return resultado
+    return armar_horario(db, current_user, box.id, start, days)
 
 
 # --------------------------------------------------------- programación
@@ -407,58 +328,11 @@ def join_class_session(session_id: UUID, db: Session = Depends(get_db), current_
     if clase_sesion.scheduled_date > date.today():
         raise HTTPException(status_code=400, detail="Podrás registrar esta clase el día que se dicte")
 
-    registro = db.query(models.Mesocycle).filter(
-        models.Mesocycle.user_id == current_user.id, models.Mesocycle.is_class_log == True  # noqa: E712
-    ).first()
-    if not registro:
-        registro = models.Mesocycle(
-            user_id=current_user.id,
-            box_id=current_user.box_id,
-            name=CLASS_LOG_NAME,
-            discipline="Clase",
-            start_date=clase_sesion.scheduled_date,
-            is_active=True,
-            is_class_log=True,
-        )
-        db.add(registro)
-        db.flush()
-
-    copia = db.query(models.Session).filter(
-        models.Session.mesocycle_id == registro.id, models.Session.class_session_id == clase_sesion.id
-    ).first()
-    if copia:
-        return schemas.ClassJoinResponse(mesocycle_id=registro.id, session_id=copia.id)
-
-    registro.start_date = min(registro.start_date, clase_sesion.scheduled_date)
-    registro.end_date = max(registro.end_date or clase_sesion.scheduled_date, clase_sesion.scheduled_date)
-
-    copia = models.Session(
-        mesocycle_id=registro.id,
-        class_session_id=clase_sesion.id,
-        scheduled_date=clase_sesion.scheduled_date,
-        status="pending",
-        # El nombre de la clase queda visible en la copia (en su historial se lee "CrossFit 6 am")
-        athlete_notes=clase_sesion.athlete_notes or clase_sesion.mesocycle.box_class.name,
-        block_order=clase_sesion.block_order,
-        warmup_notes=clase_sesion.warmup_notes,
-        wod_notes=clase_sesion.wod_notes,
-        wod_format=clase_sesion.wod_format,
-        wod_time_cap_seconds=clase_sesion.wod_time_cap_seconds,
-        duration_minutes=clase_sesion.mesocycle.box_class.duration_minutes,
-    )
-    db.add(copia)
-    db.flush()
-
-    prs = get_athlete_prs(db, current_user.id)
-    sin_marca: set[str] = set()
-    for serie in sorted(clase_sesion.sets, key=lambda x: x.set_order):
-        referencia = serie.reference_exercise or (serie.exercise.name if serie.exercise else "")
-        peso = resolve_weight_from_percentage(serie.prescribed_percentage, serie.prescribed_weight, referencia, prs)
-        if serie.prescribed_percentage is not None and peso is None and referencia:
-            sin_marca.add(referencia)
-        db.add(clonar_set(serie, copia.id, prescribed_weight=peso))
+    resultado = registrar_clase(db, current_user, clase_sesion)
     db.commit()
-    return schemas.ClassJoinResponse(mesocycle_id=registro.id, session_id=copia.id, missing_prs=sorted(sin_marca))
+    return schemas.ClassJoinResponse(
+        mesocycle_id=resultado.mesocycle_id, session_id=resultado.session_id, missing_prs=resultado.missing_prs
+    )
 
 
 @router.delete("/sessions/{session_id}/join", response_model=schemas.MessageResponse)
