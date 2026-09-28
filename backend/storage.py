@@ -15,8 +15,9 @@ import uuid
 
 import requests
 from dotenv import load_dotenv
-from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
+
+from backend.core.errors import NoEncontrado, ServicioNoDisponible
 
 load_dotenv()
 
@@ -78,7 +79,7 @@ def upload_object(bucket: str, data: bytes, extension: str, content_type: str) -
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail="No se pudo guardar la imagen. Intenta de nuevo.")
+        raise ServicioNoDisponible("No se pudo guardar la imagen. Intenta de nuevo.")
     return key
 
 
@@ -118,10 +119,10 @@ def create_signed_url(bucket: str, key: str, expires_in: int = 60) -> str:
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     if resp.status_code != 200:
-        raise HTTPException(status_code=404, detail="No hay imagen.")
+        raise NoEncontrado("No hay imagen.")
     signed_path = resp.json().get("signedURL")
     if not signed_path:
-        raise HTTPException(status_code=404, detail="No hay imagen.")
+        raise NoEncontrado("No hay imagen.")
     return f"{_STORAGE_URL}{signed_path}"
 
 
@@ -133,6 +134,6 @@ def redirect_to_image(bucket: str, filename: str | None) -> RedirectResponse:
     a otro origen) — no hace falta, la firma ya autoriza. Compartido por avatares, portadas de
     grupo y portadas de plan (ver backend/routers/users.py, groups.py, plans.py)."""
     if not filename:
-        raise HTTPException(status_code=404, detail="No hay imagen.")
+        raise NoEncontrado("No hay imagen.")
     url = create_signed_url(bucket, filename)
     return RedirectResponse(url, status_code=307)

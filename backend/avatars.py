@@ -16,8 +16,10 @@ imagen válida y esté limpia, sin importar dónde termine guardándose.
 """
 from io import BytesIO
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
+
+from backend.core.errors import SolicitudInvalida
 
 MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -56,9 +58,8 @@ def _sniff_magic_number(data: bytes) -> str | None:
     return None
 
 
-class AvatarRejected(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=400, detail=detail)
+class AvatarRejected(SolicitudInvalida):
+    """Imagen rechazada (400): tamaño, formato o contenido no válidos."""
 
 
 async def read_and_validate_upload(file: UploadFile) -> bytes:
