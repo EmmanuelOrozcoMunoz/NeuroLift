@@ -3,16 +3,16 @@ mesocycles.py/ai.py al programar un mesociclo para un grupo completo (necesitan 
 misma pertenencia antes de tocarlo)."""
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend import models
+from backend.core.errors import NoEncontrado, Prohibido, SolicitudInvalida
 
 
 def get_owned_group(db: Session, group_id: UUID, current_user: models.User) -> models.Group:
     grupo = db.query(models.Group).filter(models.Group.id == group_id).first()
     if not grupo:
-        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+        raise NoEncontrado("Grupo no encontrado")
     if current_user.role == "admin":
         return grupo
     # El dueño del box gestiona todos los grupos de su box (los suyos, los generales y los de
@@ -20,7 +20,7 @@ def get_owned_group(db: Session, group_id: UUID, current_user: models.User) -> m
     if current_user.role == "owner" and grupo.box_id is not None and grupo.box_id == current_user.box_id:
         return grupo
     if grupo.coach_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Este grupo no te pertenece")
+        raise Prohibido("Este grupo no te pertenece")
     return grupo
 
 
@@ -35,18 +35,12 @@ def ensure_athletes_addable(atletas: list[models.User], current_user: models.Use
         return
     otro_box = [a for a in atletas if a.box_id is None or a.box_id != current_user.box_id]
     if otro_box:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Uno o más atletas no pertenecen a tu box",
-        )
+        raise Prohibido("Uno o más atletas no pertenecen a tu box")
     if current_user.role == "owner":
         return
     no_permitidos = [a for a in atletas if a.coach_id not in (None, current_user.id)]
     if no_permitidos:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Uno o más atletas ya pertenecen a otro coach y no pueden agregarse a este grupo",
-        )
+        raise Prohibido("Uno o más atletas ya pertenecen a otro coach y no pueden agregarse a este grupo")
 
 
 def claim_athletes_for_group(atletas: list[models.User], current_user: models.User) -> None:
@@ -63,13 +57,8 @@ def claim_athletes_for_group(atletas: list[models.User], current_user: models.Us
     if not sin_coach:
         return
     if current_user.role == "owner":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Estos atletas no tienen coach personal: "
+        raise SolicitudInvalida("Estos atletas no tienen coach personal: "
                 + ", ".join(a.full_name for a in sin_coach)
-                + ". Asígnales uno en Equipo, o entrenan con las clases del box."
-            ),
-        )
+                + ". Asígnales uno en Equipo, o entrenan con las clases del box.")
     for atleta in sin_coach:
         atleta.coach_id = current_user.id

@@ -9,6 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from backend.core.config import CORS_ORIGINS, DOCS_ENABLED
+from backend.core.errors import ErrorDeDominio
 from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
 from backend.database import engine, get_db
@@ -41,14 +42,25 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+def _registrar_acceso_denegado(request: Request, codigo: int, detalle) -> None:
+    """Registra intentos de acceso no autorizados (401/403) para poder auditarlos después."""
+    if codigo in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
+        security_logger.warning(
+            "%s en %s %s desde %s: %s", codigo, request.method, request.url.path, _client_ip(request), detalle,
+        )
+
+
 @app.exception_handler(HTTPException)
 async def logging_http_exception_handler(request: Request, exc: HTTPException):
-    """Registra intentos de acceso no autorizados (401/403) para poder auditarlos después."""
-    if exc.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
-        security_logger.warning(
-            "%s en %s %s desde %s: %s",
-            exc.status_code, request.method, request.url.path, _client_ip(request), exc.detail,
-        )
+    _registrar_acceso_denegado(request, exc.status_code, exc.detail)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+
+
+@app.exception_handler(ErrorDeDominio)
+async def error_de_dominio_handler(request: Request, exc: ErrorDeDominio):
+    """Traduce los errores de negocio (core/errors.py) a la respuesta HTTP: mismo código y mismo
+    `detail` que daban las HTTPException que reemplazan."""
+    _registrar_acceso_denegado(request, exc.status_code, exc.detail)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
 
 
