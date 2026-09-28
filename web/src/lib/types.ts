@@ -195,6 +195,8 @@ export interface TrainingSession {
   status: SessionStatus;
   /** Si viene poblado, esta sesión es la versión corta de `parent_session_id`. */
   parent_session_id: string | null;
+  /** Registro de una clase del box: la sesión de la clase de la que es copia */
+  class_session_id?: string | null;
   duration_minutes: number | null;
   day_offset: number | null;
   /** Orden de bloques que el coach eligió para esta sesión, ej. "warmup,strength,metcon" — null

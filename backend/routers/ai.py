@@ -18,7 +18,7 @@ from backend.core.security import (
 from backend.database import SessionLocal, get_db
 from backend.routers.exercise_helpers import clean_ai_block
 from backend.routers.group_helpers import get_owned_group
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.routers.pr_helpers import get_athlete_prs, normalize_exercise_name, resolve_weight_from_percentage
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -272,7 +272,7 @@ def _build_smart_mesocycle(
                             # con el modelo bueno) — si ese kg coincide con una marca de ESTE
                             # atleta para el mismo ejercicio, derivamos el % nosotros, para que la
                             # prescripción quede igual de "viva" que si la hubiera dado ella misma.
-                            pr_valor = prs.get(nombre_ejercicio.strip().lower())
+                            pr_valor = prs.get(normalize_exercise_name(nombre_ejercicio))
                             if pr_valor:
                                 porcentaje_limpio = round(peso_limpio / pr_valor * 100)
                                 referencia = nombre_ejercicio

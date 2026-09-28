@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend import fitness_scoring, models, schemas
 from backend.core.security import ensure_owner_or_coach, get_current_user
 from backend.database import get_db
-from backend.routers.pr_helpers import FIT_LEVEL_LIFT_TO_PR_NAME, upsert_personal_record_by_name
+from backend.routers.pr_helpers import FIT_LEVEL_LIFT_TO_PR_NAME, get_athlete_prs, normalize_exercise_name, upsert_personal_record_by_name
 
 router = APIRouter(tags=["fitness"])
 
@@ -81,10 +81,9 @@ def _build_fitness_level_response(db: Session, usuario: models.User) -> schemas.
     # sincronización existiera), se usa ese valor en vez de dejar el campo vacío.
     faltantes = [k for k in FIT_LEVEL_LIFT_TO_PR_NAME if k not in valores]
     if faltantes:
-        prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == usuario.id).all()
-        prs_por_nombre = {pr.exercise_name.strip().lower(): pr.max_weight_kg for pr in prs}
+        prs_por_nombre = get_athlete_prs(db, usuario.id)
         for metric_key in faltantes:
-            nombre_pr = FIT_LEVEL_LIFT_TO_PR_NAME[metric_key].lower()
+            nombre_pr = normalize_exercise_name(FIT_LEVEL_LIFT_TO_PR_NAME[metric_key])
             if nombre_pr in prs_por_nombre:
                 valores[metric_key] = prs_por_nombre[nombre_pr]
 

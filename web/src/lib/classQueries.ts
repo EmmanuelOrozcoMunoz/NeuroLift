@@ -109,6 +109,21 @@ export function useJoinClass() {
   });
 }
 
+/** El atleta quita el registro de una clase (lo registró por error). La clase no se toca. */
+export function useLeaveClass() {
+  const queryClient = useQueryClient();
+  const user = useCurrentUser();
+  return useMutation({
+    mutationFn: ({ classSessionId }: { classSessionId: string; mesocycleId: string }) =>
+      apiFetch<MessageResponse>(`/classes/sessions/${classSessionId}/join`, { method: "DELETE" }),
+    onSuccess: (_res, { mesocycleId }) => {
+      queryClient.removeQueries({ queryKey: queryKeys.mesocycle(mesocycleId) });
+      void queryClient.invalidateQueries({ queryKey: classKeys.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(user.id) });
+    },
+  });
+}
+
 export function useOwnerDashboard(): UseQueryResult<OwnerDashboard> {
   return useQuery({ queryKey: classKeys.dashboard, queryFn: () => apiFetch<OwnerDashboard>("/boxes/me/dashboard") });
 }

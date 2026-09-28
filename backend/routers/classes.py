@@ -468,3 +468,28 @@ def join_class_session(session_id: UUID, db: Session = Depends(get_db), current_
         ))
     db.commit()
     return schemas.ClassJoinResponse(mesocycle_id=registro.id, session_id=copia.id, missing_prs=sorted(sin_marca))
+
+
+@router.delete("/sessions/{session_id}/join", response_model=schemas.MessageResponse)
+def leave_class_session(session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """El atleta quita el registro de una clase (p. ej. la registró por error): se borra SU
+    copia, con lo que haya anotado. La clase del profesor no se toca, y puede volver a
+    registrarla cuando quiera. Si ya la había marcado como hecha, deja de contar en su historial
+    y en la actividad del box."""
+    if current_user.role != "athlete":
+        raise HTTPException(status_code=403, detail="Solo los atletas registran clases")
+    copia = (
+        db.query(models.Session)
+        .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+        .filter(
+            models.Session.class_session_id == session_id,
+            models.Mesocycle.user_id == current_user.id,
+            models.Mesocycle.is_class_log == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not copia:
+        raise HTTPException(status_code=404, detail="No tenías registrada esta clase")
+    db.delete(copia)
+    db.commit()
+    return {"message": "Quitaste el registro de esta clase."}
