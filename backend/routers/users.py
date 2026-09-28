@@ -19,7 +19,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.pr_helpers import PR_NAME_TO_FIT_LEVEL_LIFT
+from backend.routers.pr_helpers import find_personal_record, fit_level_lift_for
 from backend.wod_scoring import format_wod_summary
 
 # Mezcla rutas /users/* y /coach/* (el leaderboard general es "del coach", no "de un usuario"),
@@ -335,12 +335,10 @@ def upsert_personal_record(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Añade una nueva marca o la actualiza si el ejercicio ya existe."""
+    """Añade una nueva marca o la actualiza si el ejercicio ya existe — aunque esté escrito
+    distinto ("Clean and jerk" y "Clean & Jerk" son la misma marca, no dos)."""
     ensure_owner_or_coach(db, user_id, current_user)
-    pr_existente = db.query(models.PersonalRecord).filter(
-        models.PersonalRecord.user_id == user_id,
-        models.PersonalRecord.exercise_name == record.exercise_name,
-    ).first()
+    pr_existente = find_personal_record(db, user_id, record.exercise_name)
 
     if pr_existente:
         pr_existente.max_weight_kg = record.max_weight_kg
@@ -353,7 +351,7 @@ def upsert_personal_record(
 
     # Si el nombre coincide con uno de los 4 levantamientos del Fit Level, esta marca también
     # actualiza esa métrica — así no hay que volver a escribirla en la otra pantalla.
-    metric_key = PR_NAME_TO_FIT_LEVEL_LIFT.get(record.exercise_name.strip().lower())
+    metric_key = fit_level_lift_for(record.exercise_name)
     if metric_key:
         fila = db.query(models.FitnessBenchmark).filter(
             models.FitnessBenchmark.user_id == user_id, models.FitnessBenchmark.metric_key == metric_key,

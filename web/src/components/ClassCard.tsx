@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { IconCheck, IconChevronRight, IconClock, IconUser } from "@/components/icons";
 import { cx } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { useCreateClassDay, useJoinClass } from "@/lib/classQueries";
+import { useCreateClassDay, useJoinClass, useLeaveClass } from "@/lib/classQueries";
 import { daysFromToday, formatSeconds } from "@/lib/dates";
 import { groupSets } from "@/lib/sessions";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
@@ -33,6 +33,7 @@ export function ClassCard({
 }) {
   const navigate = useNavigate();
   const join = useJoinClass();
+  const leave = useLeaveClass();
   const createDay = useCreateClassDay();
 
   const [time, suffix] = formatClassTime(o.start_time).split(" ");
@@ -145,6 +146,28 @@ export function ClassCard({
         >
           {completada ? "Ver mi registro" : registrada ? "Continuar registro" : "Registrar mi clase"}
           <IconChevronRight className="h-5 w-5" />
+        </button>
+      )}
+      {esAtleta && registrada && o.session && o.my_mesocycle_id && (
+        <button
+          type="button"
+          disabled={leave.isPending}
+          onClick={() => {
+            const aviso = completada
+              ? "Ya la marcaste como hecha: dejará de contar en tu historial. ¿Quitar el registro?"
+              : "Se borrará lo que hayas anotado. ¿Quitar el registro de esta clase?";
+            if (!window.confirm(aviso)) return;
+            leave.mutate(
+              { classSessionId: o.session!.id, mesocycleId: o.my_mesocycle_id! },
+              {
+                onSuccess: () => onFeedback("Quitaste el registro de esta clase."),
+                onError: (err) => onFeedback(err instanceof ApiError ? err.message : "No se pudo quitar.", "danger"),
+              },
+            );
+          }}
+          className="press mt-2 min-h-touch w-full rounded-2xl text-sm font-semibold text-muted active:text-danger disabled:opacity-60"
+        >
+          Quitar registro
         </button>
       )}
       {esAtleta && o.session && esFutura && (

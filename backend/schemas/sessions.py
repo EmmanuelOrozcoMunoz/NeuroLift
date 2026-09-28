@@ -22,6 +22,8 @@ class SessionResponse(BaseModel):
     athlete_notes: Optional[str] = None
     status: str
     parent_session_id: Optional[UUID] = None  # si no es None, es una versión adaptada de otra sesión
+    # Registro de clase de un atleta: la sesión de la clase (del profesor) de la que es copia
+    class_session_id: Optional[UUID] = None
     duration_minutes: Optional[int] = None
     day_offset: Optional[int] = None  # "día N" del plan (solo en plantillas)
     block_order: Optional[str] = None  # ej. "warmup,strength,metcon" — ver models.py:Session
