@@ -155,7 +155,9 @@ export function PageHeader({
           <h1 className="truncate text-2xl leading-tight font-extrabold tracking-tight">{title}</h1>
           {subtitle && <p className="truncate text-sm text-muted">{subtitle}</p>}
         </div>
-        {action}
+        {/* La acción nunca se encoge ni parte su texto: con un título largo, el que se corta
+            (con "…") es el título. Antes "+ Nuevo" se partía en dos líneas. */}
+        {action && <div className="shrink-0 whitespace-nowrap">{action}</div>}
       </div>
     </header>
   );

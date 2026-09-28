@@ -29,12 +29,15 @@ function UserRow({ user, onToast }: { user: User; onToast: ToastFn }) {
         <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Selector en su propia fila y acciones debajo: en 375px las tres cosas juntas no caben
+          ("Revocar sesiones" se partía en dos líneas y se salía de la tarjeta) */}
+      <div className="space-y-2">
         <select
           value={draftRole}
           onChange={(e) => setDraftRole(e.target.value as Role)}
           disabled={user.id === me.id}
-          className="min-h-11 grow rounded-xl border border-line bg-surface-2 px-3.5 text-sm disabled:opacity-50"
+          aria-label={`Rol de ${user.full_name}`}
+          className="min-h-touch w-full rounded-xl bg-surface-2 px-3.5 disabled:opacity-50"
         >
           {ROLES.map((role) => (
             <option key={role} value={role}>
@@ -43,39 +46,43 @@ function UserRow({ user, onToast }: { user: User; onToast: ToastFn }) {
           ))}
         </select>
 
-        {dirty && (
-          <Button
-            variant="secondary"
-            loading={updateRole.isPending}
-            onClick={() =>
-              updateRole.mutate(
-                { userId: user.id, role: draftRole },
-                {
-                  onSuccess: () => onToast(`Rol de ${user.full_name} actualizado a '${ROLE_LABEL[draftRole]}'`),
-                  onError: (err) => {
-                    setDraftRole(user.role);
-                    onToast(err instanceof Error ? err.message : "Error al actualizar el rol.", "danger");
+        <div className="flex gap-2">
+          {dirty && (
+            <Button
+              variant="secondary"
+              className="flex-1"
+              loading={updateRole.isPending}
+              onClick={() =>
+                updateRole.mutate(
+                  { userId: user.id, role: draftRole },
+                  {
+                    onSuccess: () => onToast(`Rol de ${user.full_name} actualizado a '${ROLE_LABEL[draftRole]}'`),
+                    onError: (err) => {
+                      setDraftRole(user.role);
+                      onToast(err instanceof Error ? err.message : "Error al actualizar el rol.", "danger");
+                    },
                   },
-                },
-              )
+                )
+              }
+            >
+              Guardar
+            </Button>
+          )}
+
+          <Button
+            variant="danger"
+            className="flex-1 whitespace-nowrap"
+            loading={revokeSessions.isPending}
+            onClick={() =>
+              revokeSessions.mutate(user.id, {
+                onSuccess: (res) => onToast(res.message),
+                onError: () => onToast("Error al revocar las sesiones.", "danger"),
+              })
             }
           >
-            Guardar
+            Revocar sesiones
           </Button>
-        )}
-
-        <Button
-          variant="danger"
-          loading={revokeSessions.isPending}
-          onClick={() =>
-            revokeSessions.mutate(user.id, {
-              onSuccess: (res) => onToast(res.message),
-              onError: () => onToast("Error al revocar las sesiones.", "danger"),
-            })
-          }
-        >
-          Revocar sesiones
-        </Button>
+        </div>
       </div>
     </Card>
   );
