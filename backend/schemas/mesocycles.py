@@ -31,7 +31,7 @@ class MesocycleResponse(BaseModel):
 
 class MesocycleSummaryResponse(BaseModel):
     """GET /users/{id}/mesocycles/ — exactamente los campos que ya consume el frontend
-    (ver web/src/lib/types.ts:MesocycleSummary). Antes este endpoint devolvía el modelo ORM
+    (ver web/src/lib/types/mesocycles.ts:MesocycleSummary). Antes este endpoint devolvía el modelo ORM
     crudo sin response_model; con esto queda con la misma lista blanca que el resto de la API."""
     id: UUID
     user_id: Optional[UUID] = None
