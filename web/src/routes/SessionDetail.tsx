@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { CoachNoteCallout } from "@/components/CoachNote";
 import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
 import { SetRow } from "@/components/SetRow";
 import { WodTimer } from "@/components/WodTimer";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
+import { useLeaveClass } from "@/lib/classQueries";
 import { useAdaptSession, useCompleteSession, useDeleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
 import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
@@ -33,6 +35,7 @@ export default function SessionDetail() {
   const unit = useWeightUnit();
   const user = useCurrentUser();
   const navigate = useNavigate();
+  const salirDeClase = useLeaveClass();
 
   const [vista, setVista] = useState<Vista>("normal");
   const [sheetAbierta, setSheetAbierta] = useState(false);
@@ -137,6 +140,20 @@ export default function SessionDetail() {
     eliminar.mutate(
       { mesocycleId: mesocycleId!, sessionId: activa!.id },
       { onSuccess: () => navigate("/entrenos") },
+    );
+  }
+
+  // Registró una clase por error: se borra SU copia (con lo anotado); la clase no se toca
+  function quitarRegistroDeClase() {
+    const classSessionId = original?.class_session_id;
+    if (!classSessionId) return;
+    const aviso = completada
+      ? "Ya la marcaste como hecha: dejará de contar en tu historial. ¿Quitar el registro de esta clase?"
+      : "Se borrará lo que hayas anotado. Podrás volver a registrarla desde Clases. ¿Quitar el registro?";
+    if (!window.confirm(aviso)) return;
+    salirDeClase.mutate(
+      { classSessionId, mesocycleId: mesocycleId! },
+      { onSuccess: () => navigate("/clases", { replace: true }) },
     );
   }
 
@@ -273,6 +290,7 @@ export default function SessionDetail() {
                     <div className="mb-2.5 px-1">
                       <p className="leading-tight font-bold">{grupo.name}</p>
                       <p className="text-xs text-muted">{groupSummary(grupo, unit)}</p>
+                      <CoachNoteCallout note={grupo.sets.find((st) => st.coach_note)?.coach_note} />
                     </div>
                     <div className="space-y-2">
                       {grupo.sets.map((set, indiceSerie) => (
@@ -331,6 +349,18 @@ export default function SessionDetail() {
       )}
       {completada && (
         <p className="mt-2 text-center text-xs text-muted">¿Te equivocaste? Toca el botón para deshacerlo.</p>
+      )}
+
+      {/* Registro de una clase del box: se puede deshacer si se registró por error */}
+      {original.class_session_id && (
+        <button
+          type="button"
+          disabled={salirDeClase.isPending}
+          onClick={quitarRegistroDeClase}
+          className="press mt-6 min-h-touch w-full rounded-2xl text-sm font-semibold text-danger disabled:opacity-60"
+        >
+          Quitar registro de esta clase
+        </button>
       )}
 
       <Sheet open={sheetAbierta} onClose={() => setSheetAbierta(false)} title="¿Cuánto tiempo tienes?">

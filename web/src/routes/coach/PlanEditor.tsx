@@ -3,10 +3,10 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
-import { BlockSelect } from "@/components/BlockSelect";
 import { CoverUploader } from "@/components/CoverImage";
+import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast, cx } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Stepper, Toast, cx } from "@/components/ui";
 import {
   coachKeys,
   useAddPlanSet,
@@ -15,13 +15,12 @@ import {
   useUpdatePlan,
   useUpdatePlanSessionMeta,
 } from "@/lib/coachQueries";
+import { camposComunes, nuevoDraft } from "@/lib/exerciseDraft";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock, groupSummary } from "@/lib/sessions";
-import { useWeightUnit, WeightStepper } from "@/lib/units";
+import { useWeightUnit } from "@/lib/units";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { MesocycleFull, PlanLevel, TrainingSession, WodFormat } from "@/lib/types";
-
-type TipoCarga = "porcentaje" | "kg" | "libre";
 
 const DISCIPLINAS = ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting", "CrossFit"];
 const NIVELES: PlanLevel[] = ["Principiante", "Intermedio", "Avanzado"];
@@ -297,39 +296,28 @@ function DayEditor({
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
   const unit = useWeightUnit();
 
-  const [name, setName] = useState("");
-  const [series, setSeries] = useState(3);
-  const [reps, setReps] = useState(5);
-  const [rpe, setRpe] = useState(7);
-  const [tipo, setTipo] = useState<TipoCarga>("porcentaje");
-  const [valor, setValor] = useState(75);
-  const [referencia, setReferencia] = useState("");
-  const [block, setBlock] = useState("");
+  const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 5, tipo: "porcentaje" }));
   const [error, setError] = useState<string | null>(null);
 
   function handleAdd() {
     setError(null);
-    if (!name.trim()) return setError("Escribe el nombre del ejercicio.");
+    if (!draft.name.trim()) return setError("Escribe el nombre del ejercicio.");
 
     addSet.mutate(
       {
         sessionId,
         body: {
-          exercise_name: name.trim(),
-          prescribed_sets: series,
-          prescribed_reps: reps,
-          rpe: rpe > 0 ? rpe : null,
-          prescribed_weight: tipo === "kg" ? valor : null,
-          prescribed_percentage: tipo === "porcentaje" ? valor : null,
-          reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
-          block: block || null,
+          exercise_name: draft.name.trim(),
+          prescribed_sets: draft.series,
+          prescribed_reps: draft.reps,
+          ...camposComunes(draft),
+          coach_note: draft.nota.trim() || null,
         },
       },
       {
         onSuccess: (response) => {
           onFeedback(response.message ?? "Ejercicio agregado.");
-          setName("");
-          setReferencia("");
+          cambiar({ name: "", referencia: "", nota: "" });
         },
         onError: (err) => setError(err instanceof Error ? err.message : "No se pudo agregar."),
       },
@@ -366,6 +354,9 @@ function DayEditor({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
                       <p className="truncate text-xs text-muted">{groupSummary(group, unit)}</p>
+                      {group.sets.some((s) => s.coach_note) && (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-brand">📝 {group.sets.find((s) => s.coach_note)?.coach_note}</p>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -387,7 +378,7 @@ function DayEditor({
               onClick={() => setForzarMetcon(true)}
               className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
             >
-              🔥 Añadir bloque metabólico (WOD)
+              🔥 Añadir WOD
             </button>
           )}
         </div>
@@ -398,61 +389,13 @@ function DayEditor({
           onClick={() => setForzarMetcon(true)}
           className="mb-3 w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
         >
-          🔥 Añadir bloque metabólico (WOD)
+          🔥 Añadir WOD
         </button>
       )}
 
       <div className="space-y-3 border-t border-line pt-3">
         <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>
-        <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} />
-        <BlockSelect value={block} onChange={setBlock} className="" />
-
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
-            <Stepper value={series} onChange={setSeries} min={1} max={20} compact />
-          </div>
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">Reps</span>
-            <Stepper value={reps} onChange={setReps} min={1} max={100} compact />
-          </div>
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
-            <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
-          </div>
-        </div>
-
-        <Segmented<TipoCarga>
-          value={tipo}
-          onChange={setTipo}
-          options={[
-            { value: "porcentaje", label: "% de 1RM" },
-            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
-            { value: "libre", label: "Sin carga" },
-          ]}
-        />
-
-        {tipo === "porcentaje" && (
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
-            <Stepper value={valor} onChange={setValor} step={5} min={0} max={150} />
-          </div>
-        )}
-        {tipo === "kg" && (
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
-            <WeightStepper valueKg={valor} onChangeKg={setValor} />
-          </div>
-        )}
-
-        {tipo === "porcentaje" && (
-          <Field
-            label="1RM de referencia (opcional)"
-            placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-          />
-        )}
+        <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} />
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <Button full loading={addSet.isPending} onClick={handleAdd}>

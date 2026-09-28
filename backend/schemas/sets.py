@@ -26,6 +26,8 @@ class SetUpdate(SanitizedModel):
     prescribed_percentage: float | None = Field(None, ge=1, le=150)
     reference_exercise: str | None = Field(None, min_length=1, max_length=100)
     block: Bloque | None = None
+    # Nota del coach para este ejercicio (se muestra al atleta). "" la borra.
+    coach_note: str | None = Field(None, max_length=500)
 
 
 class SetCreate(SanitizedModel):
@@ -36,6 +38,8 @@ class SetCreate(SanitizedModel):
     prescribed_percentage: float | None = Field(None, ge=1, le=150)
     reference_exercise: str | None = Field(None, min_length=1, max_length=100)
     block: Bloque | None = None
+    # Nota del coach para este ejercicio (se muestra al atleta). "" la borra.
+    coach_note: str | None = Field(None, max_length=500)
 
 
 class SetLogUpdate(SanitizedModel):
@@ -57,6 +61,7 @@ class SetResponse(BaseModel):
     actual_reps: Optional[int] = None
     actual_weight: Optional[float] = None
     technique_feedback: Optional[str] = None
+    coach_note: Optional[str] = None
     exercise: ExerciseResponse
 
     class Config:

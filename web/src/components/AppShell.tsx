@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode } from "react";
 import { BoxLogo } from "@/components/BoxLogo";
 import {
   IconBack,
+  IconCalendar,
   IconDumbbell,
   IconHome,
   IconList,
@@ -27,6 +28,15 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
+// Atleta de un box: sus clases. Atleta de un coach independiente: sin clases (no hay box).
+const ATHLETE_BOX_NAV: NavItem[] = [
+  { to: "/", label: "Hoy", icon: IconToday },
+  { to: "/clases", label: "Clases", icon: IconCalendar },
+  { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
+  { to: "/planes", label: "Planes", icon: IconStore },
+  { to: "/perfil", label: "Perfil", icon: IconUser },
+];
+
 const ATHLETE_NAV: NavItem[] = [
   { to: "/", label: "Hoy", icon: IconToday },
   { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
@@ -34,27 +44,29 @@ const ATHLETE_NAV: NavItem[] = [
   { to: "/perfil", label: "Perfil", icon: IconUser },
 ];
 
+// Coach de un box: sus atletas personales, las clases que dicta y su programación
 const COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/clases", label: "Clases", icon: IconCalendar },
   { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
-  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
-  { to: "/coach/planes", label: "Planes", icon: IconStore },
+  { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
 
+// Dueño: cómo va el box (Inicio), sus clases y atletas; la configuración vive en "Box"
 const OWNER_NAV: NavItem[] = [
-  { to: "/box", label: "Box", icon: IconHome },
+  { to: "/box", label: "Inicio", icon: IconShield },
+  { to: "/clases", label: "Clases", icon: IconCalendar },
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
-  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
-  { to: "/coach/planes", label: "Planes", icon: IconStore },
-  { to: "/coach/perfil", label: "Perfil", icon: IconUser },
+  { to: "/programacion", label: "Programar", icon: IconDumbbell },
+  { to: "/box/ajustes", label: "Box", icon: IconHome },
 ];
 
 // Coach independiente: la barra de un coach, con "Cuenta" (plan, link de invitación, marca)
 const INDEPENDENT_COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
-  { to: "/coach/grupos", label: "Grupos", icon: IconDumbbell },
-  { to: "/coach/planes", label: "Planes", icon: IconStore },
+  { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
+  { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/box", label: "Cuenta", icon: IconHome },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
@@ -74,13 +86,13 @@ const ADMIN_NAV: NavItem[] = [
 ];
 
 function navFor(user: User): NavItem[] {
-  if (user.role === "coach") return COACH_NAV;
+  if (user.role === "coach") return user.box?.kind === "box" ? COACH_NAV : INDEPENDENT_COACH_NAV;
   if (user.role === "admin") return ADMIN_NAV;
   if (user.role === "owner") {
     if (user.box?.status !== "active") return OWNER_INACTIVE_NAV;
     return user.box.kind === "coach" ? INDEPENDENT_COACH_NAV : OWNER_NAV;
   }
-  return ATHLETE_NAV;
+  return user.box?.kind === "box" ? ATHLETE_BOX_NAV : ATHLETE_NAV;
 }
 
 // Rutas "raíz" de sección: solo se marcan activas en su URL exacta, no en sus subrutas
@@ -143,7 +155,9 @@ export function PageHeader({
           <h1 className="truncate text-2xl leading-tight font-extrabold tracking-tight">{title}</h1>
           {subtitle && <p className="truncate text-sm text-muted">{subtitle}</p>}
         </div>
-        {action}
+        {/* La acción nunca se encoge ni parte su texto: con un título largo, el que se corta
+            (con "…") es el título. Antes "+ Nuevo" se partía en dos líneas. */}
+        {action && <div className="shrink-0 whitespace-nowrap">{action}</div>}
       </div>
     </header>
   );
@@ -203,7 +217,8 @@ function SideItem({ item }: { item: NavItem }) {
 
 /** Identidad de la cuenta en el sidebar: el box / coach del usuario, o NeuroLift para el admin. */
 function SidebarBrand({ user }: { user: User }) {
-  if (!user.box) {
+  // El admin no tiene cuenta y el atleta solo tiene una personal: ninguno "tiene box" que mostrar
+  if (!user.box || user.box.kind === "athlete") {
     return (
       <div className="flex items-center gap-3">
         <Logo className="h-10 w-10" />

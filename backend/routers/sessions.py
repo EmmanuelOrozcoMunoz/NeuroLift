@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import ai_agent, models, schemas
 from backend.core.security import (
     _ip_and_user_key,
+    ensure_can_manage_mesocycle,
     ensure_owner_or_coach,
     ensure_owner_or_coach_editable,
     get_current_user,
@@ -14,7 +15,8 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.exercise_helpers import clean_ai_block, get_or_create_exercise
+from backend.services.exercises import clean_ai_block, get_or_create_exercise
+from backend.services.prs import normalize_exercise_name
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -26,7 +28,7 @@ def create_session(
     db_meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == session.mesocycle_id).first()
     if not db_meso:
         raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
-    ensure_owner_or_coach(db, db_meso.user_id, current_user)
+    ensure_can_manage_mesocycle(db, db_meso, current_user)
 
     new_session = models.Session(
         mesocycle_id=session.mesocycle_id,
@@ -281,10 +283,18 @@ def adapt_session_to_available_time(
         "athlete_notes", f"Versión adaptada a {req.available_minutes} minutos."
     )
 
+    # La versión corta la arma la IA: las notas del coach se conservan por ejercicio (mismo
+    # nombre, sin importar cómo lo escriba) para que no se pierdan al recortar la sesión
+    notas_por_ejercicio = {
+        normalize_exercise_name(s.exercise.name): s.coach_note
+        for s in original.sets
+        if s.coach_note and s.exercise
+    }
     orden = 1
     for ej_data in rutina_ai.get("exercises", []):
         ejercicio = get_or_create_exercise(db, ej_data.get("exercise_name", "Ejercicio Desconocido"))
         db.add(models.Set(
+            coach_note=notas_por_ejercicio.get(normalize_exercise_name(ejercicio.name)),
             session_id=adaptada.id,
             exercise_id=ejercicio.id,
             set_order=orden,

@@ -57,8 +57,10 @@ export default function Register() {
     event.preventDefault();
     setError(null);
 
-    if (lookup.state !== "ok") {
-      setError("Escribe un código de invitación válido para continuar.");
+    // Sin código = atleta solo (gratis). Con código, tiene que ser uno válido.
+    const conCodigo = code.trim().length > 0;
+    if (conCodigo && lookup.state !== "ok") {
+      setError("Ese código no es válido. Revísalo, o déjalo vacío para entrenar por tu cuenta.");
       return;
     }
     if (password.length < 8) {
@@ -76,7 +78,7 @@ export default function Register() {
           full_name: fullName.trim(),
           email: email.trim(),
           password,
-          invite_code: code.trim(),
+          invite_code: code.trim() || null,
           body_weight: bodyWeight && peso > 0 ? peso : null,
         },
       });
@@ -97,23 +99,25 @@ export default function Register() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
       <h1 className="mb-1 text-3xl font-bold">Crear cuenta</h1>
       <p className="mb-6 text-sm text-muted">
-        Únete con el código o el link que te compartió tu coach o tu box.
+        Si tu box o tu coach te dio un código, escríbelo. Si entrenas por tu cuenta, déjalo vacío: es gratis.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Field
-            label="Código de invitación"
+            label="Código de invitación (opcional)"
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
-            required
             maxLength={CODE_LENGTH}
             placeholder="Ej. K7M2QX9P"
-            className="font-mono tracking-[0.2em] uppercase"
+            className="font-mono tracking-[0.2em] uppercase placeholder:font-sans placeholder:tracking-normal placeholder:normal-case"
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
           />
+          {code.length > 0 && code.length < CODE_LENGTH && (
+            <p className="mt-1.5 text-xs text-muted">El código tiene {CODE_LENGTH} caracteres.</p>
+          )}
           {lookup.state === "loading" && <p className="mt-1.5 text-xs text-muted">Buscando tu box…</p>}
           {lookup.state === "ok" && (
             <p className="mt-2 flex items-start gap-2 rounded-xl bg-done-soft px-3 py-2 text-sm font-medium text-done">
@@ -126,6 +130,12 @@ export default function Register() {
             </p>
           )}
           {lookup.state === "error" && <p className="mt-1.5 text-xs font-medium text-danger">{lookup.message}</p>}
+          {!code && (
+            <p className="mt-1.5 text-xs text-muted">
+              Sin código entrenas por tu cuenta: registras tus sesiones y accedes a planes. Si luego te unes a un box o a
+              un coach, conservas todo tu historial.
+            </p>
+          )}
         </div>
 
         <Field
@@ -169,7 +179,7 @@ export default function Register() {
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
 
-        <Button type="submit" full loading={submitting} disabled={lookup.state !== "ok"}>
+        <Button type="submit" full loading={submitting} disabled={code.trim().length > 0 && lookup.state !== "ok"}>
           Crear cuenta
         </Button>
       </form>

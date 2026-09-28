@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from slowapi import Limiter
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import models
 from backend.core.config import ALGORITHM, SECRET_KEY
+from backend.core.errors import NoAutenticado, Prohibido, SolicitudInvalida
 from backend.database import get_db
 
 # Le decimos a FastAPI dónde está la ruta de login
@@ -38,16 +39,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    revoked_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Esta sesión fue cerrada. Inicia sesión de nuevo.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = NoAutenticado("No se pudieron validar las credenciales")
+    revoked_exception = NoAutenticado("Esta sesión fue cerrada. Inicia sesión de nuevo.")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -78,10 +71,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     # pueden usar la app. El dueño SÍ entra — necesita ver el estado de su solicitud y completar
     # el perfil del box —, pero require_coach le cierra todo lo que es programar entrenamientos.
     if user.box is not None and not user.box.is_active and user.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu box no está activo en este momento. Contacta a su administrador.",
-        )
+        raise Prohibido("Tu box no está activo en este momento. Contacta a su administrador.")
 
     return user
 
@@ -114,12 +104,9 @@ def require_coach(current_user: models.User = Depends(get_current_user)) -> mode
     if current_user.role == "admin":
         return current_user
     if current_user.role not in models.COACHING_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada para coaches")
+        raise Prohibido("Acción reservada para coaches")
     if current_user.box is None or not current_user.box.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu box todavía no está activo: podrás programar en cuanto lo aprueben.",
-        )
+        raise Prohibido("Tu box todavía no está activo: podrás programar en cuanto lo aprueben.")
     return current_user
 
 
@@ -128,14 +115,14 @@ def require_owner(current_user: models.User = Depends(get_current_user)) -> mode
     su perfil, subir la foto, etc.). NO incluye al admin de plataforma: la gestión de un box se
     hace desde dentro del box; el admin tiene sus propios endpoints en /admin/boxes."""
     if current_user.role != "owner" or current_user.box_id is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada al dueño del box")
+        raise Prohibido("Acción reservada al dueño del box")
     return current_user
 
 
 def require_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
     """Dependencia para endpoints reservados exclusivamente al rol 'admin'."""
     if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acción reservada para administradores")
+        raise Prohibido("Acción reservada para administradores")
     return current_user
 
 
@@ -184,7 +171,53 @@ def ensure_owner_or_coach(db: Session, owner_id: UUID | None, current_user: mode
         and owner_id in _coach_athlete_ids(db, current_user)
     ):
         return
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso sobre este recurso")
+    raise Prohibido("No tienes permiso sobre este recurso")
+
+
+def can_program_class(user: models.User, box_class: models.BoxClass) -> bool:
+    """Programar el contenido de una clase: su profesor o el dueño del box (de un box activo), y
+    el admin de plataforma."""
+    if user.role == "admin":
+        return True
+    if user.box_id is None or user.box_id != box_class.box_id or user.box is None or not user.box.is_active:
+        return False
+    return user.role == "owner" or (user.role == "coach" and box_class.coach_id == user.id)
+
+
+def ensure_can_program_class(user: models.User, box_class: models.BoxClass) -> None:
+    if not can_program_class(user, box_class):
+        raise Prohibido("Solo el profesor de esta clase o el dueño del box pueden programarla")
+
+
+def ensure_can_manage_mesocycle(db: Session, mesocycle: models.Mesocycle, current_user: models.User) -> None:
+    """Como ensure_owner_or_coach, pero entiende la programación de una clase (sin atleta dueño):
+    ahí manda ensure_can_program_class. Úsala en todo endpoint que modifique un mesociclo."""
+    if mesocycle.class_id is not None:
+        ensure_can_program_class(current_user, mesocycle.box_class)
+        return
+    ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+
+
+def ensure_can_view_mesocycle(db: Session, mesocycle: models.Mesocycle, current_user: models.User) -> None:
+    """Ver un mesociclo: el de una clase lo ve cualquier miembro del box (los atletas necesitan
+    saber de qué se trata la clase); el de un atleta, él y sus coaches."""
+    if mesocycle.class_id is not None:
+        if current_user.role == "admin" or current_user.box_id == mesocycle.box_class.box_id:
+            return
+        raise Prohibido("Esta clase es de otro box")
+    ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+
+
+def ensure_has_personal_coach(atletas: list[models.User]) -> None:
+    """Los mesociclos son exclusivos de los atletas con coach personal: un atleta del box sin
+    coach entrena con las clases del box (ver routers/classes.py). Aplica a todo lo que
+    PROGRAME un mesociclo para un atleta (manual, con IA, para un grupo); no a lo que el propio
+    atleta hace por su cuenta (sesiones personales, planes que adquiere)."""
+    sin_coach = [a.full_name for a in atletas if a.coach_id is None]
+    if sin_coach:
+        raise SolicitudInvalida("Los mesociclos son para atletas con coach personal. Sin coach: "
+                + ", ".join(sin_coach)
+                + ". Asígnales uno en Equipo, o entrenan con las clases del box.")
 
 
 def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, current_user: models.User):
@@ -192,12 +225,15 @@ def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, cur
     ni un admin), solo puede hacerlo sobre un mesociclo que él mismo creó a mano
     (is_self_managed) -- uno que le prescribió su coach sigue siendo editable solo por el
     coach, aunque el atleta sea su "dueño" en el sentido de a quién pertenece."""
+    if mesocycle.class_id is not None:
+        # Programación de una clase: la editan su profesor y el dueño, nunca un atleta
+        ensure_can_program_class(current_user, mesocycle.box_class)
+        return
     ensure_owner_or_coach(db, mesocycle.user_id, current_user)
     if current_user.role == "athlete" and not mesocycle.is_self_managed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Esta sesión la prescribió tu coach — solo tu coach puede editarla",
-        )
+        raise Prohibido("Esta sesión es la de la clase: puedes registrar lo que hiciste, pero no cambiar lo programado"
+                if mesocycle.is_class_log
+                else "Esta sesión la prescribió tu coach — solo tu coach puede editarla")
 
 
 def _client_ip(request: Request) -> str:

@@ -1,20 +1,16 @@
 import { useState } from "react";
 
-import { BlockSelect } from "@/components/BlockSelect";
+import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { blockLabel } from "@/lib/blocks";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, Field, Segmented, Stepper, cx } from "@/components/ui";
+import { Button, Card, EmptyState, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
+import { camposComunes, draftDeEjercicio, nuevoDraft } from "@/lib/exerciseDraft";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
-import { useWeightUnit, WeightStepper } from "@/lib/units";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { TrainingSession, WodFormat } from "@/lib/types";
-
-/** Cómo se prescribe la carga: kg fijos, % de 1RM (el backend lo calcula con las marcas ya
- *  registradas del atleta), o sin carga (peso en 0/null). */
-type TipoCarga = "kg" | "porcentaje" | "libre";
 
 function ExerciseBlock({
   mesocycleId,
@@ -30,20 +26,8 @@ function ExerciseBlock({
   const updateSet = useUpdateSet(mesocycleId);
   const addSet = useAddSet(mesocycleId);
   const deleteSet = useDeleteSet(mesocycleId);
-  const unit = useWeightUnit();
 
-  const first = group.sets[0];
-  const [name, setName] = useState(group.name);
-  const [series, setSeries] = useState(group.sets.length);
-  const [reps, setReps] = useState(first.prescribed_reps);
-  const [rpe, setRpe] = useState(first.rpe ?? 0);
-  const [tipo, setTipo] = useState<TipoCarga>(
-    first.prescribed_percentage ? "porcentaje" : first.prescribed_weight ? "kg" : "libre",
-  );
-  const [weight, setWeight] = useState(first.prescribed_weight ?? 0);
-  const [porcentaje, setPorcentaje] = useState(first.prescribed_percentage ?? 75);
-  const [referencia, setReferencia] = useState(first.reference_exercise ?? "");
-  const [block, setBlock] = useState(first.block ?? "");
+  const [draft, cambiar] = useExerciseDraft(() => draftDeEjercicio(group, true));
   const [error, setError] = useState<string | null>(null);
 
   const busy = updateSet.isPending || addSet.isPending || deleteSet.isPending;
@@ -51,14 +35,12 @@ function ExerciseBlock({
   async function handleSave() {
     setError(null);
     const originalIds = group.sets.map((s) => s.id);
+    const series = draft.series;
     const body = {
-      exercise_name: name.trim() || group.name,
-      prescribed_reps: reps,
-      rpe: rpe > 0 ? rpe : null,
-      prescribed_weight: tipo === "kg" && weight > 0 ? weight : null,
-      prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
-      reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
-      block: block || null,
+      exercise_name: draft.name.trim() || group.name,
+      prescribed_reps: draft.reps,
+      ...camposComunes(draft),
+      coach_note: draft.nota.trim(),
     };
 
     try {
@@ -102,57 +84,7 @@ function ExerciseBlock({
         </button>
       </div>
 
-      <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
-      <BlockSelect value={block} onChange={setBlock} />
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
-          <Stepper value={series} onChange={setSeries} min={1} max={20} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Reps</span>
-          <Stepper value={reps} onChange={setReps} min={1} max={100} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
-          <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
-        </div>
-      </div>
-
-      <div className="mt-3 border-t border-line pt-3">
-        <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
-        <Segmented<TipoCarga>
-          value={tipo}
-          onChange={setTipo}
-          options={[
-            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
-            { value: "porcentaje", label: "% de 1RM" },
-            { value: "libre", label: "Sin carga" },
-          ]}
-        />
-        {tipo === "porcentaje" && (
-          <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
-            <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-          </div>
-        )}
-        {tipo === "kg" && (
-          <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
-            <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
-          </div>
-        )}
-        {tipo === "porcentaje" && (
-          <Field
-            label="1RM de referencia (opcional)"
-            placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            className="mt-2"
-          />
-        )}
-      </div>
+      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} />
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
 
@@ -173,36 +105,24 @@ function AddExerciseForm({
   onAdded: () => void;
 }) {
   const addSet = useAddSet(mesocycleId);
-  const unit = useWeightUnit();
-  const [name, setName] = useState("");
-  const [series, setSeries] = useState(3);
-  const [reps, setReps] = useState(10);
-  const [rpe, setRpe] = useState(7);
-  const [tipo, setTipo] = useState<TipoCarga>("kg");
-  const [weight, setWeight] = useState(0);
-  const [porcentaje, setPorcentaje] = useState(75);
-  const [referencia, setReferencia] = useState("");
-  const [block, setBlock] = useState("");
+  const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 10 }));
   const [error, setError] = useState<string | null>(null);
 
   async function handleAdd() {
     setError(null);
-    if (!name.trim()) return setError("Escribe el nombre del ejercicio.");
+    if (!draft.name.trim()) return setError("Escribe el nombre del ejercicio.");
     const body = {
-      exercise_name: name.trim(),
-      prescribed_reps: reps,
-      rpe: rpe > 0 ? rpe : null,
-      prescribed_weight: tipo === "kg" && weight > 0 ? weight : null,
-      prescribed_percentage: tipo === "porcentaje" ? porcentaje : null,
-      reference_exercise: tipo === "porcentaje" && referencia.trim() ? referencia.trim() : null,
-      block: block || null,
+      exercise_name: draft.name.trim(),
+      prescribed_reps: draft.reps,
+      ...camposComunes(draft),
+      coach_note: draft.nota.trim(),
     };
     try {
-      for (let i = 0; i < series; i++) {
+      for (let i = 0; i < draft.series; i++) {
         // eslint-disable-next-line no-await-in-loop
         await addSet.mutateAsync({ sessionId, body });
       }
-      setName("");
+      cambiar({ name: "", nota: "" });
       onAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo añadir el ejercicio.");
@@ -212,56 +132,7 @@ function AddExerciseForm({
   return (
     <Card className="border-dashed">
       <p className="mb-3 font-bold">➕ Añadir ejercicio</p>
-      <Field label="Ejercicio" value={name} onChange={(e) => setName(e.target.value)} className="mb-3" />
-      <BlockSelect value={block} onChange={setBlock} />
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Series</span>
-          <Stepper value={series} onChange={setSeries} min={1} max={20} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">Reps</span>
-          <Stepper value={reps} onChange={setReps} min={1} max={100} compact />
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted">RPE</span>
-          <Stepper value={rpe} onChange={setRpe} min={0} max={10} compact />
-        </div>
-      </div>
-
-      <div className="mt-3 border-t border-line pt-3">
-        <span className="mb-1.5 block text-xs font-medium text-muted">Carga</span>
-        <Segmented<TipoCarga>
-          value={tipo}
-          onChange={setTipo}
-          options={[
-            { value: "kg", label: `${unit === "lb" ? "Lb" : "Kg"} fijos` },
-            { value: "porcentaje", label: "% de 1RM" },
-            { value: "libre", label: "Sin carga" },
-          ]}
-        />
-        {tipo === "porcentaje" && (
-          <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">Porcentaje (%)</span>
-            <Stepper value={porcentaje} onChange={setPorcentaje} step={5} min={0} max={150} compact />
-          </div>
-        )}
-        {tipo === "kg" && (
-          <div className="mt-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted">Peso ({unit})</span>
-            <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
-          </div>
-        )}
-        {tipo === "porcentaje" && (
-          <Field
-            label="1RM de referencia (opcional)"
-            placeholder="Ej. Back Squat — vacío usa el mismo ejercicio"
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            className="mt-2"
-          />
-        )}
-      </div>
+      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} />
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button full className="mt-3" loading={addSet.isPending} onClick={() => void handleAdd()}>
@@ -577,7 +448,7 @@ export function SessionSetsEditor({
           onClick={() => setForzarMetcon(true)}
           className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
         >
-          🔥 Añadir bloque metabólico (WOD)
+          🔥 Añadir WOD
         </button>
       )}
     </div>

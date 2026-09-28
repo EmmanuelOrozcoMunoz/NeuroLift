@@ -8,7 +8,7 @@ from backend.schemas.common import SanitizedModel
 
 HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 BoxStatus = Literal["pending", "active", "rejected", "suspended"]
-BoxKind = Literal["box", "coach"]
+BoxKind = Literal["box", "coach", "athlete"]
 PlanCode = Literal["basic", "pro", "unlimited"]
 SubscriptionStatus = Literal["trial", "active", "expired"]
 
@@ -141,6 +141,11 @@ class CoachCreate(SanitizedModel):
     password: str = Field(..., min_length=8, max_length=128)
 
 
+class BoxJoinRequest(SanitizedModel):
+    """Un atleta solo se une a un box o a un coach independiente con su código de invitación."""
+    invite_code: str = Field(..., min_length=1, max_length=16)
+
+
 class AthleteCoachAssign(SanitizedModel):
     """null = el atleta queda "del box" (sin coach): recibe los mesociclos generales."""
     coach_id: Optional[UUID] = None
@@ -179,3 +184,36 @@ class AdminPaymentCreate(SanitizedModel):
     """Registra un pago manual: extiende la suscripción `months` periodos de 30 días, contados
     desde el vencimiento actual si sigue vigente, o desde hoy si ya venció."""
     months: int = Field(1, ge=1, le=12)
+
+
+class CoachLoad(BaseModel):
+    id: UUID
+    full_name: str
+    role: str
+    athletes: int = 0
+    trained_this_week: int = 0
+    classes: int = 0
+
+
+class AttentionAthlete(BaseModel):
+    id: UUID
+    full_name: str
+    # "sin_coach" (entrena solo con clases, no es un problema: se lista para que el dueño decida),
+    # "inactivo" (no completa una sesión hace 14+ días) o "nuevo" (se unió esta semana)
+    reason: str
+    last_completed_at: Optional[datetime] = None
+
+
+class OwnerDashboard(BaseModel):
+    """Inicio del dueño del box: cómo va el negocio, no la configuración."""
+    athletes_total: int
+    max_athletes: Optional[int] = None
+    athletes_trained_this_week: int
+    sessions_completed_this_week: int
+    athletes_without_coach: int
+    new_athletes_this_week: int
+    classes_today: int
+    # Clases de los próximos 7 días que todavía no tienen contenido programado
+    unprogrammed_classes_next_7_days: int
+    coaches: list[CoachLoad] = []
+    attention: list[AttentionAthlete] = []

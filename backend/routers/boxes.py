@@ -1,15 +1,16 @@
 """Boxes (gimnasios cliente): alta pública, perfil, logo, código de invitación y gestión de
 miembros por parte del dueño. La aprobación de boxes nuevos vive en routers/admin.py."""
-import secrets
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
 from backend.core import billing
+from backend.core.invite import new_invite_code
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -20,7 +21,7 @@ from backend.core.security import (
     require_owner,
 )
 from backend.database import get_db
-from backend.routers.auth import find_active_box_by_code
+from backend.services.boxes import find_active_box_by_code
 
 router = APIRouter(prefix="/boxes", tags=["boxes"])
 
@@ -29,17 +30,6 @@ BOX_REGISTER_MESSAGE = (
     "Recibimos la solicitud de tu box. Te avisaremos en cuanto esté aprobado; mientras tanto ya "
     "puedes iniciar sesión para completar su perfil."
 )
-# Sin 0/O ni 1/I: el código se dicta en voz alta o se copia de una pantalla
-_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-
-def new_invite_code(db: Session) -> str:
-    """Código de 8 caracteres (32^8 ≈ 10^12 combinaciones: no se adivina probando)."""
-    while True:
-        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
-        if not db.query(models.Box.id).filter(models.Box.invite_code == code).first():
-            return code
-
 
 def _box_detail(box: models.Box, viewer: models.User, db: Session) -> schemas.BoxDetail:
     detalle = schemas.BoxDetail.model_validate(box)
@@ -339,3 +329,139 @@ def assign_athlete_coach(
         coach_name=coach.full_name if coach else None,
         created_at=atleta.created_at,
     )
+
+
+# ------------------------------------------------------------- tablero
+
+INACTIVE_DAYS = 14
+
+
+@router.get("/me/dashboard", response_model=schemas.OwnerDashboard)
+def get_owner_dashboard(db: Session = Depends(get_db), current_user: models.User = Depends(require_owner)):
+    """Inicio del dueño: atletas frente al límite del plan, quién entrenó esta semana, carga de
+    cada coach, clases sin programar y atletas que requieren atención."""
+    box = current_user.box
+    hoy = date.today()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    hace_una_semana = datetime.utcnow() - timedelta(days=7)
+    limite_inactivo = datetime.utcnow() - timedelta(days=INACTIVE_DAYS)
+
+    miembros = db.query(models.User).filter(models.User.box_id == box.id).all()
+    atletas = [m for m in miembros if m.role == "athlete"]
+    coaches = [m for m in miembros if m.role in models.COACHING_ROLES]
+    ids_atletas = [a.id for a in atletas]
+
+    # Última sesión completada y sesiones completadas esta semana, por atleta (una consulta)
+    ultima: dict = {}
+    semana: dict = {}
+    if ids_atletas:
+        for user_id, ultima_fecha, esta_semana in (
+            db.query(
+                models.Mesocycle.user_id,
+                func.max(models.Session.completed_date),
+                func.count(models.Session.id).filter(models.Session.completed_date >= datetime.combine(lunes, datetime.min.time())),
+            )
+            .join(models.Session, models.Session.mesocycle_id == models.Mesocycle.id)
+            .filter(models.Mesocycle.user_id.in_(ids_atletas), models.Session.status == "completed")
+            .group_by(models.Mesocycle.user_id)
+            .all()
+        ):
+            ultima[user_id] = ultima_fecha
+            semana[user_id] = esta_semana or 0
+
+    clases = db.query(models.BoxClass).filter(
+        models.BoxClass.box_id == box.id, models.BoxClass.is_active == True  # noqa: E712
+    ).all()
+    clases_por_coach: dict = {}
+    for c in clases:
+        clases_por_coach[c.coach_id] = clases_por_coach.get(c.coach_id, 0) + 1
+
+    proximos = [hoy + timedelta(days=i) for i in range(7)]
+    programadas = set()
+    if clases:
+        programadas = {
+            (cid, d)
+            for cid, d in db.query(models.Mesocycle.class_id, models.Session.scheduled_date)
+            .join(models.Session, models.Session.mesocycle_id == models.Mesocycle.id)
+            .filter(
+                models.Mesocycle.class_id.in_([c.id for c in clases]),
+                models.Session.scheduled_date >= hoy,
+                models.Session.scheduled_date <= proximos[-1],
+            )
+            .all()
+        }
+    sin_programar = sum(
+        1 for c in clases for d in proximos if d.weekday() in c.weekday_list and (c.id, d) not in programadas
+    )
+
+    atencion: list[schemas.AttentionAthlete] = []
+    for a in sorted(atletas, key=lambda x: x.full_name):
+        if a.created_at and a.created_at >= hace_una_semana:
+            atencion.append(schemas.AttentionAthlete(id=a.id, full_name=a.full_name, reason="nuevo"))
+        elif ultima.get(a.id) is None or ultima[a.id] < limite_inactivo:
+            atencion.append(schemas.AttentionAthlete(
+                id=a.id, full_name=a.full_name, reason="inactivo", last_completed_at=ultima.get(a.id)
+            ))
+
+    return schemas.OwnerDashboard(
+        athletes_total=len(atletas),
+        max_athletes=billing.max_athletes(box),
+        athletes_trained_this_week=sum(1 for a in atletas if semana.get(a.id, 0) > 0),
+        sessions_completed_this_week=sum(semana.values()),
+        athletes_without_coach=sum(1 for a in atletas if a.coach_id is None),
+        new_athletes_this_week=sum(1 for a in atletas if a.created_at and a.created_at >= hace_una_semana),
+        classes_today=sum(1 for c in clases if hoy.weekday() in c.weekday_list),
+        unprogrammed_classes_next_7_days=sin_programar,
+        coaches=[
+            schemas.CoachLoad(
+                id=c.id,
+                full_name=c.full_name,
+                role=c.role,
+                athletes=sum(1 for a in atletas if a.coach_id == c.id),
+                trained_this_week=sum(1 for a in atletas if a.coach_id == c.id and semana.get(a.id, 0) > 0),
+                classes=clases_por_coach.get(c.id, 0),
+            )
+            for c in sorted(coaches, key=lambda x: (x.role != "owner", x.full_name))
+        ],
+        attention=atencion[:8],
+    )
+
+
+# ------------------------------------------------- atleta solo -> box/coach
+
+@router.post("/join", response_model=schemas.BoxSummary)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+def join_box(
+    request: Request,
+    req: schemas.BoxJoinRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Un atleta que se registró solo (cuenta personal) se une a un box o a un coach
+    independiente con su código. Se lleva todo lo suyo (sesiones, planes adquiridos, marcas,
+    Fit Level: cuelga del usuario, no de la cuenta) y su cuenta personal, ya vacía, se borra.
+
+    Solo desde una cuenta personal: cambiar de un box a otro no se hace por aquí (un box no
+    debe perder atletas porque alguien conozca el código de otro)."""
+    if current_user.role != "athlete" or current_user.box is None or current_user.box.kind != "athlete":
+        raise HTTPException(status_code=400, detail="Ya perteneces a un box o a un coach.")
+
+    destino = find_active_box_by_code(db, req.invite_code)
+    billing.ensure_can_add_athlete(db, destino)
+
+    coach_id = None
+    if destino.kind == "coach":
+        dueno = db.query(models.User.id).filter(models.User.box_id == destino.id, models.User.role == "owner").first()
+        coach_id = dueno[0] if dueno else None
+
+    personal_id = current_user.box_id
+    current_user.box_id = destino.id
+    current_user.coach_id = coach_id
+    db.flush()
+    # Borrado por consulta, no con db.delete(): la relación Box.members en memoria todavía
+    # tendría al atleta y el ORM le pondría box_id = NULL al "desvincularlo".
+    db.query(models.Box).filter(models.Box.id == personal_id, models.Box.kind == "athlete").delete(synchronize_session=False)
+    db.commit()
+    db.refresh(current_user)
+    security_logger.info("Atleta solo %s se unió a la cuenta '%s'", current_user.email, destino.name)
+    return destino

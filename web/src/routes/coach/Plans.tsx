@@ -264,14 +264,17 @@ export default function Plans() {
               </Link>
             </div>
 
-            <div className="mt-3 flex gap-2">
-              <Link to={`/coach/planes/${plan.id}`} className="grow">
-                <Button variant="secondary" full>
-                  Editar contenido
-                </Button>
-              </Link>
+            {/* Dos filas: en 375px los tres botones en una sola no cabían ("Eliminar" se salía
+                de la tarjeta y "Editar contenido" se partía en dos líneas) */}
+            <Link to={`/coach/planes/${plan.id}`} className="mt-3 block">
+              <Button variant="secondary" full>
+                Editar contenido
+              </Button>
+            </Link>
+            <div className="mt-2 flex gap-2">
               <Button
                 variant={plan.is_published ? "secondary" : "primary"}
+                className="flex-1"
                 loading={publish.isPending}
                 onClick={() =>
                   plan.is_published
@@ -289,6 +292,7 @@ export default function Plans() {
               </Button>
               <Button
                 variant="danger"
+                className="flex-1"
                 onClick={() => deletePlan.mutate(plan.id, { onSuccess: () => setToast("Plan eliminado.") })}
               >
                 Eliminar

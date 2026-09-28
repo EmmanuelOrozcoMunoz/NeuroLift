@@ -7,10 +7,10 @@ Cambiar precios o límites es cambiar este diccionario; el frontend los lee de G
 """
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend import models
+from backend.core.errors import Prohibido
 
 CURRENCY = "COP"
 TRIAL_DAYS = 14
@@ -53,21 +53,13 @@ def ensure_can_add_athlete(db: Session, box: models.Box) -> None:
     """Se llama en TODO camino por el que un atleta nuevo entra a una cuenta (autoregistro con
     código o alta hecha por un coach). Los atletas que ya están nunca se bloquean: el límite solo
     frena a los nuevos."""
+    if box.kind == "athlete":
+        return  # cuenta personal de un atleta solo: gratis y sin límite (tiene un único miembro)
     es_coach = box.kind == "coach"
     if subscription_status(box) == "expired":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "La suscripción de tu coach venció: no se pueden agregar atletas nuevos por ahora."
+        raise Prohibido("La suscripción de tu coach venció: no se pueden agregar atletas nuevos por ahora."
                 if es_coach
-                else "La suscripción de este box venció: no se pueden agregar atletas nuevos por ahora."
-            ),
-        )
+                else "La suscripción de este box venció: no se pueden agregar atletas nuevos por ahora.")
     limite = max_athletes(box)
     if limite is not None and athletes_count(db, box.id) >= limite:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"Se alcanzó el límite de {limite} atletas del plan actual. Hay que subir de plan para agregar más."
-            ),
-        )
+        raise Prohibido(f"Se alcanzó el límite de {limite} atletas del plan actual. Hay que subir de plan para agregar más.")
