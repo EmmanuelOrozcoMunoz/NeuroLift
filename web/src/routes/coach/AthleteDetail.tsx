@@ -108,13 +108,15 @@ export default function AthleteDetail() {
           </div>
         )}
 
-        <form onSubmit={handleSubmitPr} className="flex items-end gap-2">
-          <label className="block grow">
+        {/* Ejercicio en una fila completa y peso + Guardar debajo: en una sola fila el select
+            quedaba en "Back S…" y la etiqueta de la unidad flotaba desalineada */}
+        <form onSubmit={handleSubmitPr} className="space-y-3">
+          <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-muted">Ejercicio</span>
             <select
               value={exercise}
               onChange={(e) => setExercise(e.target.value)}
-              className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg"
+              className="min-h-touch w-full rounded-xl bg-surface-2 px-3.5 text-fg"
             >
               {COMMON_PR_EXERCISES.map((name) => (
                 <option key={name} value={name}>
@@ -123,17 +125,22 @@ export default function AthleteDetail() {
               ))}
             </select>
           </label>
-          <Field
-            label={unit}
-            type="text"
-            inputMode="decimal"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="w-20"
-          />
-          <Button type="submit" loading={upsertPr.isPending}>
-            Guardar
-          </Button>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 grow">
+              <Field
+                label={`1RM en ${unit}`}
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="num"
+              />
+            </div>
+            <Button type="submit" className="shrink-0 px-6" loading={upsertPr.isPending}>
+              Guardar
+            </Button>
+          </div>
         </form>
       </Card>
 

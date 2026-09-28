@@ -387,7 +387,7 @@ function DayEditor({
               onClick={() => setForzarMetcon(true)}
               className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
             >
-              🔥 Añadir bloque metabólico (WOD)
+              🔥 Añadir WOD
             </button>
           )}
         </div>
@@ -398,7 +398,7 @@ function DayEditor({
           onClick={() => setForzarMetcon(true)}
           className="mb-3 w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
         >
-          🔥 Añadir bloque metabólico (WOD)
+          🔥 Añadir WOD
         </button>
       )}
 

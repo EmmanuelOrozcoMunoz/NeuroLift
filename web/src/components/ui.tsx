@@ -222,7 +222,9 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cx(
-            "min-h-10 grow rounded-lg px-3 text-sm font-semibold transition-colors",
+            // Todas las opciones del mismo ancho (basis-0) y sin partir el texto: con 3 opciones
+            // en 320px, "% de 1RM" o "Sin carga" se partían en dos líneas
+            "min-h-10 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold whitespace-nowrap transition-colors",
             option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
           )}
         >
