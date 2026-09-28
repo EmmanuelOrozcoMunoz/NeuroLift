@@ -21,7 +21,7 @@ from backend.core.security import (
     require_owner,
 )
 from backend.database import get_db
-from backend.routers.auth import find_active_box_by_code
+from backend.services.boxes import find_active_box_by_code
 
 router = APIRouter(prefix="/boxes", tags=["boxes"])
 

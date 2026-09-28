@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
-from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
+from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.plans import PLAN_EPOCH, adquirir_plan
 
 router = APIRouter(prefix="/plans", tags=["plans"])

@@ -9,8 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models
-from backend.routers.exercise_helpers import clean_coach_note, get_or_create_exercise
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.exercises import clean_coach_note, get_or_create_exercise
+from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 from backend.services.sets import clonar_set
 
 

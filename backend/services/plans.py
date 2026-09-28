@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from backend import models
-from backend.routers.pr_helpers import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 from backend.services.sets import clonar_set
 
 # Los planes guardan sus días como offset relativo (day_offset) más una fecha sintética

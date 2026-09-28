@@ -15,8 +15,8 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.exercise_helpers import clean_ai_block, get_or_create_exercise
-from backend.routers.pr_helpers import normalize_exercise_name
+from backend.services.exercises import clean_ai_block, get_or_create_exercise
+from backend.services.prs import normalize_exercise_name
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

@@ -13,7 +13,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.routers.group_helpers import get_owned_group
+from backend.services.group_access import get_owned_group
 from backend.services.ai_mesocycles import (
     construir_mesociclo_en_su_propia_sesion,
     construir_mesociclo_inteligente,
