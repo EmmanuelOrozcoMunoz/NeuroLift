@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   camposComunes,
+  camposDeFila,
   cargaParaEnviar,
+  conNumeroDeSeries,
   draftDeEjercicio,
+  esUniforme,
+  firmaDeEjercicio,
   nuevoDraft,
   pesosWodParaEnviar,
 } from "@/lib/exerciseDraft";
@@ -29,6 +33,23 @@ function serie(sobre: Partial<SetItem> = {}): SetItem {
 }
 
 const grupo = (...series: SetItem[]): ExerciseGroup => ({ name: "Back Squat", sets: series });
+
+describe("nuevoDraft", () => {
+  it("crea N filas iguales con los valores dados", () => {
+    const d = nuevoDraft({ series: 4, reps: 5, tipo: "porcentaje", porcentaje: 80 });
+    expect(d.filas).toHaveLength(4);
+    expect(d.filas.every((f) => f.reps === 5 && f.porcentaje === 80)).toBe(true);
+  });
+
+  it("por defecto son 3 series de 8", () => {
+    const d = nuevoDraft();
+    expect(d.filas).toEqual([
+      { reps: 8, weight: 0, porcentaje: 75 },
+      { reps: 8, weight: 0, porcentaje: 75 },
+      { reps: 8, weight: 0, porcentaje: 75 },
+    ]);
+  });
+});
 
 describe("cargaParaEnviar", () => {
   it("kg fijos: manda el peso solo si es mayor que 0", () => {
@@ -57,6 +78,54 @@ describe("cargaParaEnviar", () => {
   it("en metcon la carga individual queda vacía", () => {
     expect(cargaParaEnviar(nuevoDraft({ tipo: "kg", weight: 60 }), true).prescribed_weight).toBeNull();
     expect(cargaParaEnviar(nuevoDraft({ tipo: "porcentaje" }), true).prescribed_percentage).toBeNull();
+  });
+});
+
+describe("series una por una (rampas)", () => {
+  const rampa = () => {
+    const d = nuevoDraft({ series: 4, tipo: "porcentaje", referencia: "Snatch", rpe: 8 });
+    [
+      [3, 50],
+      [3, 60],
+      [1, 70],
+      [1, 80],
+    ].forEach(([reps, porcentaje], i) => (d.filas[i] = { reps, weight: 0, porcentaje }));
+    return d;
+  };
+
+  it("cada serie manda sus propias repeticiones y su propio %", () => {
+    const d = rampa();
+    const cuerpos = d.filas.map((_, i) => camposDeFila(d, i));
+    expect(cuerpos.map((c) => [c.prescribed_reps, c.prescribed_percentage])).toEqual([
+      [3, 50],
+      [3, 60],
+      [1, 70],
+      [1, 80],
+    ]);
+    expect(cuerpos.every((c) => c.reference_exercise === "Snatch" && c.rpe === 8)).toBe(true);
+  });
+
+  it("una rampa no es uniforme; series iguales sí", () => {
+    expect(esUniforme(rampa())).toBe(false);
+    expect(esUniforme(nuevoDraft({ series: 5, reps: 5 }))).toBe(true);
+    expect(esUniforme(nuevoDraft({ series: 1 }))).toBe(true);
+  });
+
+  it("cambiar el número de series copia la última al crecer y recorta por el final", () => {
+    const d = rampa();
+    const mas = conNumeroDeSeries(d.filas, 6);
+    expect(mas).toHaveLength(6);
+    expect(mas[4]).toEqual(d.filas[3]);
+    expect(mas[5]).toEqual(d.filas[3]);
+    expect(conNumeroDeSeries(d.filas, 2)).toEqual(d.filas.slice(0, 2));
+    expect(conNumeroDeSeries(d.filas, 0)).toHaveLength(1); // siempre queda una serie
+  });
+
+  it("los kg de una serie no se pierden al pasar por %", () => {
+    const d = nuevoDraft({ series: 1, weight: 60, tipo: "kg" });
+    d.tipo = "porcentaje";
+    d.tipo = "kg";
+    expect(camposDeFila(d, 0).prescribed_weight).toBe(60);
   });
 });
 
@@ -89,12 +158,32 @@ describe("camposComunes", () => {
 });
 
 describe("draftDeEjercicio", () => {
-  it("toma series, reps, RPE, bloque y la primera nota que exista", () => {
+  it("toma RPE, bloque y la primera nota que exista, con una fila por serie", () => {
     const d = draftDeEjercicio(
       grupo(serie({ prescribed_reps: 3, rpe: 8, block: "strength", prescribed_weight: 100 }), serie({ coach_note: "Espalda neutra" })),
       true,
     );
-    expect(d).toMatchObject({ name: "Back Squat", series: 2, reps: 3, rpe: 8, block: "strength", nota: "Espalda neutra" });
+    expect(d).toMatchObject({ name: "Back Squat", rpe: 8, block: "strength", nota: "Espalda neutra" });
+    expect(d.filas).toHaveLength(2);
+    expect(d.filas[0]).toMatchObject({ reps: 3, weight: 100 });
+  });
+
+  it("recupera una rampa tal cual: cada fila con su % y sus reps", () => {
+    const d = draftDeEjercicio(
+      grupo(
+        serie({ prescribed_reps: 3, prescribed_percentage: 50 }),
+        serie({ prescribed_reps: 3, prescribed_percentage: 60 }),
+        serie({ prescribed_reps: 1, prescribed_percentage: 100 }),
+      ),
+      true,
+    );
+    expect(d.tipo).toBe("porcentaje");
+    expect(d.filas.map((f) => [f.reps, f.porcentaje])).toEqual([
+      [3, 50],
+      [3, 60],
+      [1, 100],
+    ]);
+    expect(esUniforme(d)).toBe(false);
   });
 
   it("deduce el tipo de carga: porcentaje si lo hay, libre solo si el formulario lo ofrece", () => {
@@ -106,6 +195,18 @@ describe("draftDeEjercicio", () => {
 
   it("valores por defecto cuando la serie no trae % ni referencia", () => {
     const d = draftDeEjercicio(grupo(serie()), true);
-    expect(d).toMatchObject({ porcentaje: 75, weight: 0, referencia: "", rpe: 0, nota: "" });
+    expect(d.filas[0]).toMatchObject({ porcentaje: 75, weight: 0 });
+    expect(d).toMatchObject({ referencia: "", rpe: 0, nota: "" });
+  });
+});
+
+describe("firmaDeEjercicio", () => {
+  it("cambia cuando llegan más series o cambia algún valor, y no cuando los datos son los mismos", () => {
+    const a = serie({ id: "a", prescribed_reps: 3 });
+    const b = serie({ id: "b", prescribed_reps: 3 });
+    const una = firmaDeEjercicio(grupo(a));
+    expect(firmaDeEjercicio(grupo(a))).toBe(una);
+    expect(firmaDeEjercicio(grupo(a, b))).not.toBe(una);
+    expect(firmaDeEjercicio(grupo({ ...a, prescribed_percentage: 60 }))).not.toBe(una);
   });
 });

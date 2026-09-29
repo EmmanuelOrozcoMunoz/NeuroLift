@@ -308,8 +308,8 @@ function DayEditor({
         sessionId,
         body: {
           exercise_name: draft.name.trim(),
-          prescribed_sets: draft.series,
-          prescribed_reps: draft.reps,
+          prescribed_sets: draft.filas.length,
+          prescribed_reps: draft.filas[0].reps,
           ...camposComunes(draft),
           coach_note: draft.nota.trim() || null,
         },

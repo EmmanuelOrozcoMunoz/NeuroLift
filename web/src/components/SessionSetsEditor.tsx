@@ -5,7 +5,7 @@ import { blockLabel } from "@/lib/blocks";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
-import { camposComunes, draftDeEjercicio, nuevoDraft } from "@/lib/exerciseDraft";
+import { camposDeFila, draftDeEjercicio, firmaDeEjercicio, nuevoDraft } from "@/lib/exerciseDraft";
 import { useSetWodFormat } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
@@ -35,28 +35,26 @@ function ExerciseBlock({
   async function handleSave() {
     setError(null);
     const originalIds = group.sets.map((s) => s.id);
-    const series = draft.series;
-    const body = {
+    const series = draft.filas.length;
+    // Cada serie lleva sus propias repeticiones y su propia carga (rampas: 50%×3, 60%×3, 70%×1…)
+    const bodyDe = (i: number) => ({
       exercise_name: draft.name.trim() || group.name,
-      prescribed_reps: draft.reps,
-      ...camposComunes(draft),
+      ...camposDeFila(draft, i),
       coach_note: draft.nota.trim(),
-    };
+    });
 
     try {
       const overlap = Math.min(originalIds.length, series);
-      await Promise.all(originalIds.slice(0, overlap).map((setId) => updateSet.mutateAsync({ setId, body })));
+      await Promise.all(originalIds.slice(0, overlap).map((setId, i) => updateSet.mutateAsync({ setId, body: bodyDe(i) })));
 
       if (series < originalIds.length) {
         await Promise.all(originalIds.slice(series).map((setId) => deleteSet.mutateAsync(setId)));
       } else if (series > originalIds.length) {
-        const faltantes = series - originalIds.length;
-        for (let i = 0; i < faltantes; i++) {
-          // secuencial a propósito: el backend calcula set_order por el conteo actual de la
-          // sesión, así que crear en paralelo podría hacer que dos series compitan por el
-          // mismo orden.
+        for (let i = originalIds.length; i < series; i++) {
+          // secuencial a propósito: cada serie nueva se acomoda junto a las de su ejercicio y
+          // eso depende del orden actual de la sesión, así que no se pueden crear en paralelo.
           // eslint-disable-next-line no-await-in-loop
-          await addSet.mutateAsync({ sessionId, body });
+          await addSet.mutateAsync({ sessionId, body: bodyDe(i) });
         }
       }
       onSaved();
@@ -84,7 +82,7 @@ function ExerciseBlock({
         </button>
       </div>
 
-      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} />
+      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} modo="porSerie" />
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
 
@@ -111,16 +109,13 @@ function AddExerciseForm({
   async function handleAdd() {
     setError(null);
     if (!draft.name.trim()) return setError("Escribe el nombre del ejercicio.");
-    const body = {
-      exercise_name: draft.name.trim(),
-      prescribed_reps: draft.reps,
-      ...camposComunes(draft),
-      coach_note: draft.nota.trim(),
-    };
     try {
-      for (let i = 0; i < draft.series; i++) {
+      for (let i = 0; i < draft.filas.length; i++) {
         // eslint-disable-next-line no-await-in-loop
-        await addSet.mutateAsync({ sessionId, body });
+        await addSet.mutateAsync({
+          sessionId,
+          body: { exercise_name: draft.name.trim(), ...camposDeFila(draft, i), coach_note: draft.nota.trim() },
+        });
       }
       cambiar({ name: "", nota: "" });
       onAdded();
@@ -132,7 +127,7 @@ function AddExerciseForm({
   return (
     <Card className="border-dashed">
       <p className="mb-3 font-bold">➕ Añadir ejercicio</p>
-      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} />
+      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} modo="porSerie" />
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
       <Button full className="mt-3" loading={addSet.isPending} onClick={() => void handleAdd()}>
@@ -426,9 +421,9 @@ export function SessionSetsEditor({
               onRemoved={() => setForzarMetcon(false)}
             />
           )}
-          {bloque.groups.map((group, index) => (
+          {bloque.groups.map((group) => (
             <ExerciseBlock
-              key={`${group.name}-${index}`}
+              key={firmaDeEjercicio(group)}
               mesocycleId={mesocycleId}
               sessionId={session.id}
               group={group}
