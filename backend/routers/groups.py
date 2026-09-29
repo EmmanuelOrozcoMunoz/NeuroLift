@@ -2,7 +2,7 @@ from datetime import date
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
@@ -13,7 +13,9 @@ from backend.services.group_access import claim_athletes_for_group, ensure_athle
 from backend.services.groups import (
     actualizar_ejercicio,
     agregar_ejercicio,
+    aplicar_accion_a_programas,
     eliminar_ejercicio,
+    retirar_miembro,
     sesiones_por_mesociclo,
     sumar_miembros,
 )
@@ -141,11 +143,15 @@ def add_group_members(
 def remove_group_member(
     group_id: UUID,
     user_id: UUID,
+    programas: schemas.AccionPrograma = Query("desvincular"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_coach),
 ):
+    """Saca al atleta del grupo. `programas` decide qué pasa con sus programas del grupo: por
+    defecto se conservan como programas individuales (su historial no se pierde y ya no le
+    llegan los cambios del grupo); con "eliminar" se borran."""
     grupo = get_owned_group(db, group_id, current_user)
-    grupo.members = [m for m in grupo.members if m.id != user_id]
+    retirar_miembro(db, grupo, user_id, programas)
     db.commit()
     db.refresh(grupo)
     return grupo
@@ -244,6 +250,26 @@ def delete_group_program(
         db.delete(meso)
     db.commit()
     return {"message": f"Programa '{req.program_name}' eliminado para {total} atleta(s)."}
+
+
+@router.post("/{group_id}/programs/remove-athlete", response_model=schemas.MessageResponse)
+def remove_athlete_from_group_program(
+    group_id: UUID,
+    req: schemas.GroupProgramAthleteRemove,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Retira a UN atleta de un programa del grupo, sin sacarlo del grupo. Con "desvincular" su
+    mesociclo se conserva (con su historial) como programa individual; con "eliminar" se borra."""
+    mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    del_atleta = [m for m in mesos if m.user_id == req.user_id]
+    if not del_atleta:
+        raise HTTPException(status_code=404, detail="Ese atleta no está en este programa")
+    nombre = del_atleta[0].user.full_name
+    aplicar_accion_a_programas(db, del_atleta, req.action)
+    db.commit()
+    accion = "eliminado" if req.action == "eliminar" else "conservado como programa individual"
+    return {"message": f"{nombre} salió del programa '{req.program_name}' (su mesociclo fue {accion})."}
 
 
 @router.post("/{group_id}/sessions/bulk-add-exercise")

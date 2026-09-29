@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -123,6 +123,21 @@ class GroupSessionExerciseDelete(SanitizedModel):
     program_start_date: date
     scheduled_date: date
     exercise_name: str = Field(..., min_length=1, max_length=100)
+
+
+# Qué hacer con el programa de un atleta que sale de él:
+# - "desvincular": el mesociclo se conserva (con su historial) como programa individual del atleta,
+#   ya sin recibir los cambios masivos del grupo.
+# - "eliminar": se borra el mesociclo con todas sus sesiones y series registradas.
+AccionPrograma = Literal["desvincular", "eliminar"]
+
+
+class GroupProgramAthleteRemove(SanitizedModel):
+    """Retira a UN atleta de un programa de grupo sin sacarlo del grupo."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+    user_id: UUID
+    action: AccionPrograma = "desvincular"
 
 
 class GroupProgramDelete(SanitizedModel):
