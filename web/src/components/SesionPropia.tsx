@@ -1,15 +1,14 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { IconDumbbell } from "@/components/icons";
-import { Button, Card, ErrorState, Field, Sheet } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { todayIso } from "@/lib/dates";
 import { useCreatePersonalSession } from "@/lib/queries";
 
 /** Crea (o recupera, si ya existía) la sesión propia de una fecha y abre su editor para armar los
  *  ejercicios ahí mismo, sin pasar por el calendario. */
-export function useAbrirSesionPropia() {
+export function useAbrirSesionPropia(onError?: (mensaje: string) => void) {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const crear = useCreatePersonalSession(user.id);
@@ -17,6 +16,7 @@ export function useAbrirSesionPropia() {
   function abrir(fecha: string) {
     crear.mutate(fecha, {
       onSuccess: (sesion) => navigate(`/entrenos/${sesion.mesocycle_id}/sesion/${sesion.id}/editar`),
+      onError: () => onError?.("No se pudo abrir tu entreno. Intenta de nuevo."),
     });
   }
 
@@ -41,32 +41,13 @@ export function SesionPropiaCard() {
   );
 }
 
-/** Botón «+ Sesión» de Entrenos: elige la fecha (hoy por defecto) y abre el editor. */
-export function NuevaSesionPropiaBoton() {
-  const [abierto, setAbierto] = useState(false);
-  const [fecha, setFecha] = useState(todayIso());
-  const { abrir, pendiente, error } = useAbrirSesionPropia();
-
+/** Botón «+ Entreno» de Entrenos: crea (o retoma) la sesión de hoy y abre el editor de una vez. Para
+ *  otro día basta tocarlo en el calendario. */
+export function NuevaSesionPropiaBoton({ onError }: { onError?: (mensaje: string) => void }) {
+  const { abrir, pendiente } = useAbrirSesionPropia(onError);
   return (
-    <>
-      <Button
-        onClick={() => {
-          setFecha(todayIso());
-          setAbierto(true);
-        }}
-      >
-        + Sesión
-      </Button>
-      <Sheet open={abierto} onClose={() => setAbierto(false)} title="Armar una sesión propia">
-        <p className="mb-4 text-sm text-muted">
-          Elige el día y arma tus ejercicios. Si ya tenías una sesión propia ese día, la retomas.
-        </p>
-        <Field label="Fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-        {error && <ErrorState error={error} />}
-        <Button full className="mt-4" loading={pendiente} disabled={!fecha} onClick={() => abrir(fecha)}>
-          Crear y armar ejercicios
-        </Button>
-      </Sheet>
-    </>
+    <Button loading={pendiente} onClick={() => abrir(todayIso())}>
+      + Entreno
+    </Button>
   );
 }

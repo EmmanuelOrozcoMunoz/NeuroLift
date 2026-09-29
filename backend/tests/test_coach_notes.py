@@ -140,3 +140,23 @@ def test_borrar_una_serie_no_hace_que_la_siguiente_choque_de_orden(coach, atleta
     ordenes = [s["set_order"] for ses in sesiones if ses["id"] == sesion for s in ses["sets"]]
     assert len(ordenes) == len(set(ordenes)), ordenes                # sin órdenes repetidos
     assert _orden(coach, meso, sesion)[-1] == "C"
+
+
+# ------------------------------------------------------------------ sesión propia y sesión del coach el mismo día
+
+def test_una_sesion_propia_convive_con_la_del_coach_y_no_se_duplica(coach, atleta_de_coach):
+    meso_coach, sesion_coach = _sesion_del_atleta(coach, atleta_de_coach)   # hoy o primer día del mesociclo
+    fecha = next(s["scheduled_date"] for s in coach.get(f"/mesocycles/{meso_coach}").json()["sessions"] if s["id"] == sesion_coach)
+
+    primera = atleta_de_coach.post("/users/me/personal-sessions", json={"scheduled_date": fecha})
+    assert primera.status_code == 200, primera.text
+    propia = primera.json()
+    assert propia["id"] != sesion_coach and propia["mesocycle_id"] != meso_coach   # otra sesión, en su propio mesociclo
+
+    otra_vez = atleta_de_coach.post("/users/me/personal-sessions", json={"scheduled_date": fecha}).json()
+    assert otra_vez["id"] == propia["id"]                                          # la retoma, no crea otra
+
+    # el atleta ve las dos ese día y la del coach queda intacta
+    hoy = [s for m in atleta_de_coach.get(f"/users/{atleta_de_coach.id}/mesocycles/").json()
+           for s in atleta_de_coach.get(f"/mesocycles/{m['id']}").json()["sessions"] if s["scheduled_date"] == fecha]
+    assert len(hoy) == 2
