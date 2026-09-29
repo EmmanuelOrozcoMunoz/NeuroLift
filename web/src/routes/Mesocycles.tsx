@@ -115,7 +115,7 @@ function CalendarioEntrenos({
     <>
       <TrainingCalendar sessions={sessions} onEmptyDayTap={onEmptyDayTap} />
       <p className="mt-3 text-center text-xs text-muted">
-        Toca un día vacío para agregar tu propia rutina manual.
+        Toca un día vacío para armar tu propio entreno.
       </p>
     </>
   );

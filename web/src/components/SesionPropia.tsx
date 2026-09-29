@@ -57,14 +57,11 @@ export function NuevaSesionPropiaBoton() {
       >
         + Sesión
       </Button>
-      <Sheet open={abierto} onClose={() => setAbierto(false)} title="Armar una sesión propia">
-        <p className="mb-4 text-sm text-muted">
-          Elige el día y arma tus ejercicios. Si ya tenías una sesión propia ese día, la retomas.
-        </p>
+      <Sheet open={abierto} onClose={() => setAbierto(false)} title="¿Qué día entrenas?">
         <Field label="Fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
         {error && <ErrorState error={error} />}
         <Button full className="mt-4" loading={pendiente} disabled={!fecha} onClick={() => abrir(fecha)}>
-          Crear y armar ejercicios
+          Armar mi entreno
         </Button>
       </Sheet>
     </>
