@@ -143,6 +143,17 @@ export interface GroupBulkUpdatePayload {
   coach_note?: string | null;
 }
 
+/** Qué pasa con el mesociclo de un atleta que sale de un programa de grupo:
+ *  "desvincular" lo conserva (con su historial) como programa individual; "eliminar" lo borra. */
+export type AccionPrograma = "desvincular" | "eliminar";
+
+export interface GroupProgramAthleteRemovePayload {
+  program_name: string;
+  program_start_date: string;
+  user_id: string;
+  action: AccionPrograma;
+}
+
 export interface GroupProgramDeletePayload {
   program_name: string;
   program_start_date: string;

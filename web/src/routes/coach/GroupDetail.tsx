@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { CoverUploader } from "@/components/CoverImage";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
+import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
 import {
@@ -167,6 +168,7 @@ export default function GroupDetail() {
   const [addOpen, setAddOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [aRetirar, setARetirar] = useState<{ id: string; nombre: string } | null>(null);
 
   if (isPending) {
     return (
@@ -218,7 +220,7 @@ export default function GroupDetail() {
               <button
                 type="button"
                 aria-label="Quitar del grupo"
-                onClick={() => removeMember.mutate(member.id)}
+                onClick={() => setARetirar({ id: member.id, nombre: member.full_name })}
                 disabled={removeMember.isPending}
                 className="rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
               >
@@ -292,6 +294,26 @@ export default function GroupDetail() {
         onClose={() => setCreateOpen(false)}
         target={{ type: "group", id: groupId! }}
         onCreated={(message) => setToast(message)}
+      />
+
+      <RetirarAtletaSheet
+        nombre={aRetirar?.nombre ?? null}
+        alcance="grupo"
+        pendiente={removeMember.isPending}
+        onClose={() => setARetirar(null)}
+        onElegir={(accion) =>
+          aRetirar &&
+          removeMember.mutate(
+            { userId: aRetirar.id, programas: accion },
+            {
+              onSuccess: () => {
+                setToast(accion === "eliminar" ? "Salió del grupo y se eliminaron sus programas." : "Salió del grupo; conserva sus programas como individuales.");
+                setARetirar(null);
+              },
+              onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo quitar."),
+            },
+          )
+        }
       />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}

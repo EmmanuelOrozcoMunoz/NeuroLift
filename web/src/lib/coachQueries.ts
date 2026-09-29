@@ -17,6 +17,7 @@ import type {
   GroupBulkWodNotesPayload,
   GroupDetail,
   GroupMesocycleProgram,
+  GroupProgramAthleteRemovePayload,
   GroupProgramDeletePayload,
   GroupSummary,
   ManualMesocycleGroupPayload,
@@ -124,11 +125,26 @@ export function useAddGroupMembers(groupId: string) {
 export function useRemoveGroupMember(groupId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (userId: string) =>
-      apiFetch<GroupDetail>(`/groups/${groupId}/members/${userId}`, { method: "DELETE" }),
+    mutationFn: ({ userId, programas }: { userId: string; programas: "desvincular" | "eliminar" }) =>
+      apiFetch<GroupDetail>(`/groups/${groupId}/members/${userId}?programas=${programas}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: coachKeys.group(groupId) });
       void queryClient.invalidateQueries({ queryKey: coachKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) });
+      void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
+    },
+  });
+}
+
+/** Retira a UN atleta de un programa del grupo, sin sacarlo del grupo. */
+export function useRemoveAthleteFromProgram(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupProgramAthleteRemovePayload) =>
+      apiFetch<MessageResponse>(`/groups/${groupId}/programs/remove-athlete`, { method: "POST", body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) });
+      void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
     },
   });
 }

@@ -267,3 +267,25 @@ def eliminar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
         resultados.append({"full_name": meso.user.full_name, "status": "eliminado" if sets_existentes else "no tenía ese ejercicio"})
 
     return resultados
+
+
+def aplicar_accion_a_programas(db: Session, mesos: List[models.Mesocycle], accion: str) -> None:
+    """Saca esos mesociclos del programa del grupo. "eliminar" los borra (con sus sesiones y
+    series); cualquier otra acción los desvincula del grupo: quedan como programas individuales
+    del atleta, con su historial, y dejan de recibir los cambios masivos del grupo."""
+    for meso in mesos:
+        if accion == "eliminar":
+            db.delete(meso)
+        else:
+            meso.group_id = None
+
+
+def retirar_miembro(db: Session, grupo: models.Group, user_id: UUID, accion: str) -> int:
+    """Saca al atleta del grupo y decide qué pasa con sus programas del grupo (ver
+    aplicar_accion_a_programas). Devuelve cuántos programas tenía."""
+    grupo.members = [m for m in grupo.members if m.id != user_id]
+    mesos = db.query(models.Mesocycle).filter(
+        models.Mesocycle.group_id == grupo.id, models.Mesocycle.user_id == user_id
+    ).all()
+    aplicar_accion_a_programas(db, mesos, accion)
+    return len(mesos)
