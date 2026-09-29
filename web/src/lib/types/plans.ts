@@ -1,4 +1,5 @@
 // Planes de la tienda.
+import type { SerieEnPeticion } from "./sessions";
 import type { Weekday } from "./common";
 import type { MesocycleFull } from "./mesocycles";
 
@@ -87,4 +88,6 @@ export interface PlanSetCreatePayload {
   block?: string | null;
   /** Nota del coach para el atleta; "" la borra. */
   coach_note?: string | null;
+  /** Series una por una (rampas). Si viene, manda sobre prescribed_sets/reps/carga. */
+  series?: SerieEnPeticion[];
 }

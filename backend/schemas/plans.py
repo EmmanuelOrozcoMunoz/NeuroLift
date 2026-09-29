@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from backend.schemas.common import Bloque, Dia, SanitizedModel
+from backend.schemas.common import Bloque, Dia, SanitizedModel, SerieDeEjercicio
 
 NivelPlan = Literal["Principiante", "Intermedio", "Avanzado"]
 
@@ -52,6 +52,9 @@ class PlanSetCreate(SanitizedModel):
     block: Bloque | None = None
     # Nota del coach para este ejercicio (se muestra al atleta). "" la borra.
     coach_note: str | None = Field(None, max_length=500)
+    # Series una por una (rampas). Si viene, MANDA sobre prescribed_sets/reps/weight/percentage:
+    # cada elemento es una serie con sus repeticiones y su carga.
+    series: List[SerieDeEjercicio] | None = Field(None, min_length=1, max_length=20)
 
 
 class PlanAcquireRequest(SanitizedModel):

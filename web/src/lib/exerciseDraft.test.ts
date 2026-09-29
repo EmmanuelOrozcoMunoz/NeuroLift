@@ -10,6 +10,7 @@ import {
   firmaDeEjercicio,
   nuevoDraft,
   pesosWodParaEnviar,
+  seriesParaEnviar,
 } from "@/lib/exerciseDraft";
 import type { ExerciseGroup } from "@/lib/sessions";
 import type { SetItem } from "@/lib/types";
@@ -208,5 +209,33 @@ describe("firmaDeEjercicio", () => {
     expect(firmaDeEjercicio(grupo(a))).toBe(una);
     expect(firmaDeEjercicio(grupo(a, b))).not.toBe(una);
     expect(firmaDeEjercicio(grupo({ ...a, prescribed_percentage: 60 }))).not.toBe(una);
+  });
+});
+
+describe("seriesParaEnviar", () => {
+  it("manda cada serie con sus repeticiones y su carga", () => {
+    const d = nuevoDraft({ series: 3, tipo: "porcentaje" });
+    d.filas = [
+      { reps: 3, weight: 0, porcentaje: 50 },
+      { reps: 3, weight: 0, porcentaje: 60 },
+      { reps: 1, weight: 0, porcentaje: 80 },
+    ];
+    expect(seriesParaEnviar(d)).toEqual([
+      { prescribed_reps: 3, prescribed_weight: null, prescribed_percentage: 50 },
+      { prescribed_reps: 3, prescribed_weight: null, prescribed_percentage: 60 },
+      { prescribed_reps: 1, prescribed_weight: null, prescribed_percentage: 80 },
+    ]);
+  });
+
+  it("con kg fijos manda el peso de cada serie y sin carga manda null", () => {
+    const d = nuevoDraft({ series: 2, tipo: "kg" });
+    d.filas = [{ reps: 5, weight: 60, porcentaje: 75 }, { reps: 3, weight: 0, porcentaje: 75 }];
+    expect(seriesParaEnviar(d)?.map((s) => s.prescribed_weight)).toEqual([60, null]);
+    d.tipo = "libre";
+    expect(seriesParaEnviar(d)?.every((s) => s.prescribed_weight === null && s.prescribed_percentage === null)).toBe(true);
+  });
+
+  it("en metcon no manda series (la carga va por categoría y género)", () => {
+    expect(seriesParaEnviar(nuevoDraft(), true)).toBeUndefined();
   });
 });

@@ -34,3 +34,11 @@ class SanitizedModel(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class SerieDeEjercicio(SanitizedModel):
+    """Una serie de un ejercicio con sus propias repeticiones y su propia carga (kg fijos O % de
+    1RM). Una lista de estas permite rampas como 50 %x3, 60 %x3, 70 %x1, 80 %x1."""
+    prescribed_reps: int = Field(..., ge=1, le=100)
+    prescribed_weight: float | None = Field(None, ge=0, le=1000)
+    prescribed_percentage: float | None = Field(None, ge=1, le=150)

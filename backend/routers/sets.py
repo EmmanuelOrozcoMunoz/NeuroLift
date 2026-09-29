@@ -8,6 +8,7 @@ from backend.core.security import ensure_owner_or_coach, ensure_owner_or_coach_e
 from backend.database import get_db
 from backend.services.exercises import clean_coach_note
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.sets import reservar_orden
 
 router = APIRouter(tags=["sets"])
 
@@ -67,21 +68,6 @@ def update_set(
     return db_set
 
 
-def _orden_para_nueva_serie(series_actuales: list[models.Set], ejercicio_id) -> int:
-    """Dónde va una serie nueva. Si el ejercicio ya está en la sesión, justo después de su última
-    serie (y las que venían después se corren una posición): así queda junto a las demás en vez de
-    aparecer como otra tarjeta del mismo ejercicio al final. Si es un ejercicio nuevo, al final
-    (después del mayor orden, no del conteo: al borrar series quedan huecos)."""
-    mismas = [s.set_order for s in series_actuales if s.exercise_id == ejercicio_id]
-    if not mismas:
-        return max((s.set_order for s in series_actuales), default=0) + 1
-    despues_de = max(mismas)
-    for otra in series_actuales:
-        if otra.set_order > despues_de:
-            otra.set_order += 1
-    return despues_de + 1
-
-
 @router.post("/sessions/{session_id}/sets/")
 def agregar_serie(
     session_id: UUID,
@@ -106,7 +92,7 @@ def agregar_serie(
         db.flush()
 
     series_actuales = db.query(models.Set).filter(models.Set.session_id == session_id).all()
-    siguiente_orden = _orden_para_nueva_serie(series_actuales, ejercicio.id)
+    siguiente_orden = reservar_orden(series_actuales, ejercicio.id)
 
     if req.prescribed_percentage is not None:
         prs = get_athlete_prs(db, sesion.mesocycle.user_id)

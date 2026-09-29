@@ -25,6 +25,7 @@ import {
   firmaDeEjercicio,
   nuevoDraft,
   pesosWodParaEnviar,
+  seriesParaEnviar,
 } from "@/lib/exerciseDraft";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
@@ -229,6 +230,7 @@ function BulkExerciseBlock({
         draft={draft}
         onChange={cambiar}
         tipos={["kg", "porcentaje"]}
+        modo="porSerie"
         avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
         cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
       />
@@ -248,6 +250,7 @@ function BulkExerciseBlock({
               prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
+              series: seriesParaEnviar(draft, metcon),
               coach_note: draft.nota.trim(),
             },
             { onSuccess: (r) => onFeedback(r.message) },
@@ -285,6 +288,7 @@ function BulkAddForm({
         draft={draft}
         onChange={cambiar}
         tipos={["kg", "porcentaje"]}
+        modo="porSerie"
         avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
         cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
       />
@@ -306,6 +310,7 @@ function BulkAddForm({
               prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
+              series: seriesParaEnviar(draft, metcon),
               coach_note: draft.nota.trim() || null,
             },
             { onSuccess: (r) => { onFeedback(r.message); cambiar({ name: "", nota: "" }); } },
