@@ -16,7 +16,14 @@ import {
   useGroupMesocycles,
 } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
-import { camposComunes, draftDeEjercicio, esMetcon, nuevoDraft, pesosWodParaEnviar } from "@/lib/exerciseDraft";
+import {
+  camposComunes,
+  draftDeEjercicio,
+  esMetcon,
+  firmaDeEjercicio,
+  nuevoDraft,
+  pesosWodParaEnviar,
+} from "@/lib/exerciseDraft";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
@@ -235,8 +242,8 @@ function BulkExerciseBlock({
               ...base,
               exercise_name: group.name,
               new_exercise_name: draft.name.trim() || group.name,
-              prescribed_sets: draft.series,
-              prescribed_reps: draft.reps,
+              prescribed_sets: draft.filas.length,
+              prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
               coach_note: draft.nota.trim(),
@@ -293,8 +300,8 @@ function BulkAddForm({
               program_start_date: programStartDate,
               scheduled_date: scheduledDate,
               exercise_name: draft.name.trim(),
-              prescribed_sets: draft.series,
-              prescribed_reps: draft.reps,
+              prescribed_sets: draft.filas.length,
+              prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
               coach_note: draft.nota.trim() || null,
@@ -369,9 +376,9 @@ function GroupDateSection({
               onRemoved={() => setForzarMetcon(false)}
             />
           )}
-          {bloque.groups.map((group, index) => (
+          {bloque.groups.map((group) => (
             <BulkExerciseBlock
-              key={`${group.name}-${index}`}
+              key={firmaDeEjercicio(group)}
               groupId={groupId}
               programName={programName}
               programStartDate={programStartDate}
