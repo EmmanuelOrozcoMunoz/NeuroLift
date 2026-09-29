@@ -1,5 +1,5 @@
 // Grupos, programas de grupo y edición masiva.
-import type { WodFormat } from "./sessions";
+import type { SerieEnPeticion, WodFormat } from "./sessions";
 
 /** GET /groups/{id}/wod-days — una fecha del grupo con un WOD prescrito. `wod_name` no se
  *  guarda aparte: es el nombre del ejercicio del bloque metabólico de esa sesión. */
@@ -120,6 +120,8 @@ export interface GroupBulkAddPayload {
   block?: string | null;
   /** Nota del coach para el atleta; "" la borra. */
   coach_note?: string | null;
+  /** Series una por una (rampas). Si viene, manda sobre prescribed_sets/reps/carga. */
+  series?: SerieEnPeticion[];
 }
 
 export interface GroupBulkUpdatePayload {
@@ -141,6 +143,19 @@ export interface GroupBulkUpdatePayload {
   block?: string | null;
   /** Nota del coach para el atleta; "" la borra. */
   coach_note?: string | null;
+  /** Series una por una (rampas). Si viene, manda sobre prescribed_sets/reps/carga. */
+  series?: SerieEnPeticion[];
+}
+
+/** Qué pasa con el mesociclo de un atleta que sale de un programa de grupo:
+ *  "desvincular" lo conserva (con su historial) como programa individual; "eliminar" lo borra. */
+export type AccionPrograma = "desvincular" | "eliminar";
+
+export interface GroupProgramAthleteRemovePayload {
+  program_name: string;
+  program_start_date: string;
+  user_id: string;
+  action: AccionPrograma;
 }
 
 export interface GroupProgramDeletePayload {

@@ -149,11 +149,24 @@ export function loadLabel(set: SetItem, unit: WeightUnit): string {
   return "peso libre";
 }
 
-/** "4 x 5 @ 135 kg" — resumen compacto de un bloque de ejercicio. */
+/** La carga de una serie en pocas letras: "60%", "80 kg" o "libre". */
+function shortLoad(set: SetItem, unit: WeightUnit): string {
+  if (set.prescribed_percentage) return `${Math.round(set.prescribed_percentage)}%`;
+  if (set.prescribed_weight) return formatWeight(set.prescribed_weight, unit);
+  return "libre";
+}
+
+/** Resumen compacto de un ejercicio. Con series iguales: "4 x 5 @ 135 kg". Con series distintas
+ *  (una rampa): cada serie con su carga y sus repeticiones, "50%×3 · 60%×3 · 70%×1". */
 export function groupSummary(group: ExerciseGroup, unit: WeightUnit): string {
   const first = group.sets[0];
   if (!first) return "";
-  const reps = new Set(group.sets.map((set) => set.prescribed_reps));
-  const repsLabel = reps.size === 1 ? String(first.prescribed_reps) : [...reps].join("/");
-  return `${group.sets.length} x ${repsLabel} @ ${loadLabel(first, unit)}`;
+  const iguales = group.sets.every(
+    (set) =>
+      set.prescribed_reps === first.prescribed_reps &&
+      set.prescribed_weight === first.prescribed_weight &&
+      set.prescribed_percentage === first.prescribed_percentage,
+  );
+  if (iguales) return `${group.sets.length} x ${first.prescribed_reps} @ ${loadLabel(first, unit)}`;
+  return group.sets.map((set) => `${shortLoad(set, unit)}×${set.prescribed_reps}`).join(" · ");
 }

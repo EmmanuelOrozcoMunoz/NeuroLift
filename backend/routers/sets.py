@@ -8,6 +8,7 @@ from backend.core.security import ensure_owner_or_coach, ensure_owner_or_coach_e
 from backend.database import get_db
 from backend.services.exercises import clean_coach_note
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.sets import reservar_orden
 
 router = APIRouter(tags=["sets"])
 
@@ -91,7 +92,7 @@ def agregar_serie(
         db.flush()
 
     series_actuales = db.query(models.Set).filter(models.Set.session_id == session_id).all()
-    siguiente_orden = len(series_actuales) + 1
+    siguiente_orden = reservar_orden(series_actuales, ejercicio.id)
 
     if req.prescribed_percentage is not None:
         prs = get_athlete_prs(db, sesion.mesocycle.user_id)
@@ -114,7 +115,7 @@ def agregar_serie(
     )
     db.add(nuevo_set)
     db.commit()
-    return {"message": "Nueva serie agregada al final de la sesión"}
+    return {"message": "Nueva serie agregada"}
 
 
 @router.delete("/sets/{set_id}")

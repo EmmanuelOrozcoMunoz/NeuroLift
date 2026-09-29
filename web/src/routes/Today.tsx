@@ -8,6 +8,7 @@ import { IconCheck, IconChevronRight, IconClock, IconDumbbell, IconStore } from 
 import { ProgressRing } from "@/components/ProgressRing";
 import { ClassCard } from "@/components/ClassCard";
 import { SessionCard } from "@/components/SessionCard";
+import { SesionPropiaCard } from "@/components/SesionPropia";
 import { EmptyState, ErrorState, Skeleton, Toast, cx } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth";
@@ -182,6 +183,12 @@ export default function Today() {
               }
             />
           )}
+        </div>
+      )}
+
+      {!cargando && !error && user.role === "athlete" && (
+        <div className="mt-8">
+          <SesionPropiaCard />
         </div>
       )}
 

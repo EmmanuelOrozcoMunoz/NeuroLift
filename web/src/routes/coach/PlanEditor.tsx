@@ -15,7 +15,7 @@ import {
   useUpdatePlan,
   useUpdatePlanSessionMeta,
 } from "@/lib/coachQueries";
-import { camposComunes, nuevoDraft } from "@/lib/exerciseDraft";
+import { camposComunes, nuevoDraft, seriesParaEnviar } from "@/lib/exerciseDraft";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock, groupSummary } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
@@ -308,9 +308,10 @@ function DayEditor({
         sessionId,
         body: {
           exercise_name: draft.name.trim(),
-          prescribed_sets: draft.series,
-          prescribed_reps: draft.reps,
+          prescribed_sets: draft.filas.length,
+          prescribed_reps: draft.filas[0].reps,
           ...camposComunes(draft),
+          series: seriesParaEnviar(draft),
           coach_note: draft.nota.trim() || null,
         },
       },
@@ -395,7 +396,7 @@ function DayEditor({
 
       <div className="space-y-3 border-t border-line pt-3">
         <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>
-        <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} />
+        <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} modo="porSerie" />
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <Button full loading={addSet.isPending} onClick={handleAdd}>

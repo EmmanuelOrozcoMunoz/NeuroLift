@@ -108,3 +108,55 @@ def test_adquirir_un_plan_copia_la_nota_y_resuelve_el_porcentaje(coach, atleta_d
     assert len(series) == 2
     assert all(s["coach_note"] == "Pausa de 2 s en la recepción." for s in series)
     assert all(s["prescribed_weight"] == 80 for s in series)  # 80 % de 100 kg, con SU marca
+
+
+# ------------------------------------------------------------------ orden de las series
+
+def _orden(coach, meso, sesion):
+    sesiones = coach.get(f"/mesocycles/{meso}").json()["sessions"]
+    ses = next(s for s in sesiones if s["id"] == sesion)
+    return [s["exercise"]["name"] for s in sorted(ses["sets"], key=lambda x: x["set_order"])]
+
+
+def test_una_serie_nueva_queda_junto_a_las_de_su_ejercicio(coach, atleta_de_coach):
+    meso, sesion = _sesion_del_atleta(coach, atleta_de_coach)
+    for nombre in ("Snatch", "Snatch", "Press", "Press"):
+        assert coach.post(f"/sessions/{sesion}/sets/", json={"exercise_name": nombre, "prescribed_reps": 3}).status_code == 200
+    assert coach.post(f"/sessions/{sesion}/sets/", json={"exercise_name": "Snatch", "prescribed_reps": 1}).status_code == 200
+    assert _orden(coach, meso, sesion) == ["Snatch", "Snatch", "Snatch", "Press", "Press"]
+    # un ejercicio nuevo sigue yendo al final
+    coach.post(f"/sessions/{sesion}/sets/", json={"exercise_name": "Row", "prescribed_reps": 8})
+    assert _orden(coach, meso, sesion)[-1] == "Row"
+
+
+def test_borrar_una_serie_no_hace_que_la_siguiente_choque_de_orden(coach, atleta_de_coach):
+    meso, sesion = _sesion_del_atleta(coach, atleta_de_coach)
+    for nombre in ("A", "A", "B", "B"):
+        coach.post(f"/sessions/{sesion}/sets/", json={"exercise_name": nombre, "prescribed_reps": 3})
+    a1 = _series(coach, meso, sesion, "A")[0]["id"]
+    assert coach.delete(f"/sets/{a1}").status_code == 200          # queda un hueco en el orden
+    coach.post(f"/sessions/{sesion}/sets/", json={"exercise_name": "C", "prescribed_reps": 5})
+    sesiones = coach.get(f"/mesocycles/{meso}").json()["sessions"]
+    ordenes = [s["set_order"] for ses in sesiones if ses["id"] == sesion for s in ses["sets"]]
+    assert len(ordenes) == len(set(ordenes)), ordenes                # sin órdenes repetidos
+    assert _orden(coach, meso, sesion)[-1] == "C"
+
+
+# ------------------------------------------------------------------ sesión propia y sesión del coach el mismo día
+
+def test_una_sesion_propia_convive_con_la_del_coach_y_no_se_duplica(coach, atleta_de_coach):
+    meso_coach, sesion_coach = _sesion_del_atleta(coach, atleta_de_coach)   # hoy o primer día del mesociclo
+    fecha = next(s["scheduled_date"] for s in coach.get(f"/mesocycles/{meso_coach}").json()["sessions"] if s["id"] == sesion_coach)
+
+    primera = atleta_de_coach.post("/users/me/personal-sessions", json={"scheduled_date": fecha})
+    assert primera.status_code == 200, primera.text
+    propia = primera.json()
+    assert propia["id"] != sesion_coach and propia["mesocycle_id"] != meso_coach   # otra sesión, en su propio mesociclo
+
+    otra_vez = atleta_de_coach.post("/users/me/personal-sessions", json={"scheduled_date": fecha}).json()
+    assert otra_vez["id"] == propia["id"]                                          # la retoma, no crea otra
+
+    # el atleta ve las dos ese día y la del coach queda intacta
+    hoy = [s for m in atleta_de_coach.get(f"/users/{atleta_de_coach.id}/mesocycles/").json()
+           for s in atleta_de_coach.get(f"/mesocycles/{m['id']}").json()["sessions"] if s["scheduled_date"] == fecha]
+    assert len(hoy) == 2

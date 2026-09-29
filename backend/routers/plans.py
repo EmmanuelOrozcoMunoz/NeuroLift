@@ -11,6 +11,7 @@ from backend.core.security import _ip_and_user_key, get_current_user, limiter, r
 from backend.database import get_db
 from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.plans import PLAN_EPOCH, adquirir_plan
+from backend.services.sets import filas_de, reservar_orden
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -332,24 +333,26 @@ def add_set_to_plan_session(
         raise HTTPException(status_code=404, detail="Ese día no pertenece a este plan")
 
     ejercicio = get_or_create_exercise(db, req.exercise_name)
-    series_actuales = db.query(models.Set).filter(models.Set.session_id == sesion.id).count()
+    filas = filas_de(req)
+    series_del_dia = db.query(models.Set).filter(models.Set.session_id == sesion.id).all()
+    orden = reservar_orden(series_del_dia, ejercicio.id, len(filas))
 
-    for i in range(req.prescribed_sets):
+    for i, fila in enumerate(filas):
         db.add(models.Set(
             session_id=sesion.id,
             exercise_id=ejercicio.id,
-            set_order=series_actuales + i + 1,
-            prescribed_reps=req.prescribed_reps,
+            set_order=orden + i,
+            prescribed_reps=fila.reps,
             rpe=req.rpe,
-            prescribed_weight=req.prescribed_weight,
-            prescribed_percentage=req.prescribed_percentage,
+            prescribed_weight=fila.weight,
+            prescribed_percentage=fila.percentage,
             reference_exercise=req.reference_exercise,
             block=req.block,
             coach_note=clean_coach_note(req.coach_note),
         ))
 
     db.commit()
-    return {"message": f"'{req.exercise_name}' agregado al plan ({req.prescribed_sets} series)"}
+    return {"message": f"'{req.exercise_name}' agregado al plan ({len(filas)} series)"}
 
 
 @router.delete("/{plan_id}/sets/{set_id}")

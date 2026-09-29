@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { IconChevronRight, IconStore } from "@/components/icons";
+import { NuevaSesionPropiaBoton } from "@/components/SesionPropia";
 import { TrainingCalendar } from "@/components/TrainingCalendar";
-import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented } from "@/components/ui";
+import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import { shortDate } from "@/lib/dates";
 import { useCreatePersonalSession, useMesocycles, useMesocyclesWithSessions } from "@/lib/queries";
@@ -16,6 +17,7 @@ export default function Mesocycles() {
   const navigate = useNavigate();
   const { data, isPending, error, refetch } = useMesocycles(user.id);
   const [vista, setVista] = useState<Vista>("lista");
+  const [aviso, setAviso] = useState<string | null>(null);
   const crearSesionPersonal = useCreatePersonalSession(user.id);
 
   // Activos primero, y dentro de cada grupo el más reciente arriba
@@ -34,7 +36,7 @@ export default function Mesocycles() {
 
   return (
     <>
-      <PageHeader title="Mis entrenos" subtitle="Todos tus mesociclos y planes" />
+      <PageHeader title="Mis entrenos" subtitle="Todos tus mesociclos y planes" action={<NuevaSesionPropiaBoton onError={setAviso} />} />
 
       {isPending && <LoadingList rows={3} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
@@ -64,8 +66,7 @@ export default function Mesocycles() {
                 }
               >
                 Cuando tu coach te programe una rutina —o cuando adquieras un plan— aparecerá
-                aquí. También puedes armar tu propia rutina día por día desde la vista de
-                Calendario.
+                aquí. También puedes armar tu propia rutina con el botón «+ Entreno».
               </EmptyState>
             ) : (
               <div className="space-y-3">
@@ -96,6 +97,8 @@ export default function Mesocycles() {
           )}
         </>
       )}
+
+      {aviso && <Toast message={aviso} onDismiss={() => setAviso(null)} />}
     </>
   );
 }
@@ -115,7 +118,7 @@ function CalendarioEntrenos({
     <>
       <TrainingCalendar sessions={sessions} onEmptyDayTap={onEmptyDayTap} />
       <p className="mt-3 text-center text-xs text-muted">
-        Toca un día vacío para agregar tu propia rutina manual.
+        Toca un día vacío para armar tu propio entreno.
       </p>
     </>
   );

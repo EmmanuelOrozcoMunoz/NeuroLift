@@ -5,13 +5,12 @@ from datetime import date
 from typing import List
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models
 from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
-from backend.services.sets import clonar_set
+from backend.services.sets import FilaSerie, clonar_set, filas_de, reservar_orden
 
 
 def clonar_programa_para_atleta(db: Session, referencia: models.Mesocycle, user_id: UUID) -> models.Mesocycle:
@@ -52,14 +51,19 @@ def clonar_programa_para_atleta(db: Session, referencia: models.Mesocycle, user_
     return nuevo_meso
 
 
-def resolver_peso_de_grupo(db: Session, req, athlete: models.User, nombre_ejercicio: str) -> float | None:
+def resolver_peso_de_grupo(
+    db: Session, req, athlete: models.User, nombre_ejercicio: str, fila: FilaSerie | None = None
+) -> float | None:
     """Resuelve el peso de ESTE atleta en particular, en orden:
     1. Pesos por categoría/género (bloque metcon) — si el coach llenó alguna de las 4 variantes,
        usa la que corresponde a la categoría (rx/scaled, default "rx") y sexo (default "male")
        de este atleta.
     2. % de 1RM (bloques de fuerza/weightlifting) — si viene `prescribed_percentage`, se calcula
        con las marcas YA registradas de este atleta (ver resolve_weight_from_percentage).
-    3. `prescribed_weight` fijo, igual que siempre, si no vino ninguna de las anteriores."""
+    3. `prescribed_weight` fijo, igual que siempre, si no vino ninguna de las anteriores.
+    Con `fila` (una serie de una rampa), su % y su peso fijo reemplazan a los del ejercicio."""
+    porcentaje = fila.percentage if fila else req.prescribed_percentage
+    peso_fijo = fila.weight if fila else req.prescribed_weight
     variantes = {
         ("rx", "male"): req.prescribed_weight_rx_male,
         ("rx", "female"): req.prescribed_weight_rx_female,
@@ -69,14 +73,14 @@ def resolver_peso_de_grupo(db: Session, req, athlete: models.User, nombre_ejerci
     if any(v is not None for v in variantes.values()):
         clave = (athlete.category or "rx", athlete.sex or "male")
         peso = variantes.get(clave)
-        return peso if peso is not None else req.prescribed_weight
+        return peso if peso is not None else peso_fijo
 
-    if req.prescribed_percentage is not None:
+    if porcentaje is not None:
         prs = get_athlete_prs(db, athlete.id)
         referencia = req.reference_exercise or nombre_ejercicio
-        return resolve_weight_from_percentage(req.prescribed_percentage, req.prescribed_weight, referencia, prs)
+        return resolve_weight_from_percentage(porcentaje, peso_fijo, referencia, prs)
 
-    return req.prescribed_weight
+    return peso_fijo
 
 
 def sesiones_por_mesociclo(
@@ -145,15 +149,14 @@ def sumar_miembros(db: Session, grupo: models.Group, atletas_nuevos: List[models
 def agregar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
     """Añade el ejercicio a la sesión de esa fecha de CADA mesociclo del programa. Devuelve un resultado por atleta."""
     ejercicio = get_or_create_exercise(db, req.exercise_name)
+    filas = filas_de(req)
 
     sesiones_por_meso = sesiones_por_mesociclo(db, [m.id for m in mesos], req.scheduled_date)
     session_ids = [s.id for s in sesiones_por_meso.values()]
-    conteos_por_sesion = dict(
-        db.query(models.Set.session_id, func.count(models.Set.id))
-        .filter(models.Set.session_id.in_(session_ids))
-        .group_by(models.Set.session_id)
-        .all()
-    ) if session_ids else {}
+    series_por_sesion: dict[UUID, List[models.Set]] = {}
+    if session_ids:
+        for serie in db.query(models.Set).filter(models.Set.session_id.in_(session_ids)).all():
+            series_por_sesion.setdefault(serie.session_id, []).append(serie)
 
     resultados = []
     for meso in mesos:
@@ -163,17 +166,16 @@ def agregar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
             resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
             continue
 
-        series_actuales = conteos_por_sesion.get(sesion.id, 0)
-        peso = resolver_peso_de_grupo(db, req, meso.user, req.exercise_name)
-        for i in range(req.prescribed_sets):
+        orden = reservar_orden(series_por_sesion.get(sesion.id, []), ejercicio.id, len(filas))
+        for i, fila in enumerate(filas):
             db.add(models.Set(
                 session_id=sesion.id,
                 exercise_id=ejercicio.id,
-                set_order=series_actuales + i + 1,
-                prescribed_reps=req.prescribed_reps,
+                set_order=orden + i,
+                prescribed_reps=fila.reps,
                 rpe=req.rpe,
-                prescribed_weight=peso,
-                prescribed_percentage=req.prescribed_percentage,
+                prescribed_weight=resolver_peso_de_grupo(db, req, meso.user, req.exercise_name, fila),
+                prescribed_percentage=fila.percentage,
                 reference_exercise=req.reference_exercise,
                 block=req.block,
                 coach_note=clean_coach_note(req.coach_note),
@@ -184,8 +186,12 @@ def agregar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
 
 
 def actualizar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
-    """Edita el ejercicio en la sesión de esa fecha de CADA mesociclo del programa. Devuelve un resultado por atleta."""
+    """Edita el ejercicio en la sesión de esa fecha de CADA mesociclo del programa. Devuelve un resultado por atleta.
+
+    Las series se emparejan por posición: la 1.ª existente recibe la 1.ª fila, etc. Si sobran filas
+    se crean series nuevas junto a las del ejercicio; si sobran series, se borran las últimas."""
     nuevo_ejercicio = get_or_create_exercise(db, req.new_exercise_name)
+    filas = filas_de(req)
 
     sesiones_por_meso = sesiones_por_mesociclo(db, [m.id for m in mesos], req.scheduled_date)
     sets_por_sesion = series_por_sesion_del_ejercicio(
@@ -204,42 +210,46 @@ def actualizar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
             resultados.append({"full_name": meso.user.full_name, "status": "no tenía ese ejercicio en esa fecha"})
             continue
 
-        peso = resolver_peso_de_grupo(db, req, meso.user, req.new_exercise_name)
         num_original = len(sets_existentes)
-        limite = min(num_original, req.prescribed_sets)
+        limite = min(num_original, len(filas))
         for i in range(limite):
-            sets_existentes[i].exercise_id = nuevo_ejercicio.id
-            sets_existentes[i].prescribed_reps = req.prescribed_reps
-            sets_existentes[i].rpe = req.rpe
-            sets_existentes[i].prescribed_weight = peso
-            sets_existentes[i].prescribed_percentage = req.prescribed_percentage
-            sets_existentes[i].reference_exercise = req.reference_exercise
+            serie, fila = sets_existentes[i], filas[i]
+            serie.exercise_id = nuevo_ejercicio.id
+            serie.prescribed_reps = fila.reps
+            serie.rpe = req.rpe
+            serie.prescribed_weight = resolver_peso_de_grupo(db, req, meso.user, req.new_exercise_name, fila)
+            serie.prescribed_percentage = fila.percentage
+            serie.reference_exercise = req.reference_exercise
             if req.block is not None:
-                sets_existentes[i].block = req.block
+                serie.block = req.block
             if "coach_note" in req.model_fields_set:
-                sets_existentes[i].coach_note = clean_coach_note(req.coach_note)
+                serie.coach_note = clean_coach_note(req.coach_note)
 
-        if req.prescribed_sets < num_original:
-            for extra in sets_existentes[req.prescribed_sets:]:
+        if len(filas) < num_original:
+            for extra in sets_existentes[len(filas):]:
                 db.delete(extra)
-        elif req.prescribed_sets > num_original:
+        elif len(filas) > num_original:
             bloque_nuevas = req.block if req.block is not None else sets_existentes[0].block
-            for i in range(num_original, req.prescribed_sets):
+            nota_nuevas = (
+                clean_coach_note(req.coach_note)
+                if "coach_note" in req.model_fields_set
+                else sets_existentes[0].coach_note
+            )
+            del_dia = db.query(models.Set).filter(models.Set.session_id == sesion.id).all()
+            orden = reservar_orden(del_dia, nuevo_ejercicio.id, len(filas) - num_original)
+            for i in range(num_original, len(filas)):
+                fila = filas[i]
                 db.add(models.Set(
                     session_id=sesion.id,
                     exercise_id=nuevo_ejercicio.id,
-                    set_order=i + 1,
-                    prescribed_reps=req.prescribed_reps,
+                    set_order=orden + (i - num_original),
+                    prescribed_reps=fila.reps,
                     rpe=req.rpe,
-                    prescribed_weight=peso,
-                    prescribed_percentage=req.prescribed_percentage,
+                    prescribed_weight=resolver_peso_de_grupo(db, req, meso.user, req.new_exercise_name, fila),
+                    prescribed_percentage=fila.percentage,
                     reference_exercise=req.reference_exercise,
                     block=bloque_nuevas,
-                    coach_note=(
-                        clean_coach_note(req.coach_note)
-                        if "coach_note" in req.model_fields_set
-                        else sets_existentes[0].coach_note
-                    ),
+                    coach_note=nota_nuevas,
                 ))
 
         resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
@@ -267,3 +277,25 @@ def eliminar_ejercicio(db: Session, mesos: List[models.Mesocycle], req):
         resultados.append({"full_name": meso.user.full_name, "status": "eliminado" if sets_existentes else "no tenía ese ejercicio"})
 
     return resultados
+
+
+def aplicar_accion_a_programas(db: Session, mesos: List[models.Mesocycle], accion: str) -> None:
+    """Saca esos mesociclos del programa del grupo. "eliminar" los borra (con sus sesiones y
+    series); cualquier otra acción los desvincula del grupo: quedan como programas individuales
+    del atleta, con su historial, y dejan de recibir los cambios masivos del grupo."""
+    for meso in mesos:
+        if accion == "eliminar":
+            db.delete(meso)
+        else:
+            meso.group_id = None
+
+
+def retirar_miembro(db: Session, grupo: models.Group, user_id: UUID, accion: str) -> int:
+    """Saca al atleta del grupo y decide qué pasa con sus programas del grupo (ver
+    aplicar_accion_a_programas). Devuelve cuántos programas tenía."""
+    grupo.members = [m for m in grupo.members if m.id != user_id]
+    mesos = db.query(models.Mesocycle).filter(
+        models.Mesocycle.group_id == grupo.id, models.Mesocycle.user_id == user_id
+    ).all()
+    aplicar_accion_a_programas(db, mesos, accion)
+    return len(mesos)

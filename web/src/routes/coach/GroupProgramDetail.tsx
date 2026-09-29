@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { ExerciseFormFields, PesosWodFields, useExerciseDraft } from "@/components/ExerciseFormFields";
+import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
@@ -14,9 +15,18 @@ import {
   useGroupBulkSetWodNotes,
   useGroupBulkUpdate,
   useGroupMesocycles,
+  useRemoveAthleteFromProgram,
 } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
-import { camposComunes, draftDeEjercicio, esMetcon, nuevoDraft, pesosWodParaEnviar } from "@/lib/exerciseDraft";
+import {
+  camposComunes,
+  draftDeEjercicio,
+  esMetcon,
+  firmaDeEjercicio,
+  nuevoDraft,
+  pesosWodParaEnviar,
+  seriesParaEnviar,
+} from "@/lib/exerciseDraft";
 import { useMesocycle } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
@@ -220,6 +230,7 @@ function BulkExerciseBlock({
         draft={draft}
         onChange={cambiar}
         tipos={["kg", "porcentaje"]}
+        modo="porSerie"
         avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
         cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
       />
@@ -235,10 +246,11 @@ function BulkExerciseBlock({
               ...base,
               exercise_name: group.name,
               new_exercise_name: draft.name.trim() || group.name,
-              prescribed_sets: draft.series,
-              prescribed_reps: draft.reps,
+              prescribed_sets: draft.filas.length,
+              prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
+              series: seriesParaEnviar(draft, metcon),
               coach_note: draft.nota.trim(),
             },
             { onSuccess: (r) => onFeedback(r.message) },
@@ -276,6 +288,7 @@ function BulkAddForm({
         draft={draft}
         onChange={cambiar}
         tipos={["kg", "porcentaje"]}
+        modo="porSerie"
         avisoCarga="Cada atleta recibe su propio peso, calculado con sus marcas ya registradas."
         cargaAlternativa={metcon ? <PesosWodFields wod={draft.wod} onChange={(wod) => cambiar({ wod })} /> : undefined}
       />
@@ -293,10 +306,11 @@ function BulkAddForm({
               program_start_date: programStartDate,
               scheduled_date: scheduledDate,
               exercise_name: draft.name.trim(),
-              prescribed_sets: draft.series,
-              prescribed_reps: draft.reps,
+              prescribed_sets: draft.filas.length,
+              prescribed_reps: draft.filas[0].reps,
               ...camposComunes(draft, metcon),
               ...pesosWodParaEnviar(draft, metcon),
+              series: seriesParaEnviar(draft, metcon),
               coach_note: draft.nota.trim() || null,
             },
             { onSuccess: (r) => { onFeedback(r.message); cambiar({ name: "", nota: "" }); } },
@@ -369,9 +383,9 @@ function GroupDateSection({
               onRemoved={() => setForzarMetcon(false)}
             />
           )}
-          {bloque.groups.map((group, index) => (
+          {bloque.groups.map((group) => (
             <BulkExerciseBlock
-              key={`${group.name}-${index}`}
+              key={firmaDeEjercicio(group)}
               groupId={groupId}
               programName={programName}
               programStartDate={programStartDate}
@@ -490,6 +504,8 @@ export default function GroupProgramDetail() {
   const decodedName = decodeURIComponent(programName ?? "");
   const programs = useGroupMesocycles(groupId);
   const deleteProgram = useDeleteGroupProgram(groupId!);
+  const removeAthlete = useRemoveAthleteFromProgram(groupId!);
+  const [aRetirar, setARetirar] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("grupo");
   const [filtro, setFiltro] = useState("");
@@ -610,12 +626,43 @@ export default function GroupProgramDetail() {
         />
       )}
       {selectedAthlete && (
-        <AthleteTab
-          mesocycleId={selectedAthlete.mesocycle_id}
-          discipline={program.discipline}
-          onFeedback={setToast}
-        />
+        <>
+          <AthleteTab
+            mesocycleId={selectedAthlete.mesocycle_id}
+            discipline={program.discipline}
+            onFeedback={setToast}
+          />
+          <Button variant="danger" full className="mt-6" onClick={() => setARetirar(true)}>
+            Retirar a {selectedAthlete.full_name} de este programa
+          </Button>
+        </>
       )}
+
+      <RetirarAtletaSheet
+        nombre={aRetirar && selectedAthlete ? selectedAthlete.full_name : null}
+        alcance="programa"
+        pendiente={removeAthlete.isPending}
+        onClose={() => setARetirar(false)}
+        onElegir={(accion) =>
+          selectedAthlete &&
+          removeAthlete.mutate(
+            {
+              program_name: program.name,
+              program_start_date: program.start_date,
+              user_id: selectedAthlete.user_id,
+              action: accion,
+            },
+            {
+              onSuccess: (r) => {
+                setToast(r.message);
+                setARetirar(false);
+                setTab("grupo");
+              },
+              onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo retirar."),
+            },
+          )
+        }
+      />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

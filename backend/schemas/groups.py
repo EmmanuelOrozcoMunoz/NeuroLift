@@ -1,10 +1,10 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from backend.schemas.common import Bloque, FormatoWod, SanitizedModel
+from backend.schemas.common import Bloque, FormatoWod, SanitizedModel, SerieDeEjercicio
 
 
 # --- ESQUEMAS PARA GRUPOS DE ATLETAS ---
@@ -90,6 +90,9 @@ class GroupSessionExerciseAdd(SanitizedModel):
     block: Bloque | None = None
     # Nota del coach para este ejercicio (se muestra al atleta). "" la borra.
     coach_note: str | None = Field(None, max_length=500)
+    # Series una por una (rampas). Si viene, MANDA sobre prescribed_sets/reps/weight/percentage:
+    # cada elemento es una serie con sus repeticiones y su carga.
+    series: List[SerieDeEjercicio] | None = Field(None, min_length=1, max_length=20)
 
 
 class GroupSessionExerciseUpdate(SanitizedModel):
@@ -114,6 +117,9 @@ class GroupSessionExerciseUpdate(SanitizedModel):
     block: Bloque | None = None
     # Nota del coach para este ejercicio (se muestra al atleta). "" la borra.
     coach_note: str | None = Field(None, max_length=500)
+    # Series una por una (rampas). Si viene, MANDA sobre prescribed_sets/reps/weight/percentage:
+    # cada elemento es una serie con sus repeticiones y su carga.
+    series: List[SerieDeEjercicio] | None = Field(None, min_length=1, max_length=20)
 
 
 class GroupSessionExerciseDelete(SanitizedModel):
@@ -123,6 +129,21 @@ class GroupSessionExerciseDelete(SanitizedModel):
     program_start_date: date
     scheduled_date: date
     exercise_name: str = Field(..., min_length=1, max_length=100)
+
+
+# Qué hacer con el programa de un atleta que sale de él:
+# - "desvincular": el mesociclo se conserva (con su historial) como programa individual del atleta,
+#   ya sin recibir los cambios masivos del grupo.
+# - "eliminar": se borra el mesociclo con todas sus sesiones y series registradas.
+AccionPrograma = Literal["desvincular", "eliminar"]
+
+
+class GroupProgramAthleteRemove(SanitizedModel):
+    """Retira a UN atleta de un programa de grupo sin sacarlo del grupo."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+    user_id: UUID
+    action: AccionPrograma = "desvincular"
 
 
 class GroupProgramDelete(SanitizedModel):
