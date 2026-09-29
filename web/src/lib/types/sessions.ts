@@ -119,6 +119,13 @@ export interface RecentSessionSummary {
   exercises: RecentSessionExercise[];
 }
 
+/** Una serie con sus propias repeticiones y su propia carga (planes y programas de grupo). */
+export interface SerieEnPeticion {
+  prescribed_reps: number;
+  prescribed_weight: number | null;
+  prescribed_percentage: number | null;
+}
+
 export interface SetCreatePayload {
   exercise_name: string;
   prescribed_reps: number;

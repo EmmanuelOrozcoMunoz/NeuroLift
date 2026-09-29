@@ -192,3 +192,93 @@ def test_otro_coach_no_puede_retirar_atletas(client, programa):
     })
     assert r.status_code in (403, 404)
     assert intruso.delete(f"/groups/{programa['grupo']}/members/{a.id}").status_code in (403, 404)
+
+
+# ------------------------------------------------------------------ rampas (series distintas)
+
+RAMPA = [
+    {"prescribed_reps": 3, "prescribed_percentage": 50},
+    {"prescribed_reps": 3, "prescribed_percentage": 60},
+    {"prescribed_reps": 1, "prescribed_percentage": 80},
+]
+
+
+def _rampa_de(coach, cuenta, nombre="Snatch"):
+    return [(s["prescribed_reps"], s["prescribed_percentage"], s["prescribed_weight"])
+            for s in sorted(_series(coach, cuenta, nombre), key=lambda x: x["set_order"])]
+
+
+def test_agregar_una_rampa_al_grupo_calcula_cada_serie_con_la_marca_de_cada_atleta(coach, programa):
+    a, b = programa["atletas"]
+    a.post(f"/users/{a.id}/records/", json={"exercise_name": "Snatch", "max_weight_kg": 100})
+    b.post(f"/users/{b.id}/records/", json={"exercise_name": "Snatch", "max_weight_kg": 60})
+
+    r = coach.post(f"/groups/{programa['grupo']}/sessions/bulk-add-exercise", json={
+        **programa["base"], "exercise_name": "Snatch", "prescribed_sets": 3, "prescribed_reps": 3, "series": RAMPA,
+    })
+    assert r.status_code == 200, r.text
+    assert _rampa_de(coach, a) == [(3, 50, 50), (3, 60, 60), (1, 80, 80)]
+    assert _rampa_de(coach, b) == [(3, 50, 30), (3, 60, 35), (1, 80, 47.5)]   # 60 kg de marca, a 2,5
+
+
+def test_actualizar_con_una_rampa_reemplaza_cada_serie_y_ajusta_la_cantidad(coach, programa):
+    a, b = programa["atletas"]
+    a.post(f"/users/{a.id}/records/", json={"exercise_name": "Snatch", "max_weight_kg": 100})
+    _agregar(coach, programa)                                   # Back Squat 2x5 al 80 % (uniforme, ya existe la ruta)
+    ruta = f"/groups/{programa['grupo']}/sessions/bulk-update-exercise"
+    base = {**programa["base"], "exercise_name": "Back Squat", "new_exercise_name": "Snatch"}
+
+    # 2 series -> rampa de 3: las dos existentes se reescriben y se crea una más
+    r = coach.put(ruta, json={**base, "prescribed_sets": 3, "prescribed_reps": 3, "series": RAMPA})
+    assert r.status_code == 200, r.text
+    assert _rampa_de(coach, a) == [(3, 50, 50), (3, 60, 60), (1, 80, 80)]
+    assert _series(coach, a, "Back Squat") == []
+
+    # rampa de 3 -> 2 series: se borra la última
+    dos = RAMPA[:2]
+    coach.put(ruta, json={**base, "exercise_name": "Snatch", "prescribed_sets": 2, "prescribed_reps": 3, "series": dos})
+    assert _rampa_de(coach, a) == [(3, 50, 50), (3, 60, 60)]
+
+
+def test_las_series_nuevas_de_un_grupo_quedan_junto_a_su_ejercicio_sin_chocar_de_orden(coach, programa):
+    a, _ = programa["atletas"]
+    _agregar(coach, programa)                                                       # Back Squat x2
+    coach.post(f"/groups/{programa['grupo']}/sessions/bulk-add-exercise", json={
+        **programa["base"], "exercise_name": "Press", "prescribed_sets": 2, "prescribed_reps": 5})
+    ruta = f"/groups/{programa['grupo']}/sessions/bulk-update-exercise"
+    coach.put(ruta, json={**programa["base"], "exercise_name": "Back Squat", "new_exercise_name": "Back Squat",
+                          "prescribed_sets": 4, "prescribed_reps": 5})               # crecer a 4 series
+
+    meso = next(m for m in coach.get(f"/users/{a.id}/mesocycles/").json() if m["name"] == "Bloque")
+    sesion = coach.get(f"/mesocycles/{meso['id']}").json()["sessions"][0]
+    ordenadas = sorted(sesion["sets"], key=lambda s: s["set_order"])
+    assert [s["exercise"]["name"] for s in ordenadas] == ["Back Squat"] * 4 + ["Press"] * 2
+    assert len({s["set_order"] for s in ordenadas}) == 6
+
+
+def test_agregar_a_un_plan_una_rampa_y_al_adquirirlo_cada_serie_usa_la_marca_del_atleta(coach, atleta_de_coach):
+    atleta_de_coach.post(f"/users/{atleta_de_coach.id}/records/", json={"exercise_name": "Snatch", "max_weight_kg": 100})
+    plan = coach.post("/plans/", json={"name": "Plan rampa", "discipline": "CrossFit", "weeks_count": 1, "training_days": [0]}).json()
+    dia = coach.get(f"/plans/{plan['id']}").json()["sessions"][0]["id"]
+    r = coach.post(f"/plans/{plan['id']}/sessions/{dia}/sets", json={
+        "exercise_name": "Snatch", "prescribed_sets": 3, "prescribed_reps": 3, "series": RAMPA})
+    assert r.status_code == 200, r.text
+    assert "3 series" in r.json()["message"]
+
+    guardadas = sorted(coach.get(f"/plans/{plan['id']}").json()["sessions"][0]["sets"], key=lambda s: s["set_order"])
+    assert [(s["prescribed_reps"], s["prescribed_percentage"]) for s in guardadas] == [(3, 50), (3, 60), (1, 80)]
+
+    coach.put(f"/plans/{plan['id']}/publish", json={"is_published": True, "visibility": "box"})
+    from datetime import date
+    adq = atleta_de_coach.post(f"/plans/{plan['id']}/acquire", json={"start_date": str(date.today())}).json()
+    sesion = atleta_de_coach.get(f"/mesocycles/{adq['mesocycle_id']}").json()["sessions"][0]
+    copia = sorted(sesion["sets"], key=lambda s: s["set_order"])
+    assert [(s["prescribed_reps"], s["prescribed_weight"]) for s in copia] == [(3, 50), (3, 60), (1, 80)]
+
+
+def test_una_rampa_invalida_se_rechaza(coach, programa):
+    ruta = f"/groups/{programa['grupo']}/sessions/bulk-add-exercise"
+    base = {**programa["base"], "exercise_name": "Snatch", "prescribed_sets": 1, "prescribed_reps": 1}
+    assert coach.post(ruta, json={**base, "series": []}).status_code == 422
+    assert coach.post(ruta, json={**base, "series": [{"prescribed_reps": 0}]}).status_code == 422
+    assert coach.post(ruta, json={**base, "series": [{"prescribed_reps": 3}] * 21}).status_code == 422

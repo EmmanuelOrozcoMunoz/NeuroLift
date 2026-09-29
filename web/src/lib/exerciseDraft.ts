@@ -154,3 +154,13 @@ export function firmaDeEjercicio(group: ExerciseGroup): string {
     .join(",");
   return `${group.name}|${series}`;
 }
+
+/** Las series una por una para los endpoints de plan y de grupo (rampas). En metcon la carga va por
+ *  categoría/género y no hay series distintas: se manda `undefined` y el backend usa "N × R". */
+export function seriesParaEnviar(d: ExerciseDraft, metcon = false) {
+  if (metcon) return undefined;
+  return d.filas.map((fila) => {
+    const { prescribed_weight, prescribed_percentage } = cargaDeFila(d, fila);
+    return { prescribed_reps: fila.reps, prescribed_weight, prescribed_percentage };
+  });
+}
