@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { IconChevronRight, IconStore } from "@/components/icons";
+import { NuevaSesionPropiaBoton } from "@/components/SesionPropia";
 import { TrainingCalendar } from "@/components/TrainingCalendar";
 import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
@@ -34,7 +35,7 @@ export default function Mesocycles() {
 
   return (
     <>
-      <PageHeader title="Mis entrenos" subtitle="Todos tus mesociclos y planes" />
+      <PageHeader title="Mis entrenos" subtitle="Todos tus mesociclos y planes" action={<NuevaSesionPropiaBoton />} />
 
       {isPending && <LoadingList rows={3} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
@@ -64,8 +65,7 @@ export default function Mesocycles() {
                 }
               >
                 Cuando tu coach te programe una rutina —o cuando adquieras un plan— aparecerá
-                aquí. También puedes armar tu propia rutina día por día desde la vista de
-                Calendario.
+                aquí. También puedes armar tu propia rutina con el botón «+ Sesión».
               </EmptyState>
             ) : (
               <div className="space-y-3">
