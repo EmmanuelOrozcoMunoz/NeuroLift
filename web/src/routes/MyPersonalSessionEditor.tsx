@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
@@ -10,7 +10,8 @@ import { useMesocycle } from "@/lib/queries";
 /** El propio atleta agrega/edita los ejercicios de una sesión que él mismo creó a mano (sin
  *  coach) -- mismo componente que usa el coach (SessionSetsEditor), el backend ya limita esto a
  *  mesociclos is_self_managed=True. Para SEGUIR/registrar lo hecho, esa misma sesión se abre
- *  como cualquier otra en SessionDetail.tsx; esta pantalla es solo para armar el plan del día. */
+ *  como cualquier otra en SessionDetail.tsx; esta pantalla arma el plan del día y trae el acceso
+ *  directo a registrar, para no tener que salir y volver a buscar la sesión. */
 export default function MyPersonalSessionEditor() {
   const { mesocycleId, sessionId } = useParams<{ mesocycleId: string; sessionId: string }>();
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
@@ -50,6 +51,16 @@ export default function MyPersonalSessionEditor() {
         subtitle={data?.name ?? "Mis entrenamientos"}
         back={`/entrenos/${mesocycleId}`}
       />
+
+      <Link
+        to={`/entrenos/${mesocycleId}/sesion/${session.id}`}
+        className="press mb-4 flex min-h-touch items-center justify-between rounded-2xl bg-brand px-4 font-semibold text-on-brand"
+      >
+        <span>{session.status === "completed" ? "Ver mi registro" : "▶ Registrar esta sesión"}</span>
+        <span className="text-sm font-medium opacity-80">
+          {session.sets.length === 0 ? "Agrega ejercicios primero" : `${session.sets.length} series`}
+        </span>
+      </Link>
 
       <SessionSetsEditor
         mesocycleId={mesocycleId!}
