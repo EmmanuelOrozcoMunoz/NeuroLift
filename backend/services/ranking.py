@@ -1,5 +1,6 @@
-"""Ranking del box entre atletas: marcas (1RM) y WODs.
+"""Ranking del box entre atletas: marcas (1RM) de los levantamientos principales y WODs.
 
+Las marcas se limitan a los dos levantamientos olímpicos principales (Snatch y Clean & Jerk).
 Solo cuentan los atletas de esa cuenta que quieren aparecer (`show_in_ranking`). En los WODs solo
 entran las sesiones que el propio atleta anota a mano (`is_self_managed`): el nombre de un WOD
 programado por un coach suele traer su contenido, y las clases y los mesociclos del coach son
@@ -13,6 +14,12 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models
 from backend.services.prs import normalize_exercise_name
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
+
+
+# Los únicos levantamientos que tienen ranking de marcas, en el orden en que se muestran. Se
+# comparan por su forma normalizada, así "snatch", "Arranque" o "clean and jerk" cuentan igual.
+LEVANTAMIENTOS_PRINCIPALES = ("Snatch", "Clean & Jerk")
+_PRINCIPALES = {normalize_exercise_name(n): n for n in LEVANTAMIENTOS_PRINCIPALES}
 
 
 def nombre_mas_comun(nombres: list[str]) -> str:
@@ -59,7 +66,7 @@ def _mejores_marcas(db: Session, atletas: dict[UUID, models.User]) -> dict[str, 
         if not m.max_weight_kg or m.max_weight_kg <= 0:
             continue
         clave = normalize_exercise_name(m.exercise_name)
-        if not clave:
+        if clave not in _PRINCIPALES:
             continue
         actual = por_clave[clave].get(m.user_id)
         if actual is None or m.max_weight_kg > actual.max_weight_kg:
@@ -68,19 +75,18 @@ def _mejores_marcas(db: Session, atletas: dict[UUID, models.User]) -> dict[str, 
 
 
 def levantamientos(db: Session, box_id: UUID, sexo: str | None = None) -> list[dict]:
-    """Levantamientos con marcas de atletas del ranking, los más comunes primero."""
-    atletas = atletas_del_ranking(db, box_id, sexo)
-    lista = []
-    for clave, por_atleta in _mejores_marcas(db, atletas).items():
-        nombre = nombre_mas_comun([m.exercise_name for m in por_atleta.values()])
-        lista.append({"key": clave, "name": nombre, "athletes_count": len(por_atleta)})
-    lista.sort(key=lambda x: (-x["athletes_count"], x["name"].lower()))
-    return lista
+    """Los levantamientos principales, siempre en el mismo orden, con cuántos atletas del ranking
+    tienen marca en cada uno (puede ser 0)."""
+    por_clave = _mejores_marcas(db, atletas_del_ranking(db, box_id, sexo))
+    return [
+        {"key": clave, "name": nombre, "athletes_count": len(por_clave.get(clave, {}))}
+        for clave, nombre in _PRINCIPALES.items()
+    ]
 
 
 def tabla_de_marcas(db: Session, box_id: UUID, clave: str, yo: UUID, sexo: str | None = None) -> list[dict]:
     atletas = atletas_del_ranking(db, box_id, sexo)
-    por_atleta = _mejores_marcas(db, atletas).get(normalize_exercise_name(clave), {})
+    por_atleta = _mejores_marcas(db, atletas).get(normalize_exercise_name(clave), {})  # otros levantamientos: vacío
     ordenadas = sorted(por_atleta.values(), key=lambda m: (-m.max_weight_kg, atletas[m.user_id].full_name.lower()))
     posiciones = asignar_posiciones([m.max_weight_kg for m in ordenadas])
     return [

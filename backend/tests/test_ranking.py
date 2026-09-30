@@ -36,21 +36,30 @@ def _tabla_marcas(cuenta, clave, **params):
 
 # ------------------------------------------------------------------ marcas
 
-def test_el_ranking_de_marcas_ordena_de_mayor_a_menor_y_unifica_los_nombres(equipo):
+def test_solo_hay_ranking_de_snatch_y_clean_and_jerk_y_se_unifican_los_nombres(equipo):
     _, (ana, beto, carla) = equipo
-    _marca(ana, "Back Squat", 100)
-    _marca(beto, "back squat", 120)          # otro nombre, mismo levantamiento
+    _marca(ana, "Snatch", 100)
+    _marca(beto, "snatch", 120)              # otro nombre, mismo levantamiento
     _marca(carla, "Clean & Jerk", 60)
     _marca(ana, "Clean and jerk", 70)
+    _marca(ana, "Back Squat", 200)           # no es un levantamiento principal: no cuenta
+    _marca(beto, "Deadlift", 250)
 
-    lista = {l["name"]: l["athletes_count"] for l in ana.get("/ranking/lifts").json()}
-    assert lista == {"back squat": 2, "Clean and jerk": 2} or set(lista.values()) == {2}
-    assert len(lista) == 2                       # dos levantamientos, no cuatro
+    lista = [(l["name"], l["athletes_count"]) for l in ana.get("/ranking/lifts").json()]
+    assert lista == [("Snatch", 2), ("Clean & Jerk", 2)]           # solo los dos principales, en ese orden
 
-    assert _tabla_marcas(ana, "Back Squat") == [("Beto", 1, 120), ("Ana", 2, 100)]
+    assert _tabla_marcas(ana, "Snatch") == [("Beto", 1, 120), ("Ana", 2, 100)]
     assert _tabla_marcas(ana, "clean & jerk") == [("Ana", 1, 70), ("Carla", 2, 60)]
-    yo = [f for f in ana.get(f"/ranking/lifts/{quote('back squat')}").json() if f["is_me"]]
+    assert _tabla_marcas(ana, "Back Squat") == []                   # sin ranking
+    assert _tabla_marcas(ana, "Deadlift") == []
+    yo = [f for f in ana.get(f"/ranking/lifts/{quote('snatch')}").json() if f["is_me"]]
     assert [f["full_name"] for f in yo] == ["Ana"]
+
+
+def test_los_dos_levantamientos_salen_siempre_aunque_nadie_tenga_marca(equipo):
+    _, (ana, *_) = equipo
+    _marca(ana, "Back Squat", 100)
+    assert [(l["name"], l["athletes_count"]) for l in ana.get("/ranking/lifts").json()] == [("Snatch", 0), ("Clean & Jerk", 0)]
 
 
 def test_cada_atleta_cuenta_con_su_mejor_marca_y_los_empates_comparten_posicion(equipo):
@@ -64,39 +73,39 @@ def test_cada_atleta_cuenta_con_su_mejor_marca_y_los_empates_comparten_posicion(
 
 def test_quien_apaga_su_aparicion_desaparece_y_se_puede_volver_a_encender(equipo):
     _, (ana, beto, _carla) = equipo
-    _marca(ana, "Deadlift", 150)
-    _marca(beto, "Deadlift", 140)
+    _marca(ana, "Snatch", 150)
+    _marca(beto, "Snatch", 140)
     assert ana.put("/users/me/preferences", json={"show_in_ranking": False}).json()["show_in_ranking"] is False
-    assert _tabla_marcas(beto, "Deadlift") == [("Beto", 1, 140)]
+    assert _tabla_marcas(beto, "Snatch") == [("Beto", 1, 140)]
     assert ana.put("/users/me/preferences", json={"show_in_ranking": True}).status_code == 200
-    assert [n for n, _, _ in _tabla_marcas(beto, "Deadlift")] == ["Ana", "Beto"]
+    assert [n for n, _, _ in _tabla_marcas(beto, "Snatch")] == ["Ana", "Beto"]
 
 
 def test_el_ranking_se_puede_filtrar_por_sexo(equipo):
     _, (ana, beto, carla) = equipo
     for cuenta, sexo in ((ana, "female"), (beto, "male"), (carla, "female")):
         assert cuenta.put(f"/users/{cuenta.id}/fitness-benchmarks", json={"sex": sexo}).status_code == 200
-        _marca(cuenta, "Back Squat", {"Ana": 90, "Beto": 140, "Carla": 80}[cuenta.datos["full_name"]])
-    assert _tabla_marcas(ana, "Back Squat", sex="female") == [("Ana", 1, 90), ("Carla", 2, 80)]
-    assert _tabla_marcas(ana, "Back Squat", sex="male") == [("Beto", 1, 140)]
-    assert [n for n, _, _ in _tabla_marcas(ana, "Back Squat")] == ["Beto", "Ana", "Carla"]
+        _marca(cuenta, "Snatch", {"Ana": 90, "Beto": 140, "Carla": 80}[cuenta.datos["full_name"]])
+    assert _tabla_marcas(ana, "Snatch", sex="female") == [("Ana", 1, 90), ("Carla", 2, 80)]
+    assert _tabla_marcas(ana, "Snatch", sex="male") == [("Beto", 1, 140)]
+    assert [n for n, _, _ in _tabla_marcas(ana, "Snatch")] == ["Beto", "Ana", "Carla"]
 
 
 def test_solo_ven_el_ranking_los_de_esa_cuenta_y_no_se_mezclan_los_boxes(client, equipo, dueno_de_box):
     _, (ana, _beto, _carla) = equipo
-    _marca(ana, "Back Squat", 100)
+    _marca(ana, "Snatch", 100)
     ajeno = crear_atleta_de_box(client, dueno_de_box)
-    _marca(ajeno, "Back Squat", 300)
-    assert _tabla_marcas(ana, "Back Squat") == [("Ana", 1, 100)]
-    assert _tabla_marcas(ajeno, "Back Squat") == [(ajeno.datos["full_name"], 1, 300)]
+    _marca(ajeno, "Snatch", 300)
+    assert _tabla_marcas(ana, "Snatch") == [("Ana", 1, 100)]
+    assert _tabla_marcas(ajeno, "Snatch") == [(ajeno.datos["full_name"], 1, 300)]
 
 
 def test_el_ranking_no_existe_para_un_atleta_solo_pero_el_coach_lo_ve(equipo, atleta_solo):
     coach, (ana, *_) = equipo
-    _marca(ana, "Back Squat", 100)
+    _marca(ana, "Snatch", 100)
     r = atleta_solo.get("/ranking/lifts")
     assert r.status_code == 403 and r.json()["detail"] == "El ranking es de tu box"
-    assert _tabla_marcas(coach, "Back Squat") == [("Ana", 1, 100)]     # el entrenador también lo ve
+    assert _tabla_marcas(coach, "Snatch") == [("Ana", 1, 100)]     # el entrenador también lo ve
 
 
 # ------------------------------------------------------------------ WODs
