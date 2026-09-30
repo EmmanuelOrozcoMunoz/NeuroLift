@@ -11,6 +11,7 @@ import {
   useGroups,
 } from "@/lib/coachQueries";
 import { relativeDay, shortDate } from "@/lib/dates";
+import { RankingDelBox } from "@/routes/Ranking";
 import { useAvatarUrl } from "@/lib/useAvatarUrl";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
 import type { AthleteActivity, WodDaySummary, WodLeaderboardRow } from "@/lib/types";
@@ -216,27 +217,31 @@ function PorWodTab() {
 /** "Tabla de posiciones" del coach: quiénes de sus atletas completaron entrenamientos (con sus
  *  reps/pesos reales) y cuándo — visibilidad que antes solo existía entrando mesociclo por
  *  mesociclo a cada atleta uno por uno. La pestaña "Por WOD" compara resultados de un WOD
- *  específico entre los atletas de un grupo. */
+ *  específico entre los atletas de un grupo. La pestaña "Ranking" es el ranking del box entre atletas
+ *  (Snatch, Clean & Jerk y WODs), el mismo que ven ellos. */
 export default function Leaderboard() {
   const { data, isPending, error, refetch } = useAthleteLeaderboard();
-  const [tab, setTab] = useState<"general" | "wod">("general");
+  const [tab, setTab] = useState<"general" | "wod" | "ranking">("general");
 
   return (
     <>
       <PageHeader title="Actividad" subtitle="Quién ha completado sus entrenamientos" />
 
       <div className="mb-4">
-        <Segmented<"general" | "wod">
+        <Segmented<"general" | "wod" | "ranking">
           value={tab}
           onChange={setTab}
           options={[
             { value: "general", label: "General" },
             { value: "wod", label: "Por WOD" },
+            { value: "ranking", label: "Ranking" },
           ]}
         />
       </div>
 
-      {tab === "wod" ? (
+      {tab === "ranking" ? (
+        <RankingDelBox esAtleta={false} />
+      ) : tab === "wod" ? (
         <PorWodTab />
       ) : (
         <>

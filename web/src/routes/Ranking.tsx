@@ -17,17 +17,26 @@ type Sexo = "todos" | "female" | "male";
 
 const MEDALLAS = ["🥇", "🥈", "🥉"];
 
-/** Ranking de tu box entre atletas: las marcas (1RM) y los WODs que anotaron. */
+/** Pantalla del atleta: el ranking de su box. */
 export default function Ranking() {
   const user = useCurrentUser();
+  return (
+    <>
+      <PageHeader title="Ranking" subtitle={user.box?.name ?? "Tu box"} />
+      <RankingDelBox esAtleta />
+    </>
+  );
+}
+
+/** El ranking del box entre atletas: marcas de Snatch y Clean & Jerk, y los WODs que anotaron.
+ *  Lo usan el atleta (pantalla Ranking) y los entrenadores (pestaña de Actividad). */
+export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
   const [vista, setVista] = useState<Vista>("marcas");
   const [sexo, setSexo] = useState<Sexo>("todos");
   const filtroSexo = sexo === "todos" ? undefined : sexo;
 
   return (
     <>
-      <PageHeader title="Ranking" subtitle={user.box?.name ?? "Tu box"} />
-
       <div className="mb-3">
         <Segmented<Vista>
           value={vista}
@@ -50,14 +59,24 @@ export default function Ranking() {
         />
       </div>
 
-      {vista === "marcas" ? <Marcas sexo={filtroSexo} /> : <Wods sexo={filtroSexo} />}
+      {vista === "marcas" ? (
+        <Marcas sexo={filtroSexo} esAtleta={esAtleta} />
+      ) : (
+        <Wods sexo={filtroSexo} esAtleta={esAtleta} />
+      )}
 
       <p className="mt-6 text-center text-xs text-muted">
-        Aparecen los atletas de tu box que lo permiten. Puedes salir del ranking desde{" "}
-        <Link to="/perfil" className="font-semibold underline">
-          tu perfil
-        </Link>
-        .
+        Aparecen los atletas del box que lo permiten.
+        {esAtleta && (
+          <>
+            {" "}
+            Puedes salir del ranking desde{" "}
+            <Link to="/perfil" className="font-semibold underline">
+              tu perfil
+            </Link>
+            .
+          </>
+        )}
       </p>
     </>
   );
@@ -95,7 +114,7 @@ function Selector<T extends string>({
 
 // ---------------------------------------------------------------- marcas (1RM)
 
-function Marcas({ sexo }: { sexo?: "male" | "female" }) {
+function Marcas({ sexo, esAtleta }: { sexo?: "male" | "female"; esAtleta: boolean }) {
   const lifts = useRankingLifts(sexo);
   const [elegido, setElegido] = useState<string | null>(null);
   const actual = elegido && lifts.data?.some((l) => l.key === elegido) ? elegido : (lifts.data?.[0]?.key ?? null);
@@ -103,13 +122,7 @@ function Marcas({ sexo }: { sexo?: "male" | "female" }) {
 
   if (lifts.isPending) return <LoadingList rows={4} />;
   if (lifts.error) return <ErrorState error={lifts.error} onRetry={() => void lifts.refetch()} />;
-  if (!lifts.data.length) {
-    return (
-      <EmptyState icon={<IconTrophy className="h-10 w-10" />} title="Todavía no hay marcas">
-        Registra tus 1RM en tu perfil y aparecerás aquí junto a los demás atletas del box.
-      </EmptyState>
-    );
-  }
+  const nombre = lifts.data.find((l) => l.key === actual)?.name ?? "este levantamiento";
 
   return (
     <>
@@ -120,6 +133,13 @@ function Marcas({ sexo }: { sexo?: "male" | "female" }) {
       />
       {tabla.isPending && <LoadingList rows={3} />}
       {tabla.error && <ErrorState error={tabla.error} onRetry={() => void tabla.refetch()} />}
+      {tabla.data && tabla.data.length === 0 && (
+        <EmptyState icon={<IconTrophy className="h-10 w-10" />} title={`Sin marcas de ${nombre}`}>
+          {esAtleta
+            ? "Nadie ha registrado su marca todavía. Registra tu 1RM en tu perfil y aparecerás aquí."
+            : "Los atletas del box todavía no tienen marca de este levantamiento."}
+        </EmptyState>
+      )}
       <div className="space-y-2">
         {(tabla.data ?? []).map((fila) => (
           <MarcaFila key={fila.user_id} fila={fila} />
@@ -146,7 +166,7 @@ function MarcaFila({ fila }: { fila: RankingLiftRow }) {
 
 // ---------------------------------------------------------------- WODs
 
-function Wods({ sexo }: { sexo?: "male" | "female" }) {
+function Wods({ sexo, esAtleta }: { sexo?: "male" | "female"; esAtleta: boolean }) {
   const wods = useRankingWods(sexo);
   const [elegido, setElegido] = useState<string | null>(null);
   const idDe = (w: { key: string; wod_format: string }) => `${w.key}|${w.wod_format}`;
@@ -158,8 +178,9 @@ function Wods({ sexo }: { sexo?: "male" | "female" }) {
   if (!wods.data.length) {
     return (
       <EmptyState icon={<IconTrophy className="h-10 w-10" />} title="Todavía no hay WODs">
-        Anota un WOD con su resultado en tu entreno (con el nombre del WOD, por ejemplo «Fran») y aparecerás aquí
-        junto a quienes lo hicieron.
+        {esAtleta
+          ? "Anota un WOD con su resultado en tu entreno (con el nombre del WOD, por ejemplo «Fran») y aparecerás aquí junto a quienes lo hicieron."
+          : "Cuando los atletas anoten un WOD con su resultado (con su nombre, por ejemplo «Fran»), aparecerá aquí."}
       </EmptyState>
     );
   }

@@ -18,7 +18,7 @@ La unidad que paga es la **cuenta** (tabla `boxes`). Hay tres tipos:
 | Tipo de cuenta (`kind`) | Quién es | Paga | Cómo se crea |
 |---|---|---|---|
 | `box` | Un gimnasio con dueño, profesores y atletas | Sí | El dueño se registra (`/boxes/register`); **queda pendiente hasta que un admin de la plataforma lo aprueba** |
-| `coach` | Programar para **sus** atletas y grupos (los que él registró o tiene en grupos); crear planes; ver las clases del box y programar las que dicta |
+| `coach` | Programar para **sus** atletas y grupos (los que él registró o tiene en grupos); crear planes; ver las clases del box y programar las que dicta; ver el ranking del box |
 | `athlete` | Ver y registrar sus entrenamientos, marcas y actividad; adquirir planes; anotar su entreno del día (por ejemplo, lo que hizo en clase); ver el ranking de su box |
 
 Un coach independiente y un box **pagan lo mismo** y por lo mismo: cuántos atletas tienen.
@@ -61,11 +61,11 @@ El **dueño** crea cada clase (nombre, días, hora, duración) y le asigna un **
 **Los atletas no ven las clases**: la programación es confidencial del box. Si un atleta quiere registrar su entreno de la clase, lo anota a mano como una sesión propia («Anota tu entreno» en Hoy, o «+ Entreno» en Entrenos). El servidor lo hace cumplir: el horario, la lista de clases y la programación de una clase responden 403 a cualquier atleta.
 
 ### Ranking del box
-Los atletas de un box (o de un coach independiente) tienen un **ranking entre ellos**, en la pestaña «Ranking»:
-- **Marcas (RM):** por levantamiento (Back Squat, Snatch, Clean & Jerk…), la mejor marca de cada atleta, de mayor a menor. Los nombres se unifican («Clean & Jerk» y «clean and jerk» son el mismo levantamiento).
+Los atletas de un box (o de un coach independiente) tienen un **ranking entre ellos**, en la pestaña «Ranking». Los **entrenadores** de esa cuenta lo ven también, en la pestaña «Ranking» de **Actividad**.
+- **Marcas (RM):** solo de los **levantamientos principales: Snatch y Clean & Jerk** (los demás no tienen ranking). La mejor marca de cada atleta, de mayor a menor. Los nombres se unifican («Clean & Jerk» y «clean and jerk» son el mismo levantamiento).
 - **WODs:** por WOD y formato (Fran por tiempo, Cindy AMRAP…), el mejor intento de cada atleta. En por tiempo gana el menor; en AMRAP, el mayor.
 - Se puede filtrar por sexo, y cada fila muestra si compite Rx o Scaled. Los empates comparten posición.
-- **Privacidad:** cada atleta decide si aparece («¿Aparecer en el ranking de tu box?» en su perfil; por defecto sí). Quien lo apaga no sale en ninguna tabla. Nadie ve el ranking de otro box, y un atleta solo (sin box ni coach) no tiene ranking.
+- **Privacidad:** cada atleta decide si aparece («¿Aparecer en el ranking de tu box?» en su perfil; por defecto sí). Quien lo apaga no sale en ninguna tabla, tampoco para los entrenadores. Nadie ve el ranking de otro box, y un atleta solo (sin box ni coach) no tiene ranking.
 - **Confidencialidad:** en los WODs solo entran los que el atleta **anota a mano**; nunca los que le programa su coach ni los registros antiguos de clases, porque el nombre de un WOD suele traer su contenido.
 
 ### Tienda de planes
