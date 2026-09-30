@@ -127,3 +127,12 @@ def test_el_script_de_purga_cuenta_sin_borrar_y_solo_borra_registros_de_clase(at
         assert db.get(models.Mesocycle, ids[1]) is None                  # el registro de clase se fue
         assert db.get(models.Mesocycle, ids[0]) is not None              # su sesión propia sigue
         assert purgar_registros_de_clase(db)["mesociclos"] == 0
+
+
+def test_el_mensaje_del_script_de_purga_se_puede_imprimir_en_la_consola_de_windows():
+    from backend.scripts.purgar_registros_de_clase import mensaje
+
+    resumen = {"atletas": 2, "mesociclos": 3, "sesiones": 4, "series": 5}
+    for borrado in (False, True):
+        mensaje(resumen, borrado).encode("cp1252")        # no debe lanzar UnicodeEncodeError
+    assert "BORRADOS" in mensaje(resumen, True) and "no se borró nada" in mensaje(resumen, False)

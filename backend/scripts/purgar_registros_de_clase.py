@@ -36,6 +36,16 @@ def purgar_registros_de_clase(db: Session, ejecutar: bool = False) -> dict[str, 
     return resumen
 
 
+def mensaje(resumen: dict[str, int], borrado: bool) -> str:
+    """El resultado en una línea. Solo caracteres que la consola de Windows (cp1252) puede mostrar:
+    una flecha "→" hacía fallar el script justo al imprimir, después de haber contado (o borrado)."""
+    accion = "BORRADOS" if borrado else "se borrarían (no se borró nada; usa --yes)"
+    return (
+        f"Registros de clase: {resumen['mesociclos']} mesociclo(s) de {resumen['atletas']} atleta(s), "
+        f"{resumen['sesiones']} sesión(es), {resumen['series']} serie(s): {accion}"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--yes", action="store_true", help="borra de verdad (sin esto solo cuenta)")
@@ -46,11 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     with SessionLocal() as db:
         resumen = purgar_registros_de_clase(db, ejecutar=args.yes)
 
-    accion = "BORRADOS" if args.yes else "se borrarían (no se borró nada; usa --yes)"
-    print(
-        f"Registros de clase: {resumen['mesociclos']} mesociclo(s) de {resumen['atletas']} atleta(s), "
-        f"{resumen['sesiones']} sesión(es), {resumen['series']} serie(s) → {accion}"
-    )
+    print(mensaje(resumen, borrado=args.yes))
     return 0
 
 

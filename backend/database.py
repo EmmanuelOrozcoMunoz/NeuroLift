@@ -14,10 +14,19 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # después de un rato de calma (ej. todos los atletas de un box marcando series a la misma hora).
 # pool_pre_ping hace un SELECT 1 barato antes de reusar una conexión y la descarta si ya murió,
 # en vez de fallar la petición del usuario con ese error.
+# Conexiones del pool por proceso: hasta POOL_SIZE + MAX_OVERFLOW a la vez. main.py las usa para
+# que el límite de peticiones simultáneas nunca supere las conexiones (ver core/concurrency.py).
+POOL_SIZE = 10
+MAX_OVERFLOW = 20
+# Cuánto espera una petición por una conexión libre antes de fallar. El valor por defecto de
+# SQLAlchemy (30 s) dejaba colgadas las peticiones medio minuto cuando el pool se agotaba.
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "10"))
+
 engine = create_engine(
     DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=POOL_SIZE,
+    max_overflow=MAX_OVERFLOW,
+    pool_timeout=DB_POOL_TIMEOUT,
     pool_pre_ping=True,
     pool_recycle=1800,  # 30 min -- cómodamente por debajo de cualquier timeout de idle del pooler
 )
