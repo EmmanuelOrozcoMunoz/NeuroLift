@@ -24,6 +24,8 @@ export interface User {
   sex: "male" | "female" | null;
   /** Si su box tiene discos de 25kg. null = true (por defecto sí tiene). */
   has_25kg_plates: boolean | null;
+  /** Si aparece en el ranking de su box (marcas y WODs). */
+  show_in_ranking: boolean;
   /** Coach directo (atletas). null = atleta "del box", sin coach. */
   coach_id: string | null;
   /** Box al que pertenece. null solo para el admin de plataforma. */
