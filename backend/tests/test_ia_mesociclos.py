@@ -18,6 +18,7 @@ def gemini(monkeypatch):
     falso = Falso()
     falso.llamadas = []
     falso.error = None
+    falso.wod = None   # el WOD que devuelve la IA en cada sesión (None = sin WOD)
     falso.ejercicios = [
         {"exercise_name": "Back Squat", "prescribed_sets": 3, "prescribed_reps": 5, "rpe_target": 8,
          "prescribed_percentage": 80, "block": "strength"}
@@ -28,7 +29,7 @@ def gemini(monkeypatch):
         if falso.error:
             raise RuntimeError(falso.error)
         return {"weeks": [{"sessions": [
-            {"scheduled_date": f, "athlete_notes": "IA", "exercises": [dict(e) for e in falso.ejercicios]}
+            {"scheduled_date": f, "athlete_notes": "IA", "wod": falso.wod, "exercises": [dict(e) for e in falso.ejercicios]}
             for f in kw["session_dates"]
         ]}]}
 
@@ -146,3 +147,41 @@ def test_generar_una_sesion_suelta(coach, atleta_de_coach, monkeypatch):
 
     monkeypatch.setattr(ai_agent, "generate_workout_session", lambda **kw: {"error": "sin cuota"})
     assert coach.post("/ai/generate-session/", json={"mesocycle_id": creado["mesocycle_id"], "context": "fuerza", "weeks_count": 1, "sessions_per_week": 1}).status_code == 500
+
+
+def test_el_wod_de_la_ia_usa_la_plantilla_de_wod_y_configura_el_temporizador(coach, atleta_de_coach, gemini):
+    gemini.ejercicios = []
+    gemini.wod = {"name": "Fran", "format": "for_time", "time_cap_minutes": 10, "description": "21-15-9 Thrusters y Pull-ups"}
+    assert _pedir(coach, atleta_de_coach, weeks_count=1).status_code == 200
+    _, sesiones, series = _series_del_atleta(coach, atleta_de_coach)
+    assert len(sesiones) == 1 and series == []                       # el WOD no se guardó como ejercicios sueltos
+    sesion = sesiones[0]
+    assert sesion["wod_format"] == "for_time"                        # plantilla de WOD: formato
+    assert sesion["wod_time_cap_seconds"] == 600                     # ... y tiempo límite: de aquí sale el timer
+    assert "21-15-9 Thrusters y Pull-ups" in sesion["wod_notes"] and sesion["wod_notes"].startswith("Fran")
+
+
+def test_un_wod_invalido_de_la_ia_no_rompe_la_generacion_ni_deja_un_timer_a_medias(coach, atleta_de_coach, gemini):
+    gemini.wod = {"name": "???", "format": "inventado", "time_cap_minutes": "mucho"}
+    assert _pedir(coach, atleta_de_coach, weeks_count=1).status_code == 200
+    sesion = _series_del_atleta(coach, atleta_de_coach)[1][0]
+    assert sesion["wod_format"] is None and sesion["wod_time_cap_seconds"] is None
+
+
+def test_la_sesion_suelta_generada_con_ia_tambien_trae_su_wod(coach, atleta_de_coach, monkeypatch):
+    from backend import ai_agent
+
+    monkeypatch.setattr(ai_agent, "generate_workout_session", lambda **kw: {
+        "session_focus": "Metabólico", "athlete_notes": "Vamos",
+        "wod": {"name": "Cindy", "format": "amrap", "time_cap_minutes": 20, "description": "5 pull-ups, 10 push-ups, 15 squats"},
+        "exercises": [{"exercise_name": "Back Squat", "prescribed_reps": 5, "rpe_target": 7, "block": "strength"}],
+    })
+    creado = coach.post("/mesocycles/manual", json={
+        "user_id": atleta_de_coach.id, "name": "Base", "discipline": "CrossFit",
+        "start_date": str(HOY), "weeks_count": 1, "training_days": [HOY.weekday()],
+    }).json()
+    r = coach.post("/ai/generate-session/", json={"mesocycle_id": creado["mesocycle_id"], "context": "x", "weeks_count": 1, "sessions_per_week": 1})
+    assert r.status_code == 200, r.text
+    sesiones = coach.get(f"/mesocycles/{creado['mesocycle_id']}").json()["sessions"]
+    con_wod = [s for s in sesiones if s["wod_format"]]
+    assert len(con_wod) == 1 and con_wod[0]["wod_format"] == "amrap" and con_wod[0]["wod_time_cap_seconds"] == 1200
