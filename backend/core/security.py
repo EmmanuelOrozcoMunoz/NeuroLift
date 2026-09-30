@@ -199,25 +199,29 @@ def ensure_can_manage_mesocycle(db: Session, mesocycle: models.Mesocycle, curren
 
 
 def ensure_can_view_mesocycle(db: Session, mesocycle: models.Mesocycle, current_user: models.User) -> None:
-    """Ver un mesociclo: el de una clase lo ve cualquier miembro del box (los atletas necesitan
-    saber de qué se trata la clase); el de un atleta, él y sus coaches."""
+    """Ver un mesociclo: el de una clase, solo los entrenadores de ese box (y el admin): su
+    programación es confidencial y los atletas no la ven; el de un atleta, él y sus coaches."""
     if mesocycle.class_id is not None:
-        if current_user.role == "admin" or current_user.box_id == mesocycle.box_class.box_id:
+        if current_user.role == "admin":
             return
-        raise Prohibido("Esta clase es de otro box")
+        if current_user.box_id != mesocycle.box_class.box_id:
+            raise Prohibido("Esta clase es de otro box")
+        if current_user.role not in models.COACHING_ROLES:
+            raise Prohibido("La programación de las clases es solo para los entrenadores del box")
+        return
     ensure_owner_or_coach(db, mesocycle.user_id, current_user)
 
 
 def ensure_has_personal_coach(atletas: list[models.User]) -> None:
     """Los mesociclos son exclusivos de los atletas con coach personal: un atleta del box sin
-    coach entrena con las clases del box (ver routers/classes.py). Aplica a todo lo que
+    coach registra su entreno por su cuenta. Aplica a todo lo que
     PROGRAME un mesociclo para un atleta (manual, con IA, para un grupo); no a lo que el propio
     atleta hace por su cuenta (sesiones personales, planes que adquiere)."""
     sin_coach = [a.full_name for a in atletas if a.coach_id is None]
     if sin_coach:
         raise SolicitudInvalida("Los mesociclos son para atletas con coach personal. Sin coach: "
                 + ", ".join(sin_coach)
-                + ". Asígnales uno en Equipo, o entrenan con las clases del box.")
+                + ". Asígnales uno en Equipo.")
 
 
 def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, current_user: models.User):

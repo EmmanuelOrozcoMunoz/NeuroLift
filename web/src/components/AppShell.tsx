@@ -28,15 +28,7 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
-// Atleta de un box: sus clases. Atleta de un coach independiente: sin clases (no hay box).
-const ATHLETE_BOX_NAV: NavItem[] = [
-  { to: "/", label: "Hoy", icon: IconToday },
-  { to: "/clases", label: "Clases", icon: IconCalendar },
-  { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
-  { to: "/planes", label: "Planes", icon: IconStore },
-  { to: "/perfil", label: "Perfil", icon: IconUser },
-];
-
+// Atleta (de un box, de un coach o solo): las clases del box son solo para los entrenadores.
 const ATHLETE_NAV: NavItem[] = [
   { to: "/", label: "Hoy", icon: IconToday },
   { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
@@ -92,7 +84,7 @@ function navFor(user: User): NavItem[] {
     if (user.box?.status !== "active") return OWNER_INACTIVE_NAV;
     return user.box.kind === "coach" ? INDEPENDENT_COACH_NAV : OWNER_NAV;
   }
-  return user.box?.kind === "box" ? ATHLETE_BOX_NAV : ATHLETE_NAV;
+  return ATHLETE_NAV;
 }
 
 // Rutas "raíz" de sección: solo se marcan activas en su URL exacta, no en sus subrutas

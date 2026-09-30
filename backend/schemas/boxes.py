@@ -198,7 +198,7 @@ class CoachLoad(BaseModel):
 class AttentionAthlete(BaseModel):
     id: UUID
     full_name: str
-    # "sin_coach" (entrena solo con clases, no es un problema: se lista para que el dueño decida),
+    # "sin_coach" (no tiene coach personal, no es un problema: se lista para que el dueño decida),
     # "inactivo" (no completa una sesión hace 14+ días) o "nuevo" (se unió esta semana)
     reason: str
     last_completed_at: Optional[datetime] = None

@@ -67,10 +67,6 @@ class ClassOccurrence(BaseModel):
     # Mesociclo de la clase que contiene esa sesión (para abrir el editor del profesor)
     program_mesocycle_id: Optional[UUID] = None
     program_name: Optional[str] = None
-    # Registro del atleta que pregunta, si ya registró esta clase
-    my_session_id: Optional[UUID] = None
-    my_mesocycle_id: Optional[UUID] = None
-    my_status: Optional[str] = None
 
 
 class ClassProgramCreate(SanitizedModel):
@@ -98,11 +94,3 @@ class ClassProgramResponse(BaseModel):
 class ClassDayResponse(BaseModel):
     mesocycle_id: UUID
     session_id: UUID
-
-
-class ClassJoinResponse(BaseModel):
-    """Copia personal de la clase donde el atleta registra lo que hizo."""
-    mesocycle_id: UUID
-    session_id: UUID
-    # Ejercicios con carga en % de 1RM que no se pudieron resolver (el atleta no tiene esa marca)
-    missing_prs: List[str] = []

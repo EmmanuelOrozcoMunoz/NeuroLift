@@ -108,7 +108,7 @@ export default function Classes() {
 
       <div className="space-y-4">
         {delDia.map((o) => (
-          <ClassCard key={`${o.class_id}-${o.date}`} occurrence={o} role={user.role} onFeedback={notify} />
+          <ClassCard key={`${o.class_id}-${o.date}`} occurrence={o} onFeedback={notify} />
         ))}
       </div>
 

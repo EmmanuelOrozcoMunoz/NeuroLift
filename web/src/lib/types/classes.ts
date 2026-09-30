@@ -42,10 +42,6 @@ export interface ClassOccurrence {
   session: TrainingSession | null;
   program_mesocycle_id: string | null;
   program_name: string | null;
-  /** Registro del atleta que pregunta, si ya registró esta clase */
-  my_session_id: string | null;
-  my_mesocycle_id: string | null;
-  my_status: string | null;
 }
 
 export interface ClassProgram {
@@ -55,10 +51,4 @@ export interface ClassProgram {
   end_date: string | null;
   sessions_count: number;
   skipped_dates: string[];
-}
-
-export interface ClassJoinResponse {
-  mesocycle_id: string;
-  session_id: string;
-  missing_prs: string[];
 }

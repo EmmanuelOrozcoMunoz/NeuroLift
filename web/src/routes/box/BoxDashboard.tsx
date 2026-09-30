@@ -79,7 +79,7 @@ export default function BoxDashboard() {
               warn={d.unprogrammed_classes_next_7_days > 0}
               to="/clases"
             />
-            <Metric value={d.athletes_without_coach} label="Entrenan solo con clases" to="/box/equipo" />
+            <Metric value={d.athletes_without_coach} label="Sin coach personal" to="/box/equipo" />
           </section>
 
           {box.data && subscriptionNeedsAttention(box.data) && (

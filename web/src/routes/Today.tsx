@@ -6,13 +6,11 @@ import type { ReactNode } from "react";
 import { PageHeader } from "@/components/AppShell";
 import { IconCheck, IconChevronRight, IconClock, IconDumbbell, IconStore } from "@/components/icons";
 import { ProgressRing } from "@/components/ProgressRing";
-import { ClassCard } from "@/components/ClassCard";
 import { SessionCard } from "@/components/SessionCard";
 import { SesionPropiaCard } from "@/components/SesionPropia";
 import { EmptyState, ErrorState, Skeleton, Toast, cx } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth";
-import { useClassSchedule, useHasClasses } from "@/lib/classQueries";
 import { daysFromToday, formatSeconds, longDate, parseApiDate, relativeDay, todayIso, toApiDate } from "@/lib/dates";
 import { queryKeys, useMesocycles } from "@/lib/queries";
 import { groupSets, isSetLogged, sessionProgress, splitSessions } from "@/lib/sessions";
@@ -54,14 +52,8 @@ export default function Today() {
   // isPending solo es true la PRIMERA vez: si ya hay datos en caché (volver a esta pestaña),
   // se muestran al instante mientras TanStack Query revalida en segundo plano.
   const hoyIso = todayIso();
-  // Atletas de un box: sus clases del día (quien no tiene coach personal entrena con ellas)
-  const hasClasses = useHasClasses();
-  const schedule = useClassSchedule(hoyIso, 1, hasClasses);
-  const clasesHoy = schedule.data ?? [];
-
-  const cargando =
-    mesocycles.isPending || detalles.some((query) => query.isPending) || (hasClasses && schedule.isPending);
-  const error = mesocycles.error ?? detalles.find((query) => query.error)?.error ?? schedule.error;
+  const cargando = mesocycles.isPending || detalles.some((query) => query.isPending);
+  const error = mesocycles.error ?? detalles.find((query) => query.error)?.error;
 
   const todas: SessionRef[] = [];
   for (const query of detalles) {
@@ -79,10 +71,9 @@ export default function Today() {
     }
   }
 
-  // Los registros de clases de hoy ya se ven en su tarjeta de clase: no se duplican aquí
-  const deHoy = todas.filter((item) => item.session.scheduled_date === hoyIso && !item.isClass);
+  const deHoy = todas.filter((item) => item.session.scheduled_date === hoyIso);
   const proximas = todas
-    .filter((item) => daysFromToday(item.session.scheduled_date) > 0 && !item.isClass)
+    .filter((item) => daysFromToday(item.session.scheduled_date) > 0)
     .sort(
       (a, b) => parseApiDate(a.session.scheduled_date).getTime() - parseApiDate(b.session.scheduled_date).getTime(),
     )
@@ -106,7 +97,7 @@ export default function Today() {
 
       {!cargando && error && <ErrorState error={error} onRetry={() => void mesocycles.refetch()} />}
 
-      {!cargando && !error && todas.length === 0 && clasesHoy.length === 0 && (
+      {!cargando && !error && todas.length === 0 && (
         <EmptyState
           icon={<IconStore className="h-10 w-10" />}
           title="Todavía no tienes entrenamientos"
@@ -119,54 +110,31 @@ export default function Today() {
             </Link>
           }
         >
-          {hasClasses
-            ? "Hoy no hay clases en tu box. Revisa el horario de la semana, o adquiere un plan y entrena por tu cuenta."
-            : user.box?.kind === "athlete"
-              ? "Adquiere un plan hecho por un entrenador, o registra tus propias sesiones en Entrenos. Si te unes a un box o a un coach (en Perfil), verás aquí lo que te programen."
-              : "Pídele a tu coach que te programe un mesociclo, o adquiere un plan hecho por un entrenador y empieza por tu cuenta."}
+          {user.box?.kind === "athlete"
+            ? "Adquiere un plan hecho por un entrenador, o anota tus propias sesiones. Si te unes a un box o a un coach (en Perfil), verás aquí lo que te programen."
+            : "Pídele a tu coach que te programe un mesociclo, adquiere un plan hecho por un entrenador, o anota tu entreno del día (por ejemplo, lo que hiciste en clase)."}
         </EmptyState>
       )}
 
-      {!cargando && !error && (todas.length > 0 || clasesHoy.length > 0) && (
+      {!cargando && !error && todas.length > 0 && (
         <div className="space-y-8">
           <WeekProgress sessions={todas} todayIso={hoyIso} />
 
-          {clasesHoy.length > 0 && (
-            <section aria-labelledby="clases-titulo">
-              <div className="mb-1 flex items-center justify-between">
-                <h2 id="clases-titulo" className="label-caps">
-                  Clases de hoy
-                </h2>
-                <Link to="/clases" className="flex min-h-touch items-center text-sm font-semibold text-muted active:text-fg">
-                  Horario
-                </Link>
-              </div>
+          {/* Sesión de hoy (mesociclo del coach, plan o registro propio) */}
+          <section aria-labelledby="hoy-titulo">
+            <h2 id="hoy-titulo" className="label-caps mb-3">
+              {deHoy.length > 1 ? "Tus sesiones de hoy" : "Tu sesión de hoy"}
+            </h2>
+            {deHoy.length > 0 ? (
               <div className="space-y-4">
-                {clasesHoy.map((o) => (
-                  <ClassCard key={`${o.class_id}-${o.date}`} occurrence={o} role={user.role} onFeedback={setToast} />
+                {deHoy.map((item) => (
+                  <TodayHero key={item.session.id} item={item} />
                 ))}
               </div>
-            </section>
-          )}
-
-          {/* Sesión personal (mesociclo del coach, plan o registro propio). Si hay clases hoy y
-              no tiene sesión personal, no se muestra "descansas": las clases son su entrenamiento. */}
-          {(deHoy.length > 0 || clasesHoy.length === 0) && (
-            <section aria-labelledby="hoy-titulo">
-              <h2 id="hoy-titulo" className="label-caps mb-3">
-                {deHoy.length > 1 ? "Tus sesiones de hoy" : "Tu sesión de hoy"}
-              </h2>
-              {deHoy.length > 0 ? (
-                <div className="space-y-4">
-                  {deHoy.map((item) => (
-                    <TodayHero key={item.session.id} item={item} />
-                  ))}
-                </div>
-              ) : (
-                <RestDay next={proximas[0]} />
-              )}
-            </section>
-          )}
+            ) : (
+              <RestDay next={proximas[0]} />
+            )}
+          </section>
 
           {pendientesAtras.length > 0 && (
             <SessionList title="Sin registrar" items={pendientesAtras} />

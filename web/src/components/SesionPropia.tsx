@@ -23,19 +23,19 @@ export function useAbrirSesionPropia(onError?: (mensaje: string) => void) {
   return { abrir, pendiente: crear.isPending, error: crear.error };
 }
 
-/** Atajo en "Hoy": armar (o retomar) el entreno propio de hoy. Sirve con o sin coach. */
+/** Atajo en "Hoy": anotar (o retomar) el entreno propio de hoy: lo hecho en clase o por su cuenta. */
 export function SesionPropiaCard() {
   const { abrir, pendiente, error } = useAbrirSesionPropia();
   return (
     <Card className="flex items-center gap-4">
       <IconDumbbell className="h-8 w-8 shrink-0 text-brand" aria-hidden />
       <div className="min-w-0 grow">
-        <p className="font-bold">Tu propio entreno</p>
-        <p className="text-sm text-muted">Arma tus ejercicios de hoy, sin depender de nadie.</p>
+        <p className="font-bold">Anota tu entreno</p>
+        <p className="text-sm text-muted">Lo que hiciste hoy, en clase o por tu cuenta.</p>
         {error && <p className="mt-1 text-sm font-medium text-danger">No se pudo abrir. Intenta de nuevo.</p>}
       </div>
       <Button loading={pendiente} onClick={() => abrir(todayIso())}>
-        Armar
+        Anotar
       </Button>
     </Card>
   );

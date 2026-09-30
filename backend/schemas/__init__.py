@@ -8,7 +8,6 @@ from backend.schemas.classes import (
     ClassCreate,
     ClassDayCreate,
     ClassDayResponse,
-    ClassJoinResponse,
     ClassOccurrence,
     ClassProgramCreate,
     ClassProgramResponse,
