@@ -185,3 +185,13 @@ def test_quien_apaga_su_aparicion_tampoco_sale_en_los_wods(equipo):
     _wod(beto, "Grace", "for_time", 1, wod_time_seconds=220)
     ana.put("/users/me/preferences", json={"show_in_ranking": False})
     assert _tabla_wod(beto, "Grace", "for_time") == [("Beto", 1, "Por tiempo: 3:40")]
+
+
+def test_el_nombre_que_se_muestra_es_la_escritura_mas_comun_y_no_depende_del_orden():
+    from backend.services.ranking import nombre_mas_comun
+
+    assert nombre_mas_comun(["fran", "Fran", "Fran"]) == "Fran"
+    assert nombre_mas_comun(["Fran", "fran", "fran"]) == "fran"
+    assert nombre_mas_comun(["fran", "Fran"]) == "Fran"            # empate: alfabético, siempre igual
+    assert nombre_mas_comun(["Fran", "fran"]) == "Fran"
+    assert nombre_mas_comun(["Snatch"]) == "Snatch"

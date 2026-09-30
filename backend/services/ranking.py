@@ -15,6 +15,16 @@ from backend.services.prs import normalize_exercise_name
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
 
+def nombre_mas_comun(nombres: list[str]) -> str:
+    """Cómo mostrar un ejercicio o WOD que varios escribieron distinto ("Fran" / "fran"): la
+    escritura más frecuente y, en empate, la primera por orden alfabético (así no depende del
+    orden en que la base devuelve las filas)."""
+    cuenta: dict[str, int] = {}
+    for n in nombres:
+        cuenta[n] = cuenta.get(n, 0) + 1
+    return sorted(cuenta, key=lambda n: (-cuenta[n], n))[0]
+
+
 def atletas_del_ranking(db: Session, box_id: UUID, sexo: str | None = None) -> dict[UUID, models.User]:
     """Atletas de la cuenta que aparecen en el ranking, por id."""
     consulta = db.query(models.User).filter(
@@ -62,8 +72,8 @@ def levantamientos(db: Session, box_id: UUID, sexo: str | None = None) -> list[d
     atletas = atletas_del_ranking(db, box_id, sexo)
     lista = []
     for clave, por_atleta in _mejores_marcas(db, atletas).items():
-        mejor = max(por_atleta.values(), key=lambda m: m.max_weight_kg)
-        lista.append({"key": clave, "name": mejor.exercise_name, "athletes_count": len(por_atleta)})
+        nombre = nombre_mas_comun([m.exercise_name for m in por_atleta.values()])
+        lista.append({"key": clave, "name": nombre, "athletes_count": len(por_atleta)})
     lista.sort(key=lambda x: (-x["athletes_count"], x["name"].lower()))
     return lista
 
@@ -114,18 +124,18 @@ def _mejores_sesiones_de_wod(db: Session, atletas: dict[UUID, models.User]) -> d
         .all()
     )
     intentos: dict[tuple[str, str], dict[UUID, list[models.Session]]] = defaultdict(lambda: defaultdict(list))
-    nombres: dict[tuple[str, str], str] = {}
+    nombres: dict[tuple[str, str], list[str]] = defaultdict(list)
     for sesion in sesiones:
         nombre = _nombre_del_wod(sesion)
         if not nombre or wod_score_value(sesion) is None:
             continue
         clave = (normalize_exercise_name(nombre), sesion.wod_format)
-        nombres.setdefault(clave, nombre)
+        nombres[clave].append(nombre)
         intentos[clave][sesion.mesocycle.user_id].append(sesion)
     resultado = {}
     for clave, por_atleta in intentos.items():
         mejores = {uid: rank_wod_sessions(lista)[0] for uid, lista in por_atleta.items()}
-        resultado[clave] = {"name": nombres[clave], "por_atleta": mejores}
+        resultado[clave] = {"name": nombre_mas_comun(nombres[clave]), "por_atleta": mejores}
     return resultado
 
 
