@@ -30,7 +30,7 @@ def _box_del_ranking(user: models.User) -> UUID:
 def listar_levantamientos(
     sex: Sexo = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    """Levantamientos con marcas de los atletas de tu box que aparecen en el ranking."""
+    """Los levantamientos principales (Snatch y Clean & Jerk) con cuántos atletas de tu box tienen marca."""
     return servicio.levantamientos(db, _box_del_ranking(current_user), sex)
 
 
@@ -38,7 +38,7 @@ def listar_levantamientos(
 def tabla_de_un_levantamiento(
     key: str, sex: Sexo = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    """Ranking de un levantamiento (la mejor marca de cada atleta), de mayor a menor."""
+    """Ranking de Snatch o Clean & Jerk (la mejor marca de cada atleta), de mayor a menor. Otro levantamiento devuelve una lista vacía."""
     return servicio.tabla_de_marcas(db, _box_del_ranking(current_user), key, current_user.id, sex)
 
 
