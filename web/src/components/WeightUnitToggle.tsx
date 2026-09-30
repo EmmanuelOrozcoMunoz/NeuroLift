@@ -52,3 +52,25 @@ export function PlateAvailabilityToggle() {
     </div>
   );
 }
+
+/** Si este atleta aparece en el ranking de su box (marcas y WODs). Por defecto sí. */
+export function RankingVisibilityToggle() {
+  const user = useCurrentUser();
+  const { refreshUser } = useAuth();
+  const update = useUpdateMyPreferences();
+  const value: PlateAvailability = user.show_in_ranking ? "si" : "no";
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-medium text-muted">¿Aparecer en el ranking de tu box?</span>
+      <Segmented<PlateAvailability>
+        value={value}
+        onChange={(next) => update.mutate({ show_in_ranking: next === "si" }, { onSuccess: () => void refreshUser() })}
+        options={[
+          { value: "si", label: "Sí" },
+          { value: "no", label: "No, prefiero no aparecer" },
+        ]}
+      />
+    </div>
+  );
+}

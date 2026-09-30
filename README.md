@@ -60,6 +60,14 @@ El **dueño** crea cada clase (nombre, días, hora, duración) y le asigna un **
 
 **Los atletas no ven las clases**: la programación es confidencial del box. Si un atleta quiere registrar su entreno de la clase, lo anota a mano como una sesión propia («Anota tu entreno» en Hoy, o «+ Entreno» en Entrenos). El servidor lo hace cumplir: el horario, la lista de clases y la programación de una clase responden 403 a cualquier atleta.
 
+### Ranking del box
+Los atletas de un box (o de un coach independiente) tienen un **ranking entre ellos**, en la pestaña «Ranking»:
+- **Marcas (RM):** por levantamiento (Back Squat, Snatch, Clean & Jerk…), la mejor marca de cada atleta, de mayor a menor. Los nombres se unifican («Clean & Jerk» y «clean and jerk» son el mismo levantamiento).
+- **WODs:** por WOD y formato (Fran por tiempo, Cindy AMRAP…), el mejor intento de cada atleta. En por tiempo gana el menor; en AMRAP, el mayor.
+- Se puede filtrar por sexo, y cada fila muestra si compite Rx o Scaled. Los empates comparten posición.
+- **Privacidad:** cada atleta decide si aparece («¿Aparecer en el ranking de tu box?» en su perfil; por defecto sí). Quien lo apaga no sale en ninguna tabla. Nadie ve el ranking de otro box, y un atleta solo (sin box ni coach) no tiene ranking.
+- **Confidencialidad:** en los WODs solo entran los que el atleta **anota a mano**; nunca los que le programa su coach ni los registros antiguos de clases, porque el nombre de un WOD suele traer su contenido.
+
 ### Tienda de planes
 Un coach puede armar un **plan** (una plantilla de varias semanas con cargas en % de 1RM) y publicarlo con visibilidad `box` (solo atletas de su box) o `public` (toda la plataforma). Al **adquirirlo**, el atleta recibe una copia con fechas reales y los pesos calculados con sus propias marcas.
 > Los planes tienen un campo de precio, pero **hoy adquirir un plan no cobra**: no hay pasarela de pagos.
@@ -95,8 +103,8 @@ La dependencia va **en un solo sentido**: `routers → services → core / model
 
 | Carpeta / archivo | Responsabilidad |
 |---|---|
-| `routers/` | La capa HTTP: valida la petición, comprueba permisos, llama a un servicio, hace `commit` y arma la respuesta. Un archivo por dominio (`auth`, `boxes`, `classes`, `groups`, `plans`, `mesocycles`, `sessions`, `sets`, `users`, `fitness`, `ai`, `admin`) |
-| `services/` | Las reglas de negocio, **sin HTTP ni commit**: `classes` (horario de los entrenadores), `plans` (adquirir), `groups` (edición masiva, miembros nuevos), `ai_mesocycles` (generación con IA en pasos pequeños), `sets` (`clonar_set`), `prs` (marcas y % de 1RM), `exercises`, `group_access`, `boxes` |
+| `routers/` | La capa HTTP: valida la petición, comprueba permisos, llama a un servicio, hace `commit` y arma la respuesta. Un archivo por dominio (`auth`, `boxes`, `classes`, `groups`, `plans`, `mesocycles`, `sessions`, `sets`, `users`, `fitness`, `ranking`, `ai`, `admin`) |
+| `services/` | Las reglas de negocio, **sin HTTP ni commit**: `classes` (horario de los entrenadores), `plans` (adquirir), `ranking` (marcas y WODs del box), `groups` (edición masiva, miembros nuevos), `ai_mesocycles` (generación con IA en pasos pequeños), `sets` (`clonar_set`), `prs` (marcas y % de 1RM), `exercises`, `group_access`, `boxes` |
 | `core/` | `security` (JWT, roles, aislamiento entre clientes), `billing` (planes y suscripción), `errors` (excepciones de dominio), `config`, `invite`, `logging` (auditoría) |
 | `models.py` · `schemas/` | Modelos SQLAlchemy (11 tablas) · esquemas Pydantic de entrada y salida (con saneamiento de texto) |
 | `storage.py` · `avatars.py` · `ai_agent.py` | Supabase Storage, validación de imágenes, llamadas a Gemini |

@@ -28,7 +28,17 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
-// Atleta (de un box, de un coach o solo): las clases del box son solo para los entrenadores.
+// Atleta de un box o de un coach: además tiene el ranking de su cuenta. Las clases del box son
+// solo para los entrenadores, así que ningún atleta las tiene en su navegación.
+const ATHLETE_RANKING_NAV: NavItem[] = [
+  { to: "/", label: "Hoy", icon: IconToday },
+  { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
+  { to: "/ranking", label: "Ranking", icon: IconTrophy },
+  { to: "/planes", label: "Planes", icon: IconStore },
+  { to: "/perfil", label: "Perfil", icon: IconUser },
+];
+
+// Atleta solo (sin box ni coach): no hay ranking de su cuenta.
 const ATHLETE_NAV: NavItem[] = [
   { to: "/", label: "Hoy", icon: IconToday },
   { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
