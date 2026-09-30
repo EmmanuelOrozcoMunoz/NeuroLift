@@ -68,6 +68,11 @@ export function ExerciseFormFields({
     <>
       <Field label="Ejercicio" value={draft.name} onChange={(e) => onChange({ name: e.target.value })} className="mb-3" />
       <BlockSelect value={draft.block} onChange={(block) => onChange({ block })} />
+      {draft.block === "metcon" && (
+        <p className="-mt-1 mb-3 text-xs text-muted">
+          Esto añade un ejercicio suelto. Para configurar el formato y el temporizador del WOD usa «🔥 Añadir WOD».
+        </p>
+      )}
 
       {!porSerie && (
         <div className="grid grid-cols-2 gap-3">

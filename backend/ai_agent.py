@@ -38,7 +38,9 @@ indique la parte de la sesión a la que pertenece:
 - "strength": fuerza tipo squat/press/deadlift y sus variantes.
 - "weightlifting": weightlifting olímpico — snatch, clean & jerk y sus derivados/técnica.
 - "skills": gimnasia / skills — dominadas, muscle-ups, handstand, técnica gimnástica.
-- "metcon": trabajo metabólico / condicionamiento (AMRAP, EMOM, for time, intervalos).
+- "metcon": trabajo metabólico / condicionamiento. OJO: el WOD del día NO va en "exercises":
+  va en el campo "wod" de la sesión (ver instrucciones del WOD). Usa "metcon" en "exercises"
+  solo si quieres detallar un ejercicio concreto de ese trabajo con su carga.
 - "accessory": accesorios, core, trabajo complementario de bajo riesgo/intensidad.
 - "main": bloque principal genérico — úsalo SOLO si la disciplina NO es CrossFit y el ejercicio
   no encaja mejor en "strength" o "accessory".
@@ -46,6 +48,27 @@ Si la disciplina es CrossFit, reparte los ejercicios entre warmup/strength/weigh
 metcon/accessory según corresponda (no uses "main"). Si NO es CrossFit, usa normalmente solo
 "warmup", "strength" y, cuando aplique, "accessory" — no inventes weightlifting/skills/metcon
 salvo que el ejercicio sea literalmente eso.
+"""
+
+# Cómo debe devolver la IA el WOD (el trabajo metabólico del día). El WOD tiene su propia plantilla
+# en la app (formato + tiempo límite + descripción) y de ahí sale el temporizador del atleta; si la
+# IA lo devolviera como ejercicios sueltos, el temporizador nunca se configuraría. Se valida y se
+# guarda en backend/services/ai_mesocycles.py:wod_limpio.
+_INSTRUCCION_WOD = """
+REGLA DEL WOD (solo para CrossFit): el trabajo metabólico del día (AMRAP, EMOM, por tiempo,
+Tabata) se devuelve en el campo "wod" de la sesión, NO como ejercicios sueltos. Si la sesión no
+tiene WOD, "wod" es null. Estructura:
+    "wod": {
+        "name": "string corto, p. ej. 'Fran' o 'AMRAP 12'",
+        "format": EXACTAMENTE uno de: "for_time", "amrap", "emom", "tabata",
+        "time_cap_minutes": int | null,
+        "description": "qué hay que hacer, p. ej. '21-15-9 Thrusters (43/30 kg) y Pull-ups'"
+    }
+- "for_time": gana el menor tiempo; "time_cap_minutes" es el tiempo máximo.
+- "amrap": más rondas/reps en una ventana; "time_cap_minutes" es la duración del AMRAP.
+- "emom": una ronda por minuto; "time_cap_minutes" es la duración total.
+- "tabata": protocolo fijo; "time_cap_minutes" va en null.
+Mezcla WODs cortos, medios y largos a lo largo del mesociclo y varía las modalidades.
 """
 
 # Instrucción anti-inyección compartida: se incluye una vez por prompt, junto a los campos que
@@ -124,11 +147,13 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
 
     {_INSTRUCCION_ANTIINYECCION}
     {_INSTRUCCION_BLOQUES}
+    {_INSTRUCCION_WOD}
 
     DEBES responder ÚNICAMENTE con un objeto JSON válido que siga exactamente esta estructura, sin texto adicional ni formato markdown:
     {{
         "session_focus": "string",
         "athlete_notes": "string",
+        "wod": {{"name": "string", "format": "string", "time_cap_minutes": int | null, "description": "string"}} | null,
         "exercises": [
             {{
                 "exercise_name": "string",
@@ -233,6 +258,7 @@ def generate_mesocycle_chunk(
     el ejercicio no tenga ninguna marca de 1RM relacionada para referenciar.
 
     {_INSTRUCCION_BLOQUES}
+    {_INSTRUCCION_WOD}
 
     DEBES responder ÚNICAMENTE con un objeto JSON válido con esta estructura, sin texto adicional:
     {{
@@ -244,6 +270,7 @@ def generate_mesocycle_chunk(
                     {{
                         "scheduled_date": "YYYY-MM-DD",  <-- ¡LA IA INYECTARÁ LA FECHA AQUÍ!
                         "athlete_notes": "string",
+                        "wod": {{"name": "string", "format": "string", "time_cap_minutes": int | null, "description": "string"}} | null,
                         "exercises": [
                             {{
                                 "exercise_name": "string",

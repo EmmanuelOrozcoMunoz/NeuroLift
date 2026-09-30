@@ -44,3 +44,35 @@ def test_limpiar_ejercicio_descarta_valores_invalidos_y_usa_defaults():
     ej = limpiar_ejercicio({"prescribed_weight": "mucho", "prescribed_percentage": "n/a", "rpe": "7.9", "block": "raro"}, {})
     assert (ej.nombre, ej.series, ej.reps, ej.rpe) == ("Ejercicio Desconocido", 1, 1, 7)
     assert (ej.peso, ej.porcentaje, ej.referencia, ej.bloque) == (None, None, None, None)
+
+
+# ------------------------------------------------------------------ el WOD que devuelve la IA
+
+def test_wod_limpio_convierte_lo_que_devuelve_la_ia_a_la_plantilla_de_wod():
+    from backend.services.ai_mesocycles import wod_limpio
+
+    assert wod_limpio({"name": "Fran", "format": "for_time", "time_cap_minutes": 10,
+                       "description": "21-15-9 Thrusters (43/30 kg) y Pull-ups"}) == {
+        "format": "for_time", "time_cap_seconds": 600, "notes": "Fran\n21-15-9 Thrusters (43/30 kg) y Pull-ups"}
+    assert wod_limpio({"name": "AMRAP 12", "format": " AMRAP ", "time_cap_minutes": 12, "description": "x"})["time_cap_seconds"] == 720
+    assert wod_limpio({"format": "emom", "time_cap_minutes": 16, "description": "E2MOM"})["time_cap_seconds"] == 960
+
+
+def test_wod_limpio_no_pone_tiempo_donde_no_aplica_ni_acepta_valores_absurdos():
+    from backend.services.ai_mesocycles import wod_limpio
+
+    assert wod_limpio({"format": "tabata", "time_cap_minutes": 4, "description": "x"})["time_cap_seconds"] is None
+    for minutos in (0, -5, 999, "mucho", None):
+        assert wod_limpio({"format": "amrap", "time_cap_minutes": minutos, "description": "x"})["time_cap_seconds"] is None
+
+
+def test_wod_limpio_descarta_lo_inutilizable():
+    from backend.services.ai_mesocycles import wod_limpio
+
+    for basura in (None, "un WOD", [], 5, {}, {"format": "inventado"}, {"format": None, "name": "  ", "description": ""}):
+        assert wod_limpio(basura) is None
+    # formato inventado pero con descripción: se conserva el texto, sin temporizador
+    assert wod_limpio({"format": "inventado", "description": "Correr 5 km"}) == {
+        "format": None, "time_cap_seconds": None, "notes": "Correr 5 km"}
+    # el texto largo se recorta
+    assert len(wod_limpio({"format": "for_time", "description": "a" * 5000})["notes"]) == 2000
