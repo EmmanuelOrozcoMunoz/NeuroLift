@@ -28,3 +28,9 @@ CORS_ORIGINS = [
     for o in os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
     if o.strip()
 ]
+
+# Cuántas peticiones HTTP procesa a la vez CADA proceso de la API; las demás esperan en cola (y
+# si esperan más de HTTP_QUEUE_TIMEOUT_SECONDS reciben 503). Se recorta al tamaño del pool de
+# conexiones. 0 lo desactiva. Ver core/concurrency.py.
+MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "20"))
+HTTP_QUEUE_TIMEOUT_SECONDS = float(os.getenv("HTTP_QUEUE_TIMEOUT_SECONDS", "15"))

@@ -118,6 +118,7 @@ La dependencia va **en un solo sentido**: `routers → services → core / model
 - **Cargas en % de 1RM.** Los planes, las clases y la IA prescriben en %; el kg se calcula por atleta con sus marcas. Los nombres de ejercicio se normalizan (tildes, mayúsculas, `&`/`y`, alias en español) para reconocer la misma marca aunque cambie el nombre.
 - **Clases.** Una clase es un `Mesocycle` con `class_id` y sin atleta, visible solo para los entrenadores de ese box (`ensure_can_view_mesocycle`). Los registros antiguos de atletas (`is_class_log`) se conservan como historial hasta que se purguen con `backend/scripts/purgar_registros_de_clase.py`.
 - **Arranque.** `create_all()` y la creación de buckets corren en el `lifespan`, no al importar. Como ninguna migración crea el esquema base, un ambiente nuevo todavía lo necesita; por eso una migración que crea una tabla debe tolerar que ya exista.
+- **Concurrencia.** Los endpoints son síncronos (40 hilos por proceso) y cada petición retiene una conexión de la base (30 por proceso). Con más peticiones en vuelo que conexiones, se bloqueaban entre sí y el servicio colapsaba (de ~100 a ~3 peticiones por segundo). `core/concurrency.py` limita cuántas se procesan a la vez por proceso: las demás esperan en cola y, si esperan más de 15 s, reciben un 503 con `Retry-After`. El límite va por dentro de CORS y no afecta a `/` (el health check). Con varios procesos (workers) el límite es **por proceso**, y las conexiones a la base se multiplican: hay que revisar el máximo de conexiones del plan de Supabase.
 - **Seguridad.** JWT con revocación real (`token_version`), límites de peticiones por IP y usuario, cabeceras de seguridad, texto saneado en todos los esquemas y `/docs` apagado en producción.
 
 ### Frontend (`web/`)
@@ -160,6 +161,9 @@ Requisitos: Python 3.11 y Node 20+.
 | `GEMINI_API_KEY` | Generación con IA |
 | `CORS_ORIGINS` | Orígenes permitidos del frontend |
 | `ENVIRONMENT` | `production` apaga `/docs` |
+| `MAX_CONCURRENT_REQUESTS` | (opcional, 20) Peticiones que procesa a la vez **cada proceso** de la API; las demás esperan en cola. 0 lo desactiva. Se recorta a las conexiones del pool (30) |
+| `HTTP_QUEUE_TIMEOUT_SECONDS` | (opcional, 15) Cuánto espera una petición en cola antes de recibir un 503 |
+| `DB_POOL_TIMEOUT` | (opcional, 10) Segundos que una petición espera una conexión libre a la base antes de fallar |
 | `VITE_API_URL` | (en `web/`) URL de la API |
 
 ```bash
