@@ -94,7 +94,7 @@ function navFor(user: User): NavItem[] {
     if (user.box?.status !== "active") return OWNER_INACTIVE_NAV;
     return user.box.kind === "coach" ? INDEPENDENT_COACH_NAV : OWNER_NAV;
   }
-  return ATHLETE_NAV;
+  return user.box?.kind === "box" || user.box?.kind === "coach" ? ATHLETE_RANKING_NAV : ATHLETE_NAV;
 }
 
 // Rutas "raíz" de sección: solo se marcan activas en su URL exacta, no en sus subrutas
