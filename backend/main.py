@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from backend.core.config import CORS_ORIGINS, DOCS_ENABLED
+from backend.core.concurrency import LimitarConcurrencia
+from backend.core.config import CORS_ORIGINS, DOCS_ENABLED, HTTP_QUEUE_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS
 from backend.core.errors import ErrorDeDominio
 from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
-from backend.database import engine, get_db
+from backend.database import MAX_OVERFLOW, POOL_SIZE, engine, get_db
 from backend import models, storage
 from backend.routers import (
     admin,
@@ -54,6 +55,15 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Límite de peticiones simultáneas por proceso. Se registra PRIMERO para quedar lo más adentro de
+# todos los middlewares: así un 503 de "servidor ocupado" pasa por las cabeceras de seguridad y
+# por CORS (sin CORS, el navegador lo vería como un error de red en vez de un 503).
+app.add_middleware(
+    LimitarConcurrencia,
+    maximo=min(MAX_CONCURRENT_REQUESTS, POOL_SIZE + MAX_OVERFLOW) if MAX_CONCURRENT_REQUESTS > 0 else 0,
+    espera_maxima=HTTP_QUEUE_TIMEOUT_SECONDS,
+)
 
 
 def _registrar_acceso_denegado(request: Request, codigo: int, detalle) -> None:
