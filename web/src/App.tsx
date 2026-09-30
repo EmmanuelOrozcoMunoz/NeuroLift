@@ -341,7 +341,7 @@ export default function App() {
         <Route
           path="/clases"
           element={
-            <RoleGate role={["athlete", ...COACH_ROLES]}>
+            <RoleGate role={COACH_ROLES}>
               <Classes />
             </RoleGate>
           }

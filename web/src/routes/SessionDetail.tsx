@@ -149,11 +149,11 @@ export default function SessionDetail() {
     if (!classSessionId) return;
     const aviso = completada
       ? "Ya la marcaste como hecha: dejará de contar en tu historial. ¿Quitar el registro de esta clase?"
-      : "Se borrará lo que hayas anotado. Podrás volver a registrarla desde Clases. ¿Quitar el registro?";
+      : "Se borrará lo que hayas anotado. ¿Quitar el registro?";
     if (!window.confirm(aviso)) return;
     salirDeClase.mutate(
       { classSessionId, mesocycleId: mesocycleId! },
-      { onSuccess: () => navigate("/clases", { replace: true }) },
+      { onSuccess: () => navigate("/entrenos", { replace: true }) },
     );
   }
 
@@ -351,7 +351,7 @@ export default function SessionDetail() {
         <p className="mt-2 text-center text-xs text-muted">¿Te equivocaste? Toca el botón para deshacerlo.</p>
       )}
 
-      {/* Registro de una clase del box: se puede deshacer si se registró por error */}
+      {/* Registro ANTIGUO de una clase del box (ya no se pueden crear): se puede quitar */}
       {original.class_session_id && (
         <button
           type="button"
