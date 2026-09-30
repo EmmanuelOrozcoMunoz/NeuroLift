@@ -55,6 +55,57 @@ def _a_float(valor) -> float | None:
         return None
 
 
+# ------------------------------------------------------------ el WOD de una sesión
+
+# Formatos que la IA puede devolver y cuáles llevan tiempo límite / duración (el temporizador del
+# atleta lo usa). Coinciden con backend/schemas/common.py:FormatoWod y web/src/lib/wod.ts.
+FORMATOS_DE_WOD = ("for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts")
+FORMATOS_CON_TIEMPO = ("for_time", "amrap", "amrap_reps", "emom", "calories", "distance", "watts")
+_MAX_NOTAS_WOD = 2000
+_MAX_MINUTOS_WOD = 180
+
+
+def wod_limpio(wod) -> dict | None:
+    """Valida el WOD que devolvió la IA y lo deja como lo guarda la plantilla de WOD de la app:
+    {"format", "time_cap_seconds", "notes"}. Devuelve None si no hay nada usable (la IA a veces
+    devuelve null, un texto o valores inventados: mejor sin WOD que uno mal configurado)."""
+    if not isinstance(wod, dict):
+        return None
+    formato = wod.get("format")
+    formato = formato.strip().lower() if isinstance(formato, str) else None
+    if formato not in FORMATOS_DE_WOD:
+        formato = None
+
+    segundos = None
+    if formato in FORMATOS_CON_TIEMPO:
+        minutos = _a_float(wod.get("time_cap_minutes"))
+        if minutos is not None and 0 < minutos <= _MAX_MINUTOS_WOD:
+            segundos = int(round(minutos * 60))
+
+    partes = [
+        " ".join(str(wod.get(clave)).split())
+        for clave in ("name", "description")
+        if isinstance(wod.get(clave), str) and wod.get(clave).strip()
+    ]
+    notas = "\n".join(partes)[:_MAX_NOTAS_WOD] or None
+
+    if formato is None and notas is None:
+        return None
+    return {"format": formato, "time_cap_seconds": segundos, "notes": notas}
+
+
+def aplicar_wod(sesion: models.Session, wod) -> bool:
+    """Configura en la sesión la plantilla de WOD (formato, tiempo límite, descripción) a partir de
+    lo que devolvió la IA. Devuelve si había un WOD usable."""
+    datos = wod_limpio(wod)
+    if datos is None:
+        return False
+    sesion.wod_format = datos["format"]
+    sesion.wod_time_cap_seconds = datos["time_cap_seconds"]
+    sesion.wod_notes = datos["notes"]
+    return True
+
+
 # ------------------------------------------------------------ una sesión suelta
 
 def guardar_sesion_ia(db: Session, meso: models.Mesocycle, rutina_ai: dict) -> models.Session:
@@ -65,6 +116,7 @@ def guardar_sesion_ia(db: Session, meso: models.Mesocycle, rutina_ai: dict) -> m
         athlete_notes=rutina_ai.get("athlete_notes", ""),
         status="pending",
     )
+    aplicar_wod(sesion, rutina_ai.get("wod"))
     db.add(sesion)
     db.flush()
 
@@ -181,6 +233,7 @@ def guardar_rutinas(
                     status="pending",
                     duration_minutes=duracion,
                 )
+                aplicar_wod(sesion, sesion_data.get("wod"))
                 db.add(sesion)
                 db.flush()
 
