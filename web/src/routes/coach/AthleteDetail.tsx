@@ -246,8 +246,7 @@ export default function AthleteDetail() {
           )}
           {athlete && !athlete.coach_id && (
             <p className="mb-3 rounded-2xl bg-surface p-4 text-sm text-muted">
-              No tiene coach personal: entrena con las clases del box. Para programarle mesociclos, asígnale un coach
-              en Equipo.
+              No tiene coach personal. Para programarle mesociclos, asígnale un coach en Equipo.
             </p>
           )}
           {!mesocycles.isPending && !mesocycles.error && (mesocycles.data?.length ?? 0) === 0 && athlete?.coach_id && (

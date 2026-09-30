@@ -108,7 +108,7 @@ def test_mesociclo_para_un_atleta_sin_coach_personal(dueno_de_box, atleta_de_box
         "start_date": "2026-01-05", "weeks_count": 1, "training_days": [0],
     })
     error(r, 400, "Los mesociclos son para atletas con coach personal. Sin coach: "
-                  f"{atleta_de_box.datos['full_name']}. Asígnales uno en Equipo, o entrenan con las clases del box.")
+                  f"{atleta_de_box.datos['full_name']}. Asígnales uno en Equipo.")
 
 
 def test_el_atleta_no_edita_lo_que_prescribio_su_coach(coach, atleta_de_coach):
@@ -147,7 +147,7 @@ def test_agregar_atletas_de_otro_box_o_de_otro_coach(client, coach, atleta_de_co
 def test_el_dueno_no_agrega_a_un_grupo_atletas_sin_coach(dueno_de_box, atleta_de_box):
     r = dueno_de_box.post("/groups/", json={"name": "General", "athlete_ids": [atleta_de_box.id]})
     error(r, 400, "Estos atletas no tienen coach personal: "
-                  f"{atleta_de_box.datos['full_name']}. Asígnales uno en Equipo, o entrenan con las clases del box.")
+                  f"{atleta_de_box.datos['full_name']}. Asígnales uno en Equipo.")
 
 
 def test_portada_de_grupo_inexistente(coach):
@@ -211,3 +211,10 @@ def test_los_401_y_403_de_dominio_quedan_en_la_auditoria_pero_los_404_no(client,
     assert _entradas_de_auditoria("Acción reservada para coaches") == antes_403 + 1
     assert _entradas_de_auditoria("No se pudieron validar las credenciales") == antes_401 + 1
     assert _entradas_de_auditoria("Grupo no encontrado") == antes_404
+
+
+def test_un_atleta_del_mismo_box_no_ve_la_programacion_de_una_clase(dueno_de_box, atleta_de_box):
+    clase = dueno_de_box.post("/classes/", json={"name": "Open", "weekdays": [0], "start_time": "07:00"}).json()
+    dia = dueno_de_box.post(f"/classes/{clase['id']}/days", json={"date": "2026-01-05"}).json()
+    error(atleta_de_box.get(f"/mesocycles/{dia['mesocycle_id']}"), 403,
+          "La programación de las clases es solo para los entrenadores del box")

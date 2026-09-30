@@ -8,13 +8,13 @@ from backend.schemas.classes import (
     ClassCreate,
     ClassDayCreate,
     ClassDayResponse,
-    ClassJoinResponse,
     ClassOccurrence,
     ClassProgramCreate,
     ClassProgramResponse,
     ClassResponse,
     ClassUpdate,
 )
+from backend.schemas.ranking import RankingLift, RankingLiftRow, RankingWod, RankingWodRow
 from backend.schemas.boxes import (
     AdminBoxPlanUpdate,
     AdminBoxRow,
@@ -99,6 +99,10 @@ from backend.schemas.plans import (
 )
 
 __all__ = [
+    "RankingLift",
+    "RankingLiftRow",
+    "RankingWod",
+    "RankingWodRow",
     "Bloque", "Dia", "FormatoWod", "MessageResponse", "SanitizedModel",
     "UserLogin", "UserRegister",
     "AthleteActivityResponse", "PRCreate", "PRResponse", "RecentSessionExercise",

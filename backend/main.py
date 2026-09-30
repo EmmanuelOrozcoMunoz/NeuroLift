@@ -14,7 +14,21 @@ from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
 from backend.database import engine, get_db
 from backend import models, storage
-from backend.routers import admin, ai, auth, boxes, classes, fitness, groups, mesocycles, plans, sessions, sets, users
+from backend.routers import (
+    admin,
+    ai,
+    auth,
+    boxes,
+    classes,
+    fitness,
+    groups,
+    mesocycles,
+    plans,
+    ranking,
+    sessions,
+    sets,
+    users,
+)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -98,6 +112,7 @@ app.include_router(sets.router)
 app.include_router(ai.router)
 app.include_router(admin.router)
 app.include_router(plans.router)
+app.include_router(ranking.router)
 
 
 @app.get("/")

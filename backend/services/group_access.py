@@ -45,7 +45,7 @@ def ensure_athletes_addable(atletas: list[models.User], current_user: models.Use
 
 def claim_athletes_for_group(atletas: list[models.User], current_user: models.User) -> None:
     """Los grupos son de atletas con coach personal (los mesociclos son exclusivos de ellos; el
-    resto del box entrena con las clases). Por eso, al meter a un atleta a un grupo:
+    resto del box anota su entreno por su cuenta). Por eso, al meter a un atleta a un grupo:
     - un coach que agrega a un atleta sin coach de su box lo toma como suyo (coach_id), igual
       que cuando lo registra él mismo;
     - el dueño solo puede agregar atletas que ya tengan coach: a uno sin coach primero se le
@@ -59,6 +59,6 @@ def claim_athletes_for_group(atletas: list[models.User], current_user: models.Us
     if current_user.role == "owner":
         raise SolicitudInvalida("Estos atletas no tienen coach personal: "
                 + ", ".join(a.full_name for a in sin_coach)
-                + ". Asígnales uno en Equipo, o entrenan con las clases del box.")
+                + ". Asígnales uno en Equipo.")
     for atleta in sin_coach:
         atleta.coach_id = current_user.id

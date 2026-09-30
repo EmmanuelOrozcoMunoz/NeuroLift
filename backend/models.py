@@ -96,6 +96,9 @@ class User(Base):
     # Se incrementa al cerrar sesión (o si un admin fuerza la revocación). Va embebido en cada
     # JWT emitido ("tv"); si no coincide con este valor, el token se rechaza aunque no haya
     # expirado todavía. Así se logra revocación real sin necesitar una tabla de blacklist.
+    # Si aparece en el ranking de su box (marcas y WODs). Por defecto sí; cada atleta lo apaga desde
+    # su perfil. Ver backend/services/ranking.py.
+    show_in_ranking = Column(Boolean, nullable=False, default=True, server_default="true")
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
     # Nombre de archivo ALEATORIO (uuid4 + extensión detectada por magic number, nunca el
     # nombre que subió el usuario) de la foto de perfil ya re-renderizada y sin metadatos.

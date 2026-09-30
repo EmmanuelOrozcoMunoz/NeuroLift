@@ -7,7 +7,6 @@ import { queryKeys } from "@/lib/queries";
 import type {
   BoxClass,
   BoxClassPayload,
-  ClassJoinResponse,
   ClassOccurrence,
   ClassProgram,
   MessageResponse,
@@ -21,12 +20,6 @@ export const classKeys = {
   programs: (classId: string) => ["classes", "programs", classId] as const,
   dashboard: ["box", "dashboard"] as const,
 };
-
-/** Las clases existen solo en boxes (no en la cuenta de un coach independiente). */
-export function useHasClasses(): boolean {
-  const user = useCurrentUser();
-  return user.box?.kind === "box" && user.box.status === "active";
-}
 
 export function useClasses(enabled = true): UseQueryResult<BoxClass[]> {
   return useQuery({ queryKey: classKeys.list, queryFn: () => apiFetch<BoxClass[]>("/classes/"), enabled });
@@ -91,25 +84,7 @@ export function useCreateClassDay() {
   });
 }
 
-/** El atleta registra la clase: se le crea su copia para anotar lo que hizo. */
-export function useJoinClass() {
-  const queryClient = useQueryClient();
-  const user = useCurrentUser();
-  return useMutation({
-    mutationFn: (classSessionId: string) =>
-      apiFetch<ClassJoinResponse>(`/classes/sessions/${classSessionId}/join`, { method: "POST" }),
-    onSuccess: (res) => {
-      // El mesociclo "Clases del box" en caché todavía no tiene esta sesión: se descarta (no
-      // solo se marca vieja) para que la pantalla de la sesión lo pida de nuevo en vez de
-      // mostrar "no encontramos esta sesión" con la versión anterior.
-      queryClient.removeQueries({ queryKey: queryKeys.mesocycle(res.mesocycle_id) });
-      void queryClient.invalidateQueries({ queryKey: classKeys.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(user.id) });
-    },
-  });
-}
-
-/** El atleta quita el registro de una clase (lo registró por error). La clase no se toca. */
+/** El atleta quita un registro ANTIGUO de clase (de cuando se podían registrar). La clase no se toca. */
 export function useLeaveClass() {
   const queryClient = useQueryClient();
   const user = useCurrentUser();

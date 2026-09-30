@@ -9,6 +9,7 @@ export * from "./admin";
 export * from "./sessions";
 export * from "./mesocycles";
 export * from "./plans";
+export * from "./ranking";
 export * from "./fitness";
 export * from "./groups";
 export * from "./classes";

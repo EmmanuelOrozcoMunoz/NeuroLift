@@ -7,7 +7,7 @@ import { InstallAppCard } from "@/components/InstallApp";
 import { MyBoxCard } from "@/components/MyBoxCard";
 import { IconChevronRight, IconLogout, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
-import { PlateAvailabilityToggle, WeightUnitToggle } from "@/components/WeightUnitToggle";
+import { PlateAvailabilityToggle, RankingVisibilityToggle, WeightUnitToggle } from "@/components/WeightUnitToggle";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { COMMON_PR_EXERCISES } from "@/lib/exercises";
 import { formatWeight, parseWeightInput, toKg, useWeightUnit } from "@/lib/units";
@@ -64,6 +64,7 @@ export default function Profile() {
       <Card className="mb-4 space-y-4">
         <WeightUnitToggle />
         <PlateAvailabilityToggle />
+        {(user.box?.kind === "box" || user.box?.kind === "coach") && <RankingVisibilityToggle />}
       </Card>
 
       <Link

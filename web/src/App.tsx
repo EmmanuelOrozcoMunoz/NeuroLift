@@ -35,6 +35,7 @@ import MyPersonalSessionEditor from "@/routes/MyPersonalSessionEditor";
 import PlanDetail from "@/routes/PlanDetail";
 import Plans from "@/routes/Plans";
 import Profile from "@/routes/Profile";
+import Ranking from "@/routes/Ranking";
 import Register from "@/routes/Register";
 import RegisterBox from "@/routes/RegisterBox";
 import RegisterCoach from "@/routes/RegisterCoach";
@@ -221,6 +222,14 @@ export default function App() {
           }
         />
         <Route
+          path="/ranking"
+          element={
+            <RoleGate role="athlete">
+              <Ranking />
+            </RoleGate>
+          }
+        />
+        <Route
           path="/planes/:planId"
           element={
             <RoleGate role="athlete">
@@ -341,7 +350,7 @@ export default function App() {
         <Route
           path="/clases"
           element={
-            <RoleGate role={["athlete", ...COACH_ROLES]}>
+            <RoleGate role={COACH_ROLES}>
               <Classes />
             </RoleGate>
           }

@@ -260,6 +260,8 @@ def update_my_preferences(
         current_user.weight_unit = req.weight_unit
     if req.has_25kg_plates is not None:
         current_user.has_25kg_plates = req.has_25kg_plates
+    if req.show_in_ranking is not None:
+        current_user.show_in_ranking = req.show_in_ranking
     db.commit()
     db.refresh(current_user)
     return current_user

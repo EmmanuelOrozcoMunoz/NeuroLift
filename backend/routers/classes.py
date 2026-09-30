@@ -1,11 +1,14 @@
-"""Clases del box: horarios recurrentes con profesor (los crea el dueño), su programación (la
-hace el profesor, como un bloque de varias semanas o día por día) y el registro de cada atleta.
+"""Clases del box: horarios recurrentes con profesor (los crea el dueño) y su programación (la
+hace el profesor, como un bloque de varias semanas o día por día).
+
+Es un módulo SOLO PARA ENTRENADORES del box (coaches y dueño): la programación es confidencial y
+los atletas no la ven. Un atleta que quiera registrar lo que hizo en clase lo hace a mano, como
+una sesión propia.
 
 Cómo se guarda el contenido: la programación de una clase es un Mesocycle con class_id y sin
 atleta (user_id=None); cada sesión es lo que se hace en la clase ese día, con el mismo modelo de
 series/WOD que cualquier entrenamiento, así que el profesor la edita con el editor de sesiones
-de siempre. Cuando un atleta registra la clase, se le copia esa sesión a su mesociclo personal
-"Clases del box" (is_class_log) y ahí anota lo que hizo, como en cualquier sesión suya.
+de siempre.
 """
 from datetime import date, timedelta
 from typing import List, Optional
@@ -17,7 +20,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import models, schemas
 from backend.core.security import can_program_class, ensure_can_program_class, get_current_user, require_owner
 from backend.database import get_db
-from backend.services.classes import armar_horario, hhmm, registrar_clase
+from backend.services.classes import armar_horario, hhmm
 
 router = APIRouter(prefix="/classes", tags=["classes"])
 
@@ -27,9 +30,12 @@ MAX_SCHEDULE_DAYS = 31
 
 # ---------------------------------------------------------------- helpers
 
-def _ensure_box_member(user: models.User) -> models.Box:
-    """Las clases son de un box activo (no de un coach independiente ni de la cuenta personal
-    de un atleta solo); el admin de plataforma no pertenece a ninguno."""
+def _ensure_box_coach(user: models.User) -> models.Box:
+    """Las clases son de un box activo y solo las ven sus entrenadores (coaches y dueño). No son
+    de un coach independiente ni de la cuenta personal de un atleta solo, y los atletas del box no
+    las ven: su programación es confidencial. El admin de plataforma no pertenece a ningún box."""
+    if user.role not in models.COACHING_ROLES:
+        raise HTTPException(status_code=403, detail="Las clases son solo para los entrenadores del box")
     if user.box is None or not user.box.is_active or user.box.kind != "box":
         raise HTTPException(status_code=403, detail="Las clases son de un box activo")
     return user.box
@@ -95,7 +101,7 @@ def list_classes(
     current_user: models.User = Depends(get_current_user),
 ):
     """Clases del box, ordenadas por hora. Cualquier miembro del box las ve."""
-    box = _ensure_box_member(current_user)
+    box = _ensure_box_coach(current_user)
     query = db.query(models.BoxClass).options(joinedload(models.BoxClass.coach)).filter(models.BoxClass.box_id == box.id)
     if not (include_inactive and current_user.role == "owner"):
         query = query.filter(models.BoxClass.is_active == True)  # noqa: E712
@@ -175,7 +181,7 @@ def get_schedule(
 ):
     """Clases del box día por día entre `start` y `start + days`, con el profesor, el contenido
     programado de cada una y, si quien pregunta es atleta, si ya la registró."""
-    box = _ensure_box_member(current_user)
+    box = _ensure_box_coach(current_user)
     return armar_horario(db, current_user, box.id, start, days)
 
 
@@ -299,46 +305,12 @@ def create_class_day(
     return schemas.ClassDayResponse(mesocycle_id=diaria.id, session_id=sesion.id)
 
 
-# ------------------------------------------------ registro del atleta
-
-@router.post("/sessions/{session_id}/join", response_model=schemas.ClassJoinResponse)
-def join_class_session(session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """El atleta registra la clase de un día: se le copia el contenido a su mesociclo "Clases del
-    box" (con las cargas en % resueltas con SUS marcas) y ahí anota lo que hizo con la pantalla
-    de siempre. Idempotente: si ya la había registrado, devuelve la misma copia."""
-    if current_user.role != "athlete":
-        raise HTTPException(status_code=403, detail="Solo los atletas registran clases")
-    _ensure_box_member(current_user)
-
-    clase_sesion = (
-        db.query(models.Session)
-        .options(
-            joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.box_class),
-            joinedload(models.Session.sets).joinedload(models.Set.exercise),
-        )
-        .filter(models.Session.id == session_id)
-        .first()
-    )
-    if (
-        not clase_sesion
-        or clase_sesion.mesocycle.class_id is None
-        or clase_sesion.mesocycle.box_class.box_id != current_user.box_id
-    ):
-        raise HTTPException(status_code=404, detail="Clase no encontrada")
-    if clase_sesion.scheduled_date > date.today():
-        raise HTTPException(status_code=400, detail="Podrás registrar esta clase el día que se dicte")
-
-    resultado = registrar_clase(db, current_user, clase_sesion)
-    db.commit()
-    return schemas.ClassJoinResponse(
-        mesocycle_id=resultado.mesocycle_id, session_id=resultado.session_id, missing_prs=resultado.missing_prs
-    )
-
+# ------------------------------------------------ registros antiguos
 
 @router.delete("/sessions/{session_id}/join", response_model=schemas.MessageResponse)
 def leave_class_session(session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """El atleta quita el registro de una clase (p. ej. la registró por error): se borra SU
-    copia, con lo que haya anotado. La clase del profesor no se toca, y puede volver a
+    """El atleta quita un registro ANTIGUO de clase (de cuando las clases se podían registrar):
+    se borra SU copia, con lo que haya anotado. La clase del profesor no se toca, y puede volver a
     registrarla cuando quiera. Si ya la había marcado como hecha, deja de contar en su historial
     y en la actividad del box."""
     if current_user.role != "athlete":

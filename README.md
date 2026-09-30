@@ -2,7 +2,7 @@
 
 Plataforma para que **boxes de CrossFit, coaches independientes y atletas** programen, sigan y registren entrenamientos. Es una PWA (se instala en el celular) con una API propia, y usa IA (Gemini) para ayudar a programar.
 
-- **Coaches y boxes** programan mesociclos, planes y clases, y ven la actividad de sus atletas.
+- **Coaches y boxes** programan mesociclos, planes y clases (las clases son solo para los entrenadores), y ven la actividad de sus atletas.
 - **Atletas** ven lo que les toca hoy, registran series y marcas, y siguen su progreso.
 - **Cada cliente** (un box o un coach) es una cuenta aislada, con su propio código de invitación, logo y color de acento.
 
@@ -18,8 +18,8 @@ La unidad que paga es la **cuenta** (tabla `boxes`). Hay tres tipos:
 | Tipo de cuenta (`kind`) | Quién es | Paga | Cómo se crea |
 |---|---|---|---|
 | `box` | Un gimnasio con dueño, profesores y atletas | Sí | El dueño se registra (`/boxes/register`); **queda pendiente hasta que un admin de la plataforma lo aprueba** |
-| `coach` | Un coach independiente, sin box | Sí, con la misma tabla | Se registra (`/boxes/register-coach`) y queda **activo de inmediato** |
-| `athlete` | El espacio personal de un atleta que se registró solo | **Gratis** | El atleta se registra sin código de box |
+| `coach` | Programar para **sus** atletas y grupos (los que él registró o tiene en grupos); crear planes; ver las clases del box y programar las que dicta |
+| `athlete` | Ver y registrar sus entrenamientos, marcas y actividad; adquirir planes; anotar su entreno del día (por ejemplo, lo que hizo en clase); ver el ranking de su box |
 
 Un coach independiente y un box **pagan lo mismo** y por lo mismo: cuántos atletas tienen.
 
@@ -52,11 +52,21 @@ El dueño también hace de coach (es un coach con más alcance). Un box pendient
 ### Qué recibe cada atleta
 
 - **Atleta con coach personal** (lo registró un coach, o se registró con el código de un coach independiente): entrena con **mesociclos** que le programa su coach, y puede además adquirir planes y crear sesiones propias.
-- **Atleta de un box sin coach personal:** entrena con las **clases del box** (ve el horario, el profesor y de qué se trata; registra lo que hizo). Los mesociclos son exclusivos de quienes tienen coach personal.
+- **Atleta de un box sin coach personal:** anota su entreno por su cuenta (lo que hizo en clase o en casa). **Las clases del box no las ve**: son solo para los entrenadores. Los mesociclos son exclusivos de quienes tienen coach personal.
 - **Atleta solo:** cuenta gratuita, con sus propias sesiones y los planes públicos. Puede **unirse después** a un box o a un coach con su código: conserva sus datos y su cuenta personal se elimina.
 
-### Clases del box
-El **dueño** crea cada clase (nombre, días, hora, duración) y le asigna un **profesor**. El profesor (o el dueño) programa el contenido de la clase, ya sea como un bloque de varias semanas o día por día, con el mismo editor de sesiones de siempre. El atleta **registra** la clase (se le copia a su historial con las cargas en % resueltas con **sus** marcas) y anota lo que hizo. No hay reservas de cupo.
+### Clases del box (solo entrenadores)
+El **dueño** crea cada clase (nombre, días, hora, duración) y le asigna un **profesor**. El profesor (o el dueño) programa el contenido de la clase, ya sea como un bloque de varias semanas o día por día, con el mismo editor de sesiones de siempre. Todos los entrenadores del box ven el horario y el contenido; solo el profesor de la clase y el dueño lo editan.
+
+**Los atletas no ven las clases**: la programación es confidencial del box. Si un atleta quiere registrar su entreno de la clase, lo anota a mano como una sesión propia («Anota tu entreno» en Hoy, o «+ Entreno» en Entrenos). El servidor lo hace cumplir: el horario, la lista de clases y la programación de una clase responden 403 a cualquier atleta.
+
+### Ranking del box
+Los atletas de un box (o de un coach independiente) tienen un **ranking entre ellos**, en la pestaña «Ranking»:
+- **Marcas (RM):** por levantamiento (Back Squat, Snatch, Clean & Jerk…), la mejor marca de cada atleta, de mayor a menor. Los nombres se unifican («Clean & Jerk» y «clean and jerk» son el mismo levantamiento).
+- **WODs:** por WOD y formato (Fran por tiempo, Cindy AMRAP…), el mejor intento de cada atleta. En por tiempo gana el menor; en AMRAP, el mayor.
+- Se puede filtrar por sexo, y cada fila muestra si compite Rx o Scaled. Los empates comparten posición.
+- **Privacidad:** cada atleta decide si aparece («¿Aparecer en el ranking de tu box?» en su perfil; por defecto sí). Quien lo apaga no sale en ninguna tabla. Nadie ve el ranking de otro box, y un atleta solo (sin box ni coach) no tiene ranking.
+- **Confidencialidad:** en los WODs solo entran los que el atleta **anota a mano**; nunca los que le programa su coach ni los registros antiguos de clases, porque el nombre de un WOD suele traer su contenido.
 
 ### Tienda de planes
 Un coach puede armar un **plan** (una plantilla de varias semanas con cargas en % de 1RM) y publicarlo con visibilidad `box` (solo atletas de su box) o `public` (toda la plataforma). Al **adquirirlo**, el atleta recibe una copia con fechas reales y los pesos calculados con sus propias marcas.
@@ -93,8 +103,8 @@ La dependencia va **en un solo sentido**: `routers → services → core / model
 
 | Carpeta / archivo | Responsabilidad |
 |---|---|
-| `routers/` | La capa HTTP: valida la petición, comprueba permisos, llama a un servicio, hace `commit` y arma la respuesta. Un archivo por dominio (`auth`, `boxes`, `classes`, `groups`, `plans`, `mesocycles`, `sessions`, `sets`, `users`, `fitness`, `ai`, `admin`) |
-| `services/` | Las reglas de negocio, **sin HTTP ni commit**: `classes` (registrar clase, horario), `plans` (adquirir), `groups` (edición masiva, miembros nuevos), `ai_mesocycles` (generación con IA en pasos pequeños), `sets` (`clonar_set`), `prs` (marcas y % de 1RM), `exercises`, `group_access`, `boxes` |
+| `routers/` | La capa HTTP: valida la petición, comprueba permisos, llama a un servicio, hace `commit` y arma la respuesta. Un archivo por dominio (`auth`, `boxes`, `classes`, `groups`, `plans`, `mesocycles`, `sessions`, `sets`, `users`, `fitness`, `ranking`, `ai`, `admin`) |
+| `services/` | Las reglas de negocio, **sin HTTP ni commit**: `classes` (horario de los entrenadores), `plans` (adquirir), `ranking` (marcas y WODs del box), `groups` (edición masiva, miembros nuevos), `ai_mesocycles` (generación con IA en pasos pequeños), `sets` (`clonar_set`), `prs` (marcas y % de 1RM), `exercises`, `group_access`, `boxes` |
 | `core/` | `security` (JWT, roles, aislamiento entre clientes), `billing` (planes y suscripción), `errors` (excepciones de dominio), `config`, `invite`, `logging` (auditoría) |
 | `models.py` · `schemas/` | Modelos SQLAlchemy (11 tablas) · esquemas Pydantic de entrada y salida (con saneamiento de texto) |
 | `storage.py` · `avatars.py` · `ai_agent.py` | Supabase Storage, validación de imágenes, llamadas a Gemini |
@@ -104,9 +114,9 @@ La dependencia va **en un solo sentido**: `routers → services → core / model
 
 - **Aislamiento entre clientes.** Todo cuelga de una cuenta (`boxes`). "Mis atletas" tiene una definición única (`_coach_athlete_ids` en `core/security.py`): el dueño ve a todo su box; un coach, a los que registró más los miembros de sus grupos; y nunca se cruza la frontera entre cuentas. Un recurso de otra cuenta responde igual que uno inexistente.
 - **Errores de negocio.** Las reglas lanzan excepciones de dominio (`Prohibido`, `NoEncontrado`, `NoAutenticado`, `SolicitudInvalida`…) de `core/errors.py`, y **un solo manejador** en `main.py` las traduce a HTTP (mismo código y mensaje), registrando los 401/403 en la auditoría. Solo los routers usan `HTTPException`.
-- **Copiar series.** `services/sets.py::clonar_set` es el único lugar que copia una serie (a un miembro nuevo de un grupo, al adquirir un plan, al registrar una clase). Cada columna de `Set` está declarada como "se copia" o "es de cada copia", y una prueba falla si se agrega una columna sin decidir.
+- **Copiar series.** `services/sets.py::clonar_set` es el único lugar que copia una serie (a un miembro nuevo de un grupo, al adquirir un plan). Cada columna de `Set` está declarada como "se copia" o "es de cada copia", y una prueba falla si se agrega una columna sin decidir.
 - **Cargas en % de 1RM.** Los planes, las clases y la IA prescriben en %; el kg se calcula por atleta con sus marcas. Los nombres de ejercicio se normalizan (tildes, mayúsculas, `&`/`y`, alias en español) para reconocer la misma marca aunque cambie el nombre.
-- **Clases.** Una clase es un `Mesocycle` con `class_id` y sin atleta; el registro de cada atleta es un mesociclo suyo (`is_class_log`) con copias de las sesiones.
+- **Clases.** Una clase es un `Mesocycle` con `class_id` y sin atleta, visible solo para los entrenadores de ese box (`ensure_can_view_mesocycle`). Los registros antiguos de atletas (`is_class_log`) se conservan como historial hasta que se purguen con `backend/scripts/purgar_registros_de_clase.py`.
 - **Arranque.** `create_all()` y la creación de buckets corren en el `lifespan`, no al importar. Como ninguna migración crea el esquema base, un ambiente nuevo todavía lo necesita; por eso una migración que crea una tabla debe tolerar que ya exista.
 - **Seguridad.** JWT con revocación real (`token_version`), límites de peticiones por IP y usuario, cabeceras de seguridad, texto saneado en todos los esquemas y `/docs` apagado en producción.
 
@@ -116,7 +126,7 @@ React 19 · TypeScript · Vite 8 · Tailwind 4 (tokens en `@theme`, tema "Dark E
 
 | Carpeta | Contenido |
 |---|---|
-| `src/routes/` | Pantallas por rol: atleta (Hoy, Clases —solo si es de un box—, Entrenos, Planes), `coach/`, `box/` (dueño) y `admin/` |
+| `src/routes/` | Pantallas por rol: atleta (Hoy, Entrenos, Planes), `coach/`, `box/` (dueño) y `admin/` |
 | `src/components/` | Componentes compartidos: `AppShell` (navegación por rol), `ExerciseFormFields` (el formulario de ejercicio de sesión, plan y grupo), `SessionSetsEditor`, `ClassCard`, `ui` |
 | `src/lib/` | Consultas (`queries`, `coachQueries`, `classQueries`), `api`, `brand` (color de acento), `units`, y `types/` (tipos por dominio, espejo de `backend/schemas/`) |
 
