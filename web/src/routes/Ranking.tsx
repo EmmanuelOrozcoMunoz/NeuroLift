@@ -5,8 +5,10 @@ import { PageHeader } from "@/components/AppShell";
 import { IconTrophy, IconUser } from "@/components/icons";
 import { Badge, EmptyState, ErrorState, LoadingList, Segmented, cx } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
+import { useGroups } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
 import { useRankingLift, useRankingLifts, useRankingWod, useRankingWods } from "@/lib/rankingQueries";
+import type { FiltrosRanking } from "@/lib/rankingQueries";
 import { formatWeight, useWeightUnit } from "@/lib/units";
 import { useAvatarUrl } from "@/lib/useAvatarUrl";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
@@ -28,15 +30,41 @@ export default function Ranking() {
   );
 }
 
+/** Elige entre el ranking de todo el box o el de uno de los grupos del entrenador. */
+function SelectorDeGrupo({ valor, onChange }: { valor: string | null; onChange: (id: string | null) => void }) {
+  const grupos = useGroups();
+  if (!grupos.data?.length) return null;
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {[{ id: null as string | null, name: "Todo el box" }, ...grupos.data].map((g) => (
+        <button
+          key={g.id ?? "box"}
+          type="button"
+          onClick={() => onChange(g.id)}
+          className={cx(
+            "min-h-touch max-w-full truncate rounded-full px-4 py-2 text-sm font-semibold",
+            g.id === valor ? "bg-brand text-on-brand" : "bg-surface-2 text-muted",
+          )}
+        >
+          {g.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** El ranking del box entre atletas: marcas de Snatch y Clean & Jerk, y los WODs que anotaron.
- *  Lo usan el atleta (pantalla Ranking) y los entrenadores (pestaña de Actividad). */
+ *  Lo usan el atleta (pantalla Ranking) y los entrenadores (pestaña de Actividad), que además
+ *  pueden acotarlo a uno de sus grupos de asesorados. */
 export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
   const [vista, setVista] = useState<Vista>("marcas");
   const [sexo, setSexo] = useState<Sexo>("todos");
-  const filtroSexo = sexo === "todos" ? undefined : sexo;
+  const [grupoId, setGrupoId] = useState<string | null>(null);
+  const filtros: FiltrosRanking = { sexo: sexo === "todos" ? undefined : sexo, grupoId };
 
   return (
     <>
+      {!esAtleta && <SelectorDeGrupo valor={grupoId} onChange={setGrupoId} />}
       <div className="mb-3">
         <Segmented<Vista>
           value={vista}
@@ -60,13 +88,13 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
       </div>
 
       {vista === "marcas" ? (
-        <Marcas sexo={filtroSexo} esAtleta={esAtleta} />
+        <Marcas filtros={filtros} esAtleta={esAtleta} />
       ) : (
-        <Wods sexo={filtroSexo} esAtleta={esAtleta} />
+        <Wods filtros={filtros} esAtleta={esAtleta} />
       )}
 
       <p className="mt-6 text-center text-xs text-muted">
-        Aparecen los atletas del box que lo permiten.
+        Aparecen los atletas {grupoId ? "del grupo" : "del box"} que lo permiten.
         {esAtleta && (
           <>
             {" "}
@@ -114,11 +142,11 @@ function Selector<T extends string>({
 
 // ---------------------------------------------------------------- marcas (1RM)
 
-function Marcas({ sexo, esAtleta }: { sexo?: "male" | "female"; esAtleta: boolean }) {
-  const lifts = useRankingLifts(sexo);
+function Marcas({ filtros, esAtleta }: { filtros: FiltrosRanking; esAtleta: boolean }) {
+  const lifts = useRankingLifts(filtros);
   const [elegido, setElegido] = useState<string | null>(null);
   const actual = elegido && lifts.data?.some((l) => l.key === elegido) ? elegido : (lifts.data?.[0]?.key ?? null);
-  const tabla = useRankingLift(actual, sexo);
+  const tabla = useRankingLift(actual, filtros);
 
   if (lifts.isPending) return <LoadingList rows={4} />;
   if (lifts.error) return <ErrorState error={lifts.error} onRetry={() => void lifts.refetch()} />;
@@ -166,12 +194,12 @@ function MarcaFila({ fila }: { fila: RankingLiftRow }) {
 
 // ---------------------------------------------------------------- WODs
 
-function Wods({ sexo, esAtleta }: { sexo?: "male" | "female"; esAtleta: boolean }) {
-  const wods = useRankingWods(sexo);
+function Wods({ filtros, esAtleta }: { filtros: FiltrosRanking; esAtleta: boolean }) {
+  const wods = useRankingWods(filtros);
   const [elegido, setElegido] = useState<string | null>(null);
   const idDe = (w: { key: string; wod_format: string }) => `${w.key}|${w.wod_format}`;
   const actual = wods.data?.find((w) => idDe(w) === elegido) ?? wods.data?.[0] ?? null;
-  const tabla = useRankingWod(actual?.key ?? null, actual?.wod_format ?? null, sexo);
+  const tabla = useRankingWod(actual?.key ?? null, actual?.wod_format ?? null, filtros);
 
   if (wods.isPending) return <LoadingList rows={4} />;
   if (wods.error) return <ErrorState error={wods.error} onRetry={() => void wods.refetch()} />;

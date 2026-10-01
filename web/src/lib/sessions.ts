@@ -1,6 +1,6 @@
 import { BLOCK_KEYS, blockLabel } from "@/lib/blocks";
 import { parseApiDate } from "@/lib/dates";
-import { formatWeight } from "@/lib/units";
+import { formatWeight, kgTo } from "@/lib/units";
 import type { SetItem, TrainingSession, WeightUnit } from "@/lib/types";
 
 /** Series de un mismo ejercicio, en el orden en que el coach las prescribió. */
@@ -29,6 +29,13 @@ export function groupSets(sets: SetItem[]): ExerciseGroup[] {
   }
 
   return groups;
+}
+
+/** Los ejercicios de la sesión en el orden en que el atleta los va a hacer: por bloque, respetando
+ *  el orden de bloques de ESA sesión (`block_order`). Es lo que deben mostrar las vistas previas;
+ *  `groupSets` solo ordena por set_order y no sabe de bloques. */
+export function gruposEnOrden(sets: SetItem[], blockOrder?: string | null): ExerciseGroup[] {
+  return groupByBlock(sets, blockOrder).flatMap((bloque) => bloque.groups);
 }
 
 /** Un bloque de la sesión (calentamiento, fuerza...) con sus ejercicios ya agrupados. */
@@ -169,4 +176,19 @@ export function groupSummary(group: ExerciseGroup, unit: WeightUnit): string {
   );
   if (iguales) return `${group.sets.length} x ${first.prescribed_reps} @ ${loadLabel(first, unit)}`;
   return group.sets.map((set) => `${shortLoad(set, unit)}×${set.prescribed_reps}`).join(" · ");
+}
+
+/** La carga de un ejercicio en cifra y unidad, para las vistas previas. En una rampa (series con
+ *  cargas distintas) es el rango "mín–máx", no solo la carga de la primera serie. */
+export function cargaDelGrupo(group: ExerciseGroup, unit: WeightUnit): { value: string; unit: string } | null {
+  const pesos = group.sets.filter((set) => set.prescribed_weight).map((set) => kgTo(set.prescribed_weight!, unit));
+  const numero = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  const rango = (valores: number[], formato: (v: number) => string) => {
+    const [min, max] = [Math.min(...valores), Math.max(...valores)];
+    return min === max ? formato(min) : `${formato(min)}–${formato(max)}`;
+  };
+  if (pesos.length > 0) return { value: rango(pesos, numero), unit };
+  const porcentajes = group.sets.filter((set) => set.prescribed_percentage).map((set) => Math.round(set.prescribed_percentage!));
+  if (porcentajes.length > 0) return { value: rango(porcentajes, String), unit: "%" };
+  return null;
 }

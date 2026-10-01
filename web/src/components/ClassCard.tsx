@@ -4,7 +4,7 @@ import { IconChevronRight, IconClock, IconUser } from "@/components/icons";
 import { ApiError } from "@/lib/api";
 import { useCreateClassDay } from "@/lib/classQueries";
 import { formatSeconds } from "@/lib/dates";
-import { groupSets } from "@/lib/sessions";
+import { gruposEnOrden } from "@/lib/sessions";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
 import type { ClassOccurrence } from "@/lib/types";
 
@@ -31,7 +31,7 @@ export function ClassCard({
   const createDay = useCreateClassDay();
 
   const [time, suffix] = formatClassTime(o.start_time).split(" ");
-  const grupos = o.session ? groupSets(o.session.sets) : [];
+  const grupos = o.session ? gruposEnOrden(o.session.sets, o.session.block_order) : [];
 
   function programar() {
     createDay.mutate(

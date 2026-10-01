@@ -6,46 +6,53 @@ import type { RankingLift, RankingLiftRow, RankingWod, RankingWodRow } from "@/l
 
 type Sexo = "male" | "female" | undefined;
 
-const conSexo = (sexo: Sexo) => (sexo ? `?sex=${sexo}` : "");
+/** Filtros del ranking: sexo y, para un entrenador, uno de sus grupos (sin grupo = todo el box). */
+export type FiltrosRanking = { sexo?: Sexo; grupoId?: string | null };
+
+const consulta = (f: FiltrosRanking, extra: Record<string, string> = {}) => {
+  const params = new URLSearchParams(extra);
+  if (f.sexo) params.set("sex", f.sexo);
+  if (f.grupoId) params.set("group_id", f.grupoId);
+  const texto = params.toString();
+  return texto ? `?${texto}` : "";
+};
+
+const clave = (f: FiltrosRanking) => [f.sexo ?? "todos", f.grupoId ?? "box"] as const;
 
 export const rankingKeys = {
   all: ["ranking"] as const,
-  lifts: (sexo: Sexo) => ["ranking", "lifts", sexo ?? "todos"] as const,
-  lift: (clave: string, sexo: Sexo) => ["ranking", "lift", clave, sexo ?? "todos"] as const,
-  wods: (sexo: Sexo) => ["ranking", "wods", sexo ?? "todos"] as const,
-  wod: (clave: string, formato: string, sexo: Sexo) => ["ranking", "wod", clave, formato, sexo ?? "todos"] as const,
+  lifts: (f: FiltrosRanking) => ["ranking", "lifts", ...clave(f)] as const,
+  lift: (key: string, f: FiltrosRanking) => ["ranking", "lift", key, ...clave(f)] as const,
+  wods: (f: FiltrosRanking) => ["ranking", "wods", ...clave(f)] as const,
+  wod: (key: string, formato: string, f: FiltrosRanking) => ["ranking", "wod", key, formato, ...clave(f)] as const,
 };
 
-export function useRankingLifts(sexo: Sexo): UseQueryResult<RankingLift[]> {
+export function useRankingLifts(f: FiltrosRanking): UseQueryResult<RankingLift[]> {
   return useQuery({
-    queryKey: rankingKeys.lifts(sexo),
-    queryFn: () => apiFetch<RankingLift[]>(`/ranking/lifts${conSexo(sexo)}`),
+    queryKey: rankingKeys.lifts(f),
+    queryFn: () => apiFetch<RankingLift[]>(`/ranking/lifts${consulta(f)}`),
   });
 }
 
-export function useRankingLift(clave: string | null, sexo: Sexo): UseQueryResult<RankingLiftRow[]> {
+export function useRankingLift(key: string | null, f: FiltrosRanking): UseQueryResult<RankingLiftRow[]> {
   return useQuery({
-    queryKey: rankingKeys.lift(clave ?? "", sexo),
-    queryFn: () => apiFetch<RankingLiftRow[]>(`/ranking/lifts/${encodeURIComponent(clave!)}${conSexo(sexo)}`),
-    enabled: Boolean(clave),
+    queryKey: rankingKeys.lift(key ?? "", f),
+    queryFn: () => apiFetch<RankingLiftRow[]>(`/ranking/lifts/${encodeURIComponent(key!)}${consulta(f)}`),
+    enabled: Boolean(key),
   });
 }
 
-export function useRankingWods(sexo: Sexo): UseQueryResult<RankingWod[]> {
+export function useRankingWods(f: FiltrosRanking): UseQueryResult<RankingWod[]> {
   return useQuery({
-    queryKey: rankingKeys.wods(sexo),
-    queryFn: () => apiFetch<RankingWod[]>(`/ranking/wods${conSexo(sexo)}`),
+    queryKey: rankingKeys.wods(f),
+    queryFn: () => apiFetch<RankingWod[]>(`/ranking/wods${consulta(f)}`),
   });
 }
 
-export function useRankingWod(clave: string | null, formato: string | null, sexo: Sexo): UseQueryResult<RankingWodRow[]> {
+export function useRankingWod(key: string | null, formato: string | null, f: FiltrosRanking): UseQueryResult<RankingWodRow[]> {
   return useQuery({
-    queryKey: rankingKeys.wod(clave ?? "", formato ?? "", sexo),
-    queryFn: () => {
-      const params = new URLSearchParams({ wod_format: formato! });
-      if (sexo) params.set("sex", sexo);
-      return apiFetch<RankingWodRow[]>(`/ranking/wods/${encodeURIComponent(clave!)}?${params}`);
-    },
-    enabled: Boolean(clave && formato),
+    queryKey: rankingKeys.wod(key ?? "", formato ?? "", f),
+    queryFn: () => apiFetch<RankingWodRow[]>(`/ranking/wods/${encodeURIComponent(key!)}${consulta(f, { wod_format: formato! })}`),
+    enabled: Boolean(key && formato),
   });
 }

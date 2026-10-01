@@ -204,3 +204,45 @@ def test_el_nombre_que_se_muestra_es_la_escritura_mas_comun_y_no_depende_del_ord
     assert nombre_mas_comun(["fran", "Fran"]) == "Fran"            # empate: alfabético, siempre igual
     assert nombre_mas_comun(["Fran", "fran"]) == "Fran"
     assert nombre_mas_comun(["Snatch"]) == "Snatch"
+
+
+# ------------------------------------------------------------------ ranking de un grupo de asesorados
+
+def test_el_coach_puede_ver_el_ranking_solo_de_uno_de_sus_grupos(equipo):
+    coach, (ana, beto, carla) = equipo
+    for cuenta, kg in ((ana, 80), (beto, 90), (carla, 100)):
+        _marca(cuenta, "Snatch", kg)
+    grupo = coach.post("/groups/", json={"name": "Mañanas", "athlete_ids": [ana.id, beto.id]}).json()
+
+    assert [n for n, *_ in _tabla_marcas(coach, "snatch")] == ["Carla", "Beto", "Ana"]      # sin grupo: todo el box
+    assert _tabla_marcas(coach, "snatch", group_id=grupo["id"]) == [("Beto", 1, 90), ("Ana", 2, 80)]
+    lifts = coach.get("/ranking/lifts", params={"group_id": grupo["id"]}).json()
+    assert {l["name"]: l["athletes_count"] for l in lifts}["Snatch"] == 2
+
+
+def test_el_ranking_de_wods_tambien_se_filtra_por_grupo(equipo):
+    coach, (ana, beto, carla) = equipo
+    _wod(ana, "Fran", "for_time", wod_time_seconds=300)
+    _wod(carla, "Fran", "for_time", wod_time_seconds=240)
+    grupo = coach.post("/groups/", json={"name": "Solo Ana", "athlete_ids": [ana.id]}).json()
+
+    todos = coach.get("/ranking/wods/fran", params={"wod_format": "for_time"}).json()
+    del_grupo = coach.get("/ranking/wods/fran", params={"wod_format": "for_time", "group_id": grupo["id"]}).json()
+    assert [f["full_name"] for f in todos] == ["Carla", "Ana"]
+    assert [f["full_name"] for f in del_grupo] == ["Ana"]
+    assert [w["athletes_count"] for w in coach.get("/ranking/wods", params={"group_id": grupo["id"]}).json()] == [1]
+
+
+def test_un_coach_no_puede_pedir_el_ranking_de_un_grupo_ajeno(client, equipo, dueno_de_box):
+    coach, _ = equipo
+    ajeno = dueno_de_box.post("/groups/", json={"name": "De otro box", "athlete_ids": []}).json()
+    for ruta in ("/ranking/lifts", "/ranking/wods", "/ranking/lifts/snatch"):
+        assert coach.get(ruta, params={"group_id": ajeno["id"]}).status_code in (403, 404)
+
+
+def test_un_atleta_ignora_el_filtro_de_grupo(equipo):
+    coach, (ana, beto, carla) = equipo
+    for cuenta, kg in ((ana, 80), (beto, 90)):
+        _marca(cuenta, "Snatch", kg)
+    grupo = coach.post("/groups/", json={"name": "Solo Ana", "athlete_ids": [ana.id]}).json()
+    assert len(_tabla_marcas(carla, "snatch", group_id=grupo["id"])) == 2
