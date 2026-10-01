@@ -16,7 +16,7 @@ from backend.core.security import (
 )
 from backend.database import get_db
 from backend.services.exercises import clean_ai_block, get_or_create_exercise
-from backend.services.prs import normalize_exercise_name
+from backend.services.prs import actualizar_cargas_por_porcentaje, get_athlete_prs, normalize_exercise_name
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -143,6 +143,13 @@ def complete_session(
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
     ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+
+    # Lo prescrito queda con las marcas de HOY: una vez completada ya no se recalcula.
+    if sesion.mesocycle.user_id:
+        actualizar_cargas_por_porcentaje(
+            db.query(models.Set).options(joinedload(models.Set.exercise)).filter(models.Set.session_id == sesion.id).all(),
+            get_athlete_prs(db, sesion.mesocycle.user_id),
+        )
 
     sesion.status = "completed"
     sesion.completed_date = datetime.utcnow()

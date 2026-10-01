@@ -119,3 +119,23 @@ def resolve_weight_from_percentage(
     if not pr:
         return None
     return round((pr * porcentaje / 100) / 2.5) * 2.5
+
+
+def actualizar_cargas_por_porcentaje(series, prs: dict[str, float]) -> bool:
+    """Recalcula en kg las series prescritas por % de 1RM con las marcas VIGENTES y deja el valor
+    en la serie (el llamador hace commit). Las series ya anotadas no se tocan (lo que se levantó
+    contra esa prescripción no debe moverse) y, si no hay marca de referencia, se conserva el kg
+    que tenía. Devuelve si cambió alguna."""
+    cambio = False
+    for serie in series:
+        if serie.prescribed_percentage is None or serie.actual_reps is not None:
+            continue
+        # "1RM de referencia" vacío significa "el mismo ejercicio" (como al crear/editar la serie)
+        referencia = serie.reference_exercise or (serie.exercise.name if serie.exercise else None)
+        if not referencia:
+            continue
+        nuevo = resolve_weight_from_percentage(serie.prescribed_percentage, serie.prescribed_weight, referencia, prs)
+        if nuevo is not None and nuevo != serie.prescribed_weight:
+            serie.prescribed_weight = nuevo
+            cambio = True
+    return cambio
