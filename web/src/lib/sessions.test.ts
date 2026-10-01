@@ -91,3 +91,25 @@ describe("cargaDelGrupo", () => {
     expect(cargaDelGrupo(grupo(serie(10)), "kg")).toBeNull();
   });
 });
+
+describe("al reordenar los bloques cada ejercicio conserva su propia prescripción", () => {
+  const ejercicio = (nombre: string, block: string, order: number, extra: Partial<SetItem>) =>
+    serie(2, { block, set_order: order, exercise: { id: nombre, name: nombre, category: null }, ...extra });
+  const sets = [
+    ejercicio("Back Squat", "strength", 1, { prescribed_weight: 100, prescribed_percentage: 80, reference_exercise: "Back Squat" }),
+    ejercicio("Power clean", "weightlifting", 2, { prescribed_weight: 97.5, prescribed_percentage: 78, reference_exercise: "Back Squat" }),
+  ];
+  const resumenes = (orden: string) =>
+    gruposEnOrden(sets, orden).map((g) => [g.name, groupSummary(g, "kg")]);
+
+  it("el resumen de cada tarjeta sale de sus propias series, en cualquier orden", () => {
+    expect(resumenes("strength,weightlifting")).toEqual([
+      ["Back Squat", "1 x 2 @ 100 kg (80%)"],
+      ["Power clean", "1 x 2 @ 97.5 kg (78%)"],
+    ]);
+    expect(resumenes("weightlifting,strength")).toEqual([
+      ["Power clean", "1 x 2 @ 97.5 kg (78%)"],
+      ["Back Squat", "1 x 2 @ 100 kg (80%)"],
+    ]);
+  });
+});
