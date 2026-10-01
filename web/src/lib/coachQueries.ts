@@ -17,6 +17,8 @@ import type {
   GroupBulkWodNotesPayload,
   GroupDetail,
   GroupMesocycleProgram,
+  GroupPlanAssignPayload,
+  GroupPlanAssignResponse,
   GroupProgramAthleteRemovePayload,
   GroupProgramDeletePayload,
   GroupSummary,
@@ -24,6 +26,7 @@ import type {
   ManualMesocyclePayload,
   MessageResponse,
   PlanCreatePayload,
+  PlanGenerateAIPayload,
   PlanSetCreatePayload,
   PlanSummary,
   PlanUpdatePayload,
@@ -368,6 +371,30 @@ export function useCreatePlan() {
   return useMutation({
     mutationFn: (body: PlanCreatePayload) => apiFetch<PlanSummary>("/plans/", { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
+  });
+}
+
+/** Genera con IA una plantilla (plan en borrador) con las cargas en % de 1RM: una sola generación,
+ *  sin atleta. Después se asigna a uno o varios grupos. */
+export function useGeneratePlanWithAI() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PlanGenerateAIPayload) =>
+      apiFetch<PlanSummary>("/ai/generate-plan-template/", { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
+  });
+}
+
+/** Asigna una plantilla a un grupo: cada atleta recibe su copia con los kg de SUS marcas. */
+export function useAssignPlanToGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, ...body }: GroupPlanAssignPayload & { groupId: string }) =>
+      apiFetch<GroupPlanAssignResponse>(`/groups/${groupId}/assign-plan`, { method: "POST", body }),
+    onSuccess: (_data, vars) => {
+      void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(vars.groupId) });
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+    },
   });
 }
 

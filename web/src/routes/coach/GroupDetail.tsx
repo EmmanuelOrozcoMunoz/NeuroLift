@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverUploader } from "@/components/CoverImage";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
@@ -167,6 +168,7 @@ export default function GroupDetail() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [aRetirar, setARetirar] = useState<{ id: string; nombre: string } | null>(null);
 
@@ -231,9 +233,14 @@ export default function GroupDetail() {
         </div>
       )}
 
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos del grupo</p>
-        <Button onClick={() => setCreateOpen(true)}>+ Crear</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+            Asignar plan
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>+ Crear</Button>
+        </div>
       </div>
 
       {programs.isPending && <LoadingList rows={2} />}
@@ -287,6 +294,12 @@ export default function GroupDetail() {
         onClose={() => setAddOpen(false)}
         groupId={groupId!}
         currentIds={new Set(group.members.map((m) => m.id))}
+      />
+
+      <AssignPlanSheet
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        group={{ id: groupId!, name: group.name }}
       />
 
       <CreateMesocycleSheet

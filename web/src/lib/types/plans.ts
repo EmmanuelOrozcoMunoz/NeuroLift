@@ -91,3 +91,36 @@ export interface PlanSetCreatePayload {
   /** Series una por una (rampas). Si viene, manda sobre prescribed_sets/reps/carga. */
   series?: SerieEnPeticion[];
 }
+
+/** POST /ai/generate-plan-template/ — una plantilla generada con IA, con cargas en % de 1RM. */
+export interface PlanGenerateAIPayload {
+  name: string;
+  description: string;
+  discipline: string;
+  level: PlanLevel;
+  weeks_count: number;
+  training_days: Weekday[];
+  context: string;
+  session_duration_minutes: number | null;
+}
+
+/** POST /groups/{id}/assign-plan — copia la plantilla a cada miembro del grupo. */
+export interface GroupPlanAssignPayload {
+  plan_id: string;
+  start_date: string;
+}
+
+export interface GroupPlanAssignAthlete {
+  user_id: string;
+  full_name: string;
+  /** skipped: ya tenía este plan en esa fecha. */
+  status: "assigned" | "skipped";
+  mesocycle_id: string | null;
+  /** Ejercicios de referencia de los que el atleta no tiene marca (su carga queda sin kg). */
+  missing_prs: string[];
+}
+
+export interface GroupPlanAssignResponse {
+  message: string;
+  results: GroupPlanAssignAthlete[];
+}

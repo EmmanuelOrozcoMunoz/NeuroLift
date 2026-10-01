@@ -2,18 +2,24 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverThumbnail } from "@/components/CoverImage";
 import { WeekdayPicker } from "@/components/WeekdayPicker";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
-import { useCreatePlan, useDeletePlan, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Toast } from "@/components/ui";
+import { useCreatePlan, useDeletePlan, useGeneratePlanWithAI, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
 import { formatPrice } from "@/lib/dates";
 import type { PlanLevel, PlanSummary, PlanVisibility, Weekday } from "@/lib/types";
 
 const DISCIPLINAS = ["Powerbuilding", "Powerlifting", "Hipertrofia", "Weightlifting", "CrossFit"];
 const NIVELES: PlanLevel[] = ["Principiante", "Intermedio", "Avanzado"];
 
-function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+type ModoCreacion = "manual" | "ia";
+
+function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (message: string) => void }) {
   const createPlan = useCreatePlan();
+  const generateAI = useGeneratePlanWithAI();
+  const [modo, setModo] = useState<ModoCreacion>("manual");
+  const [context, setContext] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [discipline, setDiscipline] = useState(DISCIPLINAS[0]);
@@ -28,6 +34,32 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
     if (!name.trim()) return setError("Dale un nombre al plan.");
     if (days.length === 0) return setError("Selecciona al menos un día de entrenamiento.");
     const precioNum = Number(price);
+
+    if (modo === "ia") {
+      generateAI.mutate(
+        {
+          name: name.trim(),
+          description: description.trim(),
+          discipline,
+          level,
+          weeks_count: Math.min(weeks, 16),
+          training_days: days,
+          context: context.trim(),
+          session_duration_minutes: null,
+        },
+        {
+          onSuccess: () => {
+            setName("");
+            setDescription("");
+            setContext("");
+            onCreated("¡Plantilla generada! Revísala y edítala, luego asígnala a un grupo.");
+            onClose();
+          },
+          onError: (err) => setError(err instanceof Error ? err.message : "No se pudo generar la plantilla."),
+        },
+      );
+      return;
+    }
 
     createPlan.mutate(
       {
@@ -44,7 +76,7 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           setName("");
           setDescription("");
           setPrice("");
-          onCreated();
+          onCreated("¡Plan creado! Ahora agrégale ejercicios.");
           onClose();
         },
         onError: (err) => setError(err instanceof Error ? err.message : "No se pudo crear el plan."),
@@ -55,6 +87,21 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
   return (
     <Sheet open={open} onClose={onClose} title="Nuevo plan">
       <div className="space-y-4">
+        <Segmented<ModoCreacion>
+          value={modo}
+          onChange={setModo}
+          options={[
+            { value: "manual", label: "Armarlo yo" },
+            { value: "ia", label: "✨ Con IA" },
+          ]}
+        />
+        {modo === "ia" && (
+          <p className="text-xs text-muted">
+            La IA arma la plantilla una sola vez, con las cargas en % de 1RM. Al asignarla a un grupo, cada
+            atleta recibe sus propios kg según sus marcas. Puede tardar un minuto.
+          </p>
+        )}
+
         <Field
           label="Nombre del plan"
           placeholder="Ej. Fuerza Base — 8 semanas"
@@ -104,20 +151,34 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           </select>
         </label>
 
-        <Field
-          label="Precio (vacío = gratis)"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
+        {modo === "manual" ? (
+          <Field
+            label="Precio (vacío = gratis)"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        ) : (
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-muted">¿Qué quieres que trabaje? (opcional)</span>
+            <textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="Ej. CrossFit intermedio, 5 días, énfasis en levantamientos olímpicos y un WOD corto cada día"
+              className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+            />
+          </label>
+        )}
 
         <Field
           label="Semanas de duración"
           type="number"
           min="1"
-          max="52"
+          max={modo === "ia" ? 16 : 52}
           value={weeks}
           onChange={(e) => setWeeks(Number(e.target.value) || 1)}
         />
@@ -128,8 +189,8 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
         </div>
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
-        <Button full loading={createPlan.isPending} onClick={handleSubmit}>
-          Crear plan
+        <Button full loading={createPlan.isPending || generateAI.isPending} onClick={handleSubmit}>
+          {modo === "ia" ? "Generar plantilla" : "Crear plan"}
         </Button>
       </div>
     </Sheet>
@@ -212,13 +273,14 @@ export default function Plans() {
   const deletePlan = useDeletePlan();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [publishing, setPublishing] = useState<PlanSummary | null>(null);
+  const [asignando, setAsignando] = useState<PlanSummary | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   return (
     <>
       <PageHeader
         title="Mis planes"
-        subtitle="Plantillas que los atletas adquieren por su cuenta"
+        subtitle="Tus plantillas: asígnalas a tus grupos o publícalas en el catálogo"
         action={
           <button
             type="button"
@@ -271,9 +333,12 @@ export default function Plans() {
                 Editar contenido
               </Button>
             </Link>
+            <Button className="mt-2" full onClick={() => setAsignando(plan)}>
+              Asignar a un grupo
+            </Button>
             <div className="mt-2 flex gap-2">
               <Button
-                variant={plan.is_published ? "secondary" : "primary"}
+                variant="secondary"
                 className="flex-1"
                 loading={publish.isPending}
                 onClick={() =>
@@ -302,11 +367,16 @@ export default function Plans() {
         ))}
       </div>
 
+      <AssignPlanSheet
+        open={asignando !== null}
+        onClose={() => setAsignando(null)}
+        plan={asignando ? { id: asignando.id, name: asignando.name } : undefined}
+      />
       <PublishSheet plan={publishing} onClose={() => setPublishing(null)} onDone={setToast} />
       <CreatePlanSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        onCreated={() => setToast("¡Plan creado! Ahora agrégale ejercicios.")}
+        onCreated={setToast}
       />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}

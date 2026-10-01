@@ -71,6 +71,9 @@ from backend.schemas.groups import (
     GroupMemberResponse,
     GroupMesocycleAthlete,
     GroupMesocycleProgram,
+    GroupPlanAssign,
+    GroupPlanAssignAthlete,
+    GroupPlanAssignResponse,
     AccionPrograma,
     GroupProgramAthleteRemove,
     GroupProgramDelete,
@@ -84,7 +87,7 @@ from backend.schemas.groups import (
     WodDaySummary,
     WodLeaderboardRow,
 )
-from backend.schemas.ai import AIGenerateRequest, AIGenerateSmart, AIGenerateSmartGroup
+from backend.schemas.ai import AIGeneratePlanTemplate, AIGenerateRequest, AIGenerateSmart, AIGenerateSmartGroup
 from backend.schemas.admin import AdminOverview, AuditLogResponse, UserRoleUpdate
 from backend.schemas.plans import (
     NivelPlan,
@@ -119,7 +122,8 @@ __all__ = [
     "GroupProgramDelete",
     "GroupResponse", "GroupSessionExerciseAdd", "GroupSessionExerciseDelete", "GroupSessionExerciseUpdate",
     "GroupSessionWodFormatUpdate", "GroupSessionWodNotesUpdate", "GroupSummaryResponse", "WodDaySummary", "WodLeaderboardRow",
-    "AIGenerateRequest", "AIGenerateSmart", "AIGenerateSmartGroup",
+    "AIGenerateRequest", "AIGenerateSmart", "AIGenerateSmartGroup", "AIGeneratePlanTemplate",
+    "GroupPlanAssign", "GroupPlanAssignAthlete", "GroupPlanAssignResponse",
     "AdminOverview", "AuditLogResponse", "UserRoleUpdate",
     "NivelPlan", "PlanAcquireRequest", "PlanCreate", "PlanPreviewResponse", "PlanPublishUpdate",
     "PlanSessionPreview", "PlanSetCreate", "PlanSummaryResponse", "PlanUpdate",
