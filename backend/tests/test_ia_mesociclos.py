@@ -185,3 +185,63 @@ def test_la_sesion_suelta_generada_con_ia_tambien_trae_su_wod(coach, atleta_de_c
     sesiones = coach.get(f"/mesocycles/{creado['mesocycle_id']}").json()["sessions"]
     con_wod = [s for s in sesiones if s["wod_format"]]
     assert len(con_wod) == 1 and con_wod[0]["wod_format"] == "amrap" and con_wod[0]["wod_time_cap_seconds"] == 1200
+
+
+# ------------------------------------------------------------------ plantilla generada con IA
+
+def _pedir_plantilla(coach, **extra):
+    cuerpo = {"name": "Plantilla IA", "discipline": "CrossFit", "weeks_count": 2, "training_days": [0, 3], "context": "", **extra}
+    return coach.post("/ai/generate-plan-template/", json=cuerpo)
+
+
+def test_la_ia_arma_una_plantilla_con_porcentajes_y_dias_relativos(coach, gemini):
+    r = _pedir_plantilla(coach)
+    assert r.status_code == 200, r.text
+    resumen = r.json()
+    assert resumen["is_published"] is False and resumen["sessions_count"] == 4 and resumen["weeks_count"] == 2
+    assert len(gemini.llamadas) == 1                                  # una sola generación, sin atleta
+    assert "PLANTILLA" in gemini.llamadas[0]["experience_notes"] and "porcentaje de 1RM" in gemini.llamadas[0]["experience_notes"]
+
+    detalle = coach.get(f"/plans/{resumen['id']}").json()
+    offsets = sorted(s["day_offset"] for s in detalle["sessions"])
+    assert offsets[0] == 0 and offsets[2] == 7                        # el primer día de entrenamiento es el día 0
+    series = [x for s in detalle["sessions"] for x in s["sets"]]
+    assert len(series) == 12 and {x["prescribed_percentage"] for x in series} == {80}
+    assert {x["prescribed_weight"] for x in series} == {None}         # sin marcas: nada de kg
+
+
+def test_la_plantilla_de_ia_se_asigna_a_un_grupo_con_los_kg_de_cada_atleta(client, coach, codigo_coach, gemini):
+    from backend.tests.test_asignar_plan import _atleta, _marca
+
+    ana, beto = _atleta(client, codigo_coach, "Ana"), _atleta(client, codigo_coach, "Beto")
+    _marca(ana, "Back Squat", 100)
+    _marca(beto, "Back Squat", 200)
+    grupo = coach.post("/groups/", json={"name": "Grupo", "athlete_ids": [ana.id, beto.id]}).json()
+    plan = _pedir_plantilla(coach).json()
+
+    r = coach.post(f"/groups/{grupo['id']}/assign-plan", json={"plan_id": plan["id"], "start_date": str(HOY)})
+    assert r.status_code == 200, r.text
+    for atleta, kg in ((ana, 80), (beto, 160)):
+        meso = next(m for m in atleta.get(f"/users/{atleta.id}/mesocycles/").json() if m["name"] == "Plantilla IA")
+        series = [s for ses in atleta.get(f"/mesocycles/{meso['id']}").json()["sessions"] for s in ses["sets"]]
+        assert {s["prescribed_weight"] for s in series} == {kg}
+    assert len(gemini.llamadas) == 1                                  # asignar no vuelve a llamar a la IA
+
+
+def test_si_la_ia_falla_no_queda_una_plantilla_a_medias(coach, gemini):
+    gemini.error = "Gemini caído"
+    r = _pedir_plantilla(coach)
+    assert r.status_code == 500 and "Gemini caído" in r.text
+    assert coach.get("/plans/mine").json() == []
+
+
+def test_la_plantilla_de_ia_trae_el_wod_en_su_plantilla_de_wod(coach, gemini):
+    gemini.ejercicios = []
+    gemini.wod = {"name": "Fran", "format": "for_time", "time_cap_minutes": 10, "description": "21-15-9"}
+    plan = _pedir_plantilla(coach, weeks_count=1, training_days=[2]).json()
+    sesion = coach.get(f"/plans/{plan['id']}").json()["sessions"][0]
+    assert sesion["wod_format"] == "for_time" and sesion["wod_time_cap_seconds"] == 600
+
+
+def test_un_atleta_no_puede_generar_plantillas(atleta_de_coach, gemini):
+    assert _pedir_plantilla(atleta_de_coach).status_code == 403

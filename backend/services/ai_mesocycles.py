@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from backend import models
 from backend.database import SessionLocal
 from backend.services.exercises import clean_ai_block
+from backend.services.plans import PLAN_EPOCH
 from backend.services.prs import get_athlete_prs, normalize_exercise_name, resolve_weight_from_percentage
 
 _NOMBRE_DIA_SEMANA = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
@@ -256,6 +257,45 @@ def guardar_rutinas(
                         orden += 1
 
 
+def pedir_rutinas(
+    nombre: str,
+    discipline: str,
+    contexto: str,
+    fechas: List[str],
+    weeks_count: int,
+    sesiones_por_semana: int,
+    session_duration_minutes: int | None,
+    day_focus: dict[int, str] | None,
+) -> List[dict]:
+    """Pide a Gemini las sesiones de todas las fechas, por tandas de SEMANAS_POR_CHUNK semanas y en
+    paralelo (cada tanda es una llamada HTTP independiente: tarda lo que la más lenta, no la suma)."""
+    # Se importan aquí (y no arriba) para que las pruebas puedan sustituir la llamada a Gemini.
+    from backend.ai_agent import generate_mesocycle_chunk
+    from backend.knowledge_search import search_knowledge_base
+
+    # Una sola vez para todo el mesociclo: discipline/context no cambian entre chunks.
+    literatura = search_knowledge_base(f"{discipline} - {contexto}")
+    specs = especificar_chunks(fechas, weeks_count, sesiones_por_semana, day_focus)
+
+    def pedir_chunk(spec):
+        start, end, fechas_del_chunk, guia = spec
+        return generate_mesocycle_chunk(
+            athlete_name=nombre,
+            discipline=discipline,
+            experience_notes=contexto,
+            start_week=start,
+            end_week=end,
+            session_dates=fechas_del_chunk,
+            session_duration_minutes=session_duration_minutes,
+            literatura_cientifica=literatura,
+            day_focus_text=guia,
+        )
+
+    # executor.map conserva el orden, así que las semanas se guardan en orden.
+    with ThreadPoolExecutor(max_workers=len(specs)) as executor:
+        return list(executor.map(pedir_chunk, specs))
+
+
 def construir_mesociclo_inteligente(
     db: Session,
     atleta: models.User,
@@ -281,33 +321,10 @@ def construir_mesociclo_inteligente(
     fechas = fechas_de_entrenamiento(start_date, weeks_count, training_days)
 
     try:
-        # Se importan aquí (y no arriba) para que las pruebas puedan sustituir la llamada a Gemini.
-        from backend.ai_agent import generate_mesocycle_chunk
-        from backend.knowledge_search import search_knowledge_base
-
-        # Una sola vez para todo el mesociclo: discipline/context no cambian entre chunks.
-        literatura = search_knowledge_base(f"{discipline} - {contexto}")
-        specs = especificar_chunks(fechas, weeks_count, len(training_days), day_focus)
-
-        def pedir_chunk(spec):
-            start, end, fechas_del_chunk, guia = spec
-            return generate_mesocycle_chunk(
-                athlete_name=atleta.full_name,
-                discipline=discipline,
-                experience_notes=contexto,
-                start_week=start,
-                end_week=end,
-                session_dates=fechas_del_chunk,
-                session_duration_minutes=session_duration_minutes,
-                literatura_cientifica=literatura,
-                day_focus_text=guia,
-            )
-
-        # Cada chunk es una llamada HTTP independiente: en paralelo tarda lo que el más lento, no
-        # la suma. executor.map conserva el orden, así que las semanas se guardan en orden.
-        with ThreadPoolExecutor(max_workers=len(specs)) as executor:
-            rutinas = list(executor.map(pedir_chunk, specs))
-
+        rutinas = pedir_rutinas(
+            atleta.full_name, discipline, contexto, fechas, weeks_count, len(training_days),
+            session_duration_minutes, day_focus,
+        )
         guardar_rutinas(db, meso, rutinas, start_date, session_duration_minutes, prs)
         meso.end_date = datetime.strptime(fechas[-1], "%Y-%m-%d").date()
         db.commit()
@@ -347,3 +364,75 @@ def construir_mesociclo_en_su_propia_sesion(
         return {"user_id": str(atleta_id), "full_name": full_name, "status": "error", "detail": str(e)}
     finally:
         db.close()
+
+
+# Lo que se le dice a la IA al armar una plantilla: no hay un atleta concreto, así que no hay marcas.
+_CONTEXTO_PLANTILLA = (
+    "Esto es una PLANTILLA reutilizable para varios atletas, no para uno solo: no hay marcas "
+    "individuales. Prescribe las cargas de fuerza y weightlifting SIEMPRE en porcentaje de 1RM "
+    "(prescribed_percentage) con su reference_exercise, y no uses pesos fijos en kg; la app "
+    "calculará los kg de cada atleta con sus propias marcas al asignarla. Como reference_exercise "
+    "usa nombres estándar: Back Squat, Front Squat, Snatch, Clean & Jerk, Deadlift, Bench Press, "
+    "Overhead Press. Peticiones del coach: "
+)
+
+
+def construir_plantilla_con_ia(
+    db: Session,
+    coach: models.User,
+    name: str,
+    description: str,
+    discipline: str,
+    level: str,
+    weeks_count: int,
+    training_days: List[int],
+    context: str,
+    session_duration_minutes: int | None = None,
+    day_focus: dict[int, str] | None = None,
+) -> models.Mesocycle:
+    """Genera con IA UNA plantilla (plan en borrador del coach) con las cargas en % de 1RM: una
+    sola generación sirve para todos los grupos y atletas a los que se asigne después. Hace commit
+    propio; si algo falla hace rollback y lanza RuntimeError."""
+    # Días relativos al primer día de entrenamiento (igual que un plan creado a mano): el patrón
+    # semanal se conserva sin importar en qué día de la semana se asigne.
+    fechas = fechas_de_entrenamiento(PLAN_EPOCH, weeks_count, training_days)
+    if not fechas:
+        raise RuntimeError("Selecciona al menos un día de entrenamiento.")
+
+    plan = models.Mesocycle(
+        user_id=None,
+        is_template=True,
+        is_published=False,
+        created_by_coach_id=coach.id,
+        box_id=coach.box_id,
+        plan_visibility="box",
+        name=name,
+        description=description,
+        discipline=discipline,
+        level=level,
+        start_date=PLAN_EPOCH,
+    )
+    db.add(plan)
+    db.flush()
+
+    try:
+        rutinas = pedir_rutinas(
+            "el grupo", discipline, _CONTEXTO_PLANTILLA + context, fechas, weeks_count, len(training_days),
+            session_duration_minutes, day_focus,
+        )
+        guardar_rutinas(db, plan, rutinas, PLAN_EPOCH, session_duration_minutes, {})
+        db.flush()
+
+        base = (datetime.strptime(fechas[0], "%Y-%m-%d").date() - PLAN_EPOCH).days
+        sesiones = db.query(models.Session).filter(models.Session.mesocycle_id == plan.id).all()
+        for sesion in sesiones:
+            offset = max(0, (sesion.scheduled_date - PLAN_EPOCH).days - base)
+            sesion.day_offset = offset
+            sesion.scheduled_date = PLAN_EPOCH + timedelta(days=offset)
+        plan.end_date = PLAN_EPOCH + timedelta(days=max((s.day_offset for s in sesiones), default=0))
+        db.commit()
+        db.refresh(plan)
+        return plan
+    except Exception as e:
+        db.rollback()
+        raise RuntimeError(str(e)) from e

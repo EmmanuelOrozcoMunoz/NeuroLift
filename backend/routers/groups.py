@@ -7,9 +7,11 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
 from backend import avatars, models, schemas, storage
-from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
+from backend.core.security import _ip_and_user_key, ensure_has_personal_coach, get_current_user, limiter, require_coach
 from backend.database import get_db
+from backend.core.errors import SolicitudInvalida
 from backend.services.group_access import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
+from backend.services.plans import asignar_plan_a_grupo, obtener_plan_propio
 from backend.services.groups import (
     actualizar_ejercicio,
     agregar_ejercicio,
@@ -214,6 +216,34 @@ def list_group_mesocycles(
         )
 
     return list(programas.values())
+
+
+@router.post("/{group_id}/assign-plan", response_model=schemas.GroupPlanAssignResponse)
+def assign_plan_to_group(
+    group_id: UUID,
+    req: schemas.GroupPlanAssign,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Asigna una plantilla (plan) del coach a todo el grupo: cada atleta recibe su propio
+    mesociclo con las fechas desde `start_date` y las cargas en % calculadas con SUS marcas de 1RM.
+    No usa IA: es copiar y calcular, así que es inmediato. Asignarla de nuevo (misma fecha) solo
+    llega a quienes aún no la tenían."""
+    grupo = get_owned_group(db, group_id, current_user)
+    plan = obtener_plan_propio(db, req.plan_id, current_user)
+    if not grupo.members:
+        raise SolicitudInvalida("El grupo no tiene atletas asignados")
+    ensure_has_personal_coach(grupo.members)
+
+    resultados = asignar_plan_a_grupo(db, plan, grupo, req.start_date)
+    db.commit()
+
+    asignados = sum(1 for r in resultados if r["status"] == "assigned")
+    omitidos = len(resultados) - asignados
+    mensaje = f"Plan '{plan.name}' asignado a {asignados} atleta(s) de '{grupo.name}'."
+    if omitidos:
+        mensaje += f" {omitidos} ya lo tenía(n) en esa fecha."
+    return {"message": mensaje, "results": resultados}
 
 
 def _get_group_program_mesocycles(

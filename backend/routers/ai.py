@@ -16,6 +16,7 @@ from backend.database import get_db
 from backend.services.group_access import get_owned_group
 from backend.services.ai_mesocycles import (
     construir_mesociclo_en_su_propia_sesion,
+    construir_plantilla_con_ia,
     construir_mesociclo_inteligente,
     guardar_sesion_ia,
 )
@@ -50,6 +51,27 @@ def generate_and_save_session(
     db.refresh(nueva_sesion)
 
     return {"status": "success", "session_focus": rutina_ai.get("session_focus"), "session_id": nueva_sesion.id}
+
+
+@router.post("/generate-plan-template/", response_model=schemas.PlanSummaryResponse)
+@limiter.limit("10/hour", key_func=_ip_and_user_key)
+def generate_plan_template(
+    request: Request,
+    req: schemas.AIGeneratePlanTemplate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Genera con IA una plantilla (plan en borrador) con las cargas en % de 1RM. Es UNA sola
+    generación, sin atleta: después se asigna a uno o varios grupos y ahí se calculan los kg de
+    cada atleta con sus marcas (POST /groups/{id}/assign-plan)."""
+    try:
+        plan = construir_plantilla_con_ia(
+            db, current_user, req.name, req.description, req.discipline, req.level, req.weeks_count,
+            req.training_days, req.context, session_duration_minutes=req.session_duration_minutes,
+            day_focus=req.day_focus,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"Error interno generando la plantilla: {str(e)}")
+    from backend.routers.plans import _plan_summary
+    return _plan_summary(db, plan)
 
 
 MAX_ATLETAS_POR_GENERACION_GRUPAL = 25  # cada atleta dispara su propia tanda de llamadas a Gemini
