@@ -8,7 +8,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { blockLabel } from "@/lib/blocks";
 import { formatPrice, todayIso } from "@/lib/dates";
 import { useAcquirePlan, usePlanCatalog, usePlanDetail } from "@/lib/queries";
-import { groupSets, groupSummary } from "@/lib/sessions";
+import { groupSummary, gruposEnOrden } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 
 export default function PlanDetail() {
@@ -132,7 +132,7 @@ export default function PlanDetail() {
           {[...detail.data.sessions]
             .sort((a, b) => (a.day_offset ?? 0) - (b.day_offset ?? 0))
             .map((sesion) => {
-              const grupos = groupSets(sesion.sets);
+              const grupos = gruposEnOrden(sesion.sets, sesion.block_order);
               const dia = (sesion.day_offset ?? 0) + 1;
               return (
                 <Card key={sesion.id}>

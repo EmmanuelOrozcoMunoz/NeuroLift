@@ -286,7 +286,7 @@ export default function SessionDetail() {
               {bloque.key === "metcon" && wodCard}
               <div className="space-y-3">
                 {bloque.groups.map((grupo, indiceGrupo) => (
-                  <Card key={`${grupo.name}-${indiceGrupo}`} className="p-3">
+                  <Card key={grupo.sets[0]?.id ?? `${grupo.name}-${indiceGrupo}`} className="p-3">
                     <div className="mb-2.5 px-1">
                       <p className="leading-tight font-bold">{grupo.name}</p>
                       <p className="text-xs text-muted">{groupSummary(grupo, unit)}</p>
