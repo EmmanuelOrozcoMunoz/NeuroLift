@@ -17,7 +17,7 @@ from backend.core.security import (
 )
 from backend.database import get_db
 from backend.services.group_access import get_owned_group
-from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
+from backend.services.prs import actualizar_cargas_por_porcentaje, get_athlete_prs
 
 router = APIRouter(prefix="/mesocycles", tags=["mesocycles"])
 
@@ -78,28 +78,20 @@ def get_full_mesocycle(
     for sesion in meso.sessions:
         sesion.sets.sort(key=lambda serie: serie.set_order)
 
-    # Una serie prescrita por % de 1RM guarda el kg ya calculado al momento de crearse — si el
-    # atleta actualiza su marca después, ese kg queda desactualizado. Para sesiones YA
-    # completadas eso es correcto (es el registro histórico de lo que se hizo, no debe moverse);
-    # para las pendientes se recalcula contra la marca VIGENTE en cada lectura, sin persistirlo
-    # (no hay db.commit() acá), así el plan siempre refleja el 1RM actual sin reescribir nada.
+    # Una serie prescrita por % de 1RM guarda el kg calculado al crearse: si el atleta actualiza su
+    # marca después, ese kg queda desactualizado. En las sesiones pendientes se recalcula contra la
+    # marca VIGENTE y se GUARDA, para que lo que el atleta vio y registró sea lo que quede escrito.
+    # (Antes solo se recalculaba al leer, sin guardar: al completar la sesión volvía a verse el kg
+    # viejo de cuando se generó, con otras marcas.) Las sesiones completadas y las series ya
+    # anotadas no se tocan: son el registro histórico de lo que se hizo.
     if meso.user_id:
         prs = get_athlete_prs(db, meso.user_id)
+        cambio = False
         for sesion in meso.sessions:
-            if sesion.status == "completed":
-                continue
-            for serie in sesion.sets:
-                if serie.prescribed_percentage is None:
-                    continue
-                # "1RM de referencia" vacío significa "el mismo ejercicio" (así lo promete el
-                # placeholder del campo en SessionSetsEditor.tsx, y así lo resuelven sets.py/ai.py
-                # al crear/editar) — hay que replicar ese fallback aquí, si no las series creadas
-                # sin referencia explícita nunca se recalculan y se quedan sin peso para siempre.
-                referencia = serie.reference_exercise or (serie.exercise.name if serie.exercise else None)
-                if referencia:
-                    serie.prescribed_weight = resolve_weight_from_percentage(
-                        serie.prescribed_percentage, serie.prescribed_weight, referencia, prs
-                    )
+            if sesion.status != "completed":
+                cambio = actualizar_cargas_por_porcentaje(sesion.sets, prs) or cambio
+        if cambio:
+            db.commit()
 
     return meso
 
