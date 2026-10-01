@@ -91,3 +91,18 @@ describe("cargaDelGrupo", () => {
     expect(cargaDelGrupo(grupo(serie(10)), "kg")).toBeNull();
   });
 });
+
+describe("groupSummary con series anotadas", () => {
+  it("usa el peso y las reps reales y no el % prescrito", () => {
+    const hechas = [1, 2, 3].map(() => serie(2, { prescribed_weight: 97.5, prescribed_percentage: 78, actual_reps: 2, actual_weight: 74 }));
+    expect(groupSummary(grupo(...hechas), "kg")).toBe("3 x 2 @ 74 kg");
+  });
+
+  it("mezcla lo hecho con lo que falta", () => {
+    const g = grupo(
+      serie(2, { prescribed_weight: 97.5, actual_reps: 2, actual_weight: 74 }),
+      serie(2, { prescribed_weight: 97.5 }),
+    );
+    expect(groupSummary(g, "kg")).toBe("74 kg×2 · 97.5 kg×2");
+  });
+});
