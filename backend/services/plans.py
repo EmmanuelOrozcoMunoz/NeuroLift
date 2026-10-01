@@ -4,9 +4,10 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend import models
+from backend.core.errors import NoEncontrado, Prohibido, SolicitudInvalida
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 from backend.services.sets import clonar_set
 
@@ -21,13 +22,17 @@ class ResultadoAdquisicion:
     missing_prs: list[str] = field(default_factory=list)
 
 
-def adquirir_plan(db: Session, plan: models.Mesocycle, atleta: models.User, start_date: date) -> ResultadoAdquisicion:
+def adquirir_plan(
+    db: Session, plan: models.Mesocycle, atleta: models.User, start_date: date, group_id: UUID | None = None
+) -> ResultadoAdquisicion:
     """Clona el plan (ya validado como publicado y visible) a un mesociclo propio del atleta con
-    las fechas reales a partir de `start_date` y las cargas en % resueltas con SUS marcas de 1RM."""
+    las fechas reales a partir de `start_date` y las cargas en % resueltas con SUS marcas de 1RM.
+    Con `group_id`, el mesociclo queda como parte del programa de ese grupo."""
     prs = get_athlete_prs(db, atleta.id)
 
     nuevo_meso = models.Mesocycle(
         user_id=atleta.id,
+        group_id=group_id,
         is_template=False,
         source_plan_id=plan.id,
         name=plan.name,
@@ -57,6 +62,7 @@ def adquirir_plan(db: Session, plan: models.Mesocycle, atleta: models.User, star
             wod_notes=sesion_plan.wod_notes,
             wod_format=sesion_plan.wod_format,
             wod_time_cap_seconds=sesion_plan.wod_time_cap_seconds,
+            block_order=sesion_plan.block_order,
         )
         db.add(nueva_sesion)
         db.flush()
@@ -71,3 +77,52 @@ def adquirir_plan(db: Session, plan: models.Mesocycle, atleta: models.User, star
 
     nuevo_meso.end_date = start_date + timedelta(days=max_offset)
     return ResultadoAdquisicion(mesocycle_id=nuevo_meso.id, missing_prs=sorted(sin_marca))
+
+
+def obtener_plan_propio(db: Session, plan_id: UUID, coach: models.User) -> models.Mesocycle:
+    """Un plan (plantilla) del propio coach, con sus sesiones y series cargadas. El admin puede
+    usar cualquiera. Publicado o en borrador da igual: una plantilla sirve para asignar."""
+    plan = (
+        db.query(models.Mesocycle)
+        .options(joinedload(models.Mesocycle.sessions).joinedload(models.Session.sets).joinedload(models.Set.exercise))
+        .filter(models.Mesocycle.id == plan_id, models.Mesocycle.is_template == True)  # noqa: E712
+        .first()
+    )
+    if not plan:
+        raise NoEncontrado("Plan no encontrado")
+    if coach.role != "admin" and plan.created_by_coach_id != coach.id:
+        raise Prohibido("Este plan no te pertenece")
+    return plan
+
+
+def asignar_plan_a_grupo(
+    db: Session, plan: models.Mesocycle, grupo: models.Group, start_date: date
+) -> list[dict]:
+    """Copia el plan a cada miembro del grupo: fechas reales desde `start_date` y las cargas en %
+    resueltas con las marcas de CADA atleta. Sin commit. Quien ya recibió este mismo plan en esa
+    misma fecha se omite, así volver a asignarlo solo alcanza a los miembros nuevos."""
+    if not plan.sessions:
+        raise SolicitudInvalida("Este plan no tiene días de entrenamiento.")
+    if not any(sesion.sets for sesion in plan.sessions):
+        raise SolicitudInvalida("Este plan todavía no tiene ejercicios: agrégalos antes de asignarlo.")
+
+    miembros = list(grupo.members)
+    ya_asignados = {
+        fila[0]
+        for fila in db.query(models.Mesocycle.user_id).filter(
+            models.Mesocycle.group_id == grupo.id,
+            models.Mesocycle.source_plan_id == plan.id,
+            models.Mesocycle.start_date == start_date,
+        )
+    }
+
+    resultados = []
+    for atleta in sorted(miembros, key=lambda a: a.full_name.lower()):
+        if atleta.id in ya_asignados:
+            resultados.append({"user_id": atleta.id, "full_name": atleta.full_name, "status": "skipped",
+                               "mesocycle_id": None, "missing_prs": []})
+            continue
+        resultado = adquirir_plan(db, plan, atleta, start_date, group_id=grupo.id)
+        resultados.append({"user_id": atleta.id, "full_name": atleta.full_name, "status": "assigned",
+                           "mesocycle_id": resultado.mesocycle_id, "missing_prs": resultado.missing_prs})
+    return resultados

@@ -201,3 +201,23 @@ class WodLeaderboardRow(BaseModel):
     score_label: Optional[str] = None
     rank: Optional[int] = None
     completed: bool = False
+
+
+class GroupPlanAssign(SanitizedModel):
+    """Asigna una plantilla (plan) del coach a todos los miembros de un grupo."""
+    plan_id: UUID
+    start_date: date
+
+
+class GroupPlanAssignAthlete(BaseModel):
+    user_id: UUID
+    full_name: str
+    status: Literal["assigned", "skipped"]  # skipped: ya tenía este plan en esa fecha
+    mesocycle_id: UUID | None = None
+    # Ejercicios de referencia de los que el atleta no tiene marca: su carga queda sin kg.
+    missing_prs: List[str] = []
+
+
+class GroupPlanAssignResponse(BaseModel):
+    message: str
+    results: List[GroupPlanAssignAthlete]

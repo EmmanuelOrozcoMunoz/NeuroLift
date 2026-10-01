@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Literal
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -60,6 +60,25 @@ class AIGenerateSmartGroup(SanitizedModel):
     discipline: str = Field(..., min_length=1, max_length=50)
     start_date: date
     # Mismo tope que la versión individual, y aquí se multiplica por cada atleta del grupo.
+    weeks_count: int = Field(..., ge=1, le=16)
+    training_days: List[Dia]
+    context: str = Field("", max_length=2000)
+    session_duration_minutes: int | None = Field(None, ge=15, le=180)
+    day_focus: Dict[Dia, str] | None = None
+
+    @field_validator("day_focus")
+    @classmethod
+    def _sanear_day_focus(cls, value: Dict[int, str] | None) -> Dict[int, str] | None:
+        return _clean_day_focus(value)
+
+
+class AIGeneratePlanTemplate(SanitizedModel):
+    """Una plantilla (plan) generada con IA: una sola generación para todo el grupo, con las cargas
+    en % de 1RM. Al asignarla a un grupo se calculan los kg de cada atleta con sus marcas."""
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=2000)
+    discipline: str = Field(..., min_length=1, max_length=50)
+    level: Literal["Principiante", "Intermedio", "Avanzado"] = "Intermedio"
     weeks_count: int = Field(..., ge=1, le=16)
     training_days: List[Dia]
     context: str = Field("", max_length=2000)
