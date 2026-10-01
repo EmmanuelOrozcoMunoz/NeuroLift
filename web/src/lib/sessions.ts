@@ -163,34 +163,19 @@ function shortLoad(set: SetItem, unit: WeightUnit): string {
   return "libre";
 }
 
-/** La serie tal como cuenta para el resumen: si ya está anotada, con lo que se hizo (reps y peso
- *  reales; el % prescrito deja de aplicar al peso real); si no, con lo prescrito. */
-function serieEfectiva(set: SetItem): SetItem {
-  if (!isSetLogged(set)) return set;
-  const peso = set.actual_weight || set.prescribed_weight;
-  return {
-    ...set,
-    prescribed_reps: set.actual_reps ?? set.prescribed_reps,
-    prescribed_weight: peso,
-    prescribed_percentage: set.actual_weight ? null : set.prescribed_percentage,
-  };
-}
-
 /** Resumen compacto de un ejercicio. Con series iguales: "4 x 5 @ 135 kg". Con series distintas
- *  (una rampa): cada serie con su carga y sus repeticiones, "50%×3 · 60%×3 · 70%×1". Las series ya
- *  anotadas cuentan con lo que se hizo, no con lo prescrito. */
+ *  (una rampa): cada serie con su carga y sus repeticiones, "50%×3 · 60%×3 · 70%×1". */
 export function groupSummary(group: ExerciseGroup, unit: WeightUnit): string {
-  const series = group.sets.map(serieEfectiva);
-  const first = series[0];
+  const first = group.sets[0];
   if (!first) return "";
-  const iguales = series.every(
+  const iguales = group.sets.every(
     (set) =>
       set.prescribed_reps === first.prescribed_reps &&
       set.prescribed_weight === first.prescribed_weight &&
       set.prescribed_percentage === first.prescribed_percentage,
   );
-  if (iguales) return `${series.length} x ${first.prescribed_reps} @ ${loadLabel(first, unit)}`;
-  return series.map((set) => `${shortLoad(set, unit)}×${set.prescribed_reps}`).join(" · ");
+  if (iguales) return `${group.sets.length} x ${first.prescribed_reps} @ ${loadLabel(first, unit)}`;
+  return group.sets.map((set) => `${shortLoad(set, unit)}×${set.prescribed_reps}`).join(" · ");
 }
 
 /** La carga de un ejercicio en cifra y unidad, para las vistas previas: el peso real de las series
