@@ -13,9 +13,9 @@ import { apiFetch } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth";
 import { daysFromToday, formatSeconds, longDate, parseApiDate, relativeDay, todayIso, toApiDate } from "@/lib/dates";
 import { queryKeys, useMesocycles } from "@/lib/queries";
-import { groupSets, isSetLogged, sessionProgress, splitSessions } from "@/lib/sessions";
+import { cargaDelGrupo, gruposEnOrden, isSetLogged, sessionProgress, splitSessions } from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
-import { kgTo, useWeightUnit } from "@/lib/units";
+import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
 import type { MesocycleFull, TrainingSession, WeightUnit } from "@/lib/types";
 
@@ -235,7 +235,7 @@ function WeekProgress({ sessions, todayIso: hoyIso }: { sessions: SessionRef[]; 
 function TodayHero({ item }: { item: SessionRef }) {
   const unit = useWeightUnit();
   const { session, mesocycleId, mesocycleName, adapted } = item;
-  const grupos = groupSets(session.sets);
+  const grupos = gruposEnOrden(session.sets, session.block_order);
   const { logged, total } = sessionProgress(session);
   const completada = session.status === "completed";
   const empezada = logged > 0 && !completada;
@@ -309,10 +309,9 @@ function TodayHero({ item }: { item: SessionRef }) {
 
 /** Fila de ejercicio: nombre a la izquierda, CIFRAS protagonistas a la derecha. */
 function ExerciseRow({ group, unit }: { group: ExerciseGroup; unit: WeightUnit }) {
-  const primera = group.sets[0];
   const reps = [...new Set(group.sets.map((set) => set.prescribed_reps))];
   const hecho = group.sets.length > 0 && group.sets.every(isSetLogged);
-  const carga = loadParts(primera, unit);
+  const carga = cargaDelGrupo(group, unit);
 
   return (
     <li className="flex items-center gap-3 py-3 [&+li]:border-t [&+li]:border-line">
@@ -335,7 +334,7 @@ function ExerciseRow({ group, unit }: { group: ExerciseGroup; unit: WeightUnit }
           {group.sets.length}×{reps.join("/")}
         </span>
         {carga && (
-          <span className="num min-w-[4.5rem] text-lg font-extrabold">
+          <span className="num min-w-[4.5rem] whitespace-nowrap text-lg font-extrabold">
             {carga.value}
             <span className="ml-0.5 text-xs font-semibold text-muted">{carga.unit}</span>
           </span>
@@ -343,17 +342,6 @@ function ExerciseRow({ group, unit }: { group: ExerciseGroup; unit: WeightUnit }
       </span>
     </li>
   );
-}
-
-/** La carga de la primera serie separada en cifra y unidad, para darle peso tipográfico a la cifra. */
-function loadParts(set: ExerciseGroup["sets"][number] | undefined, unit: WeightUnit): { value: string; unit: string } | null {
-  if (!set) return null;
-  if (set.prescribed_weight) {
-    const v = kgTo(set.prescribed_weight, unit);
-    return { value: Number.isInteger(v) ? String(v) : v.toFixed(1), unit };
-  }
-  if (set.prescribed_percentage) return { value: String(Math.round(set.prescribed_percentage)), unit: "%" };
-  return null;
 }
 
 function RestDay({ next }: { next?: SessionRef }) {

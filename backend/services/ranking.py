@@ -32,13 +32,19 @@ def nombre_mas_comun(nombres: list[str]) -> str:
     return sorted(cuenta, key=lambda n: (-cuenta[n], n))[0]
 
 
-def atletas_del_ranking(db: Session, box_id: UUID, sexo: str | None = None) -> dict[UUID, models.User]:
-    """Atletas de la cuenta que aparecen en el ranking, por id."""
+def atletas_del_ranking(
+    db: Session, box_id: UUID, sexo: str | None = None, grupo_id: UUID | None = None
+) -> dict[UUID, models.User]:
+    """Atletas de la cuenta que aparecen en el ranking, por id. Con `grupo_id`, solo los miembros
+    de ese grupo (el coach compara a sus asesorados)."""
     consulta = db.query(models.User).filter(
         models.User.box_id == box_id, models.User.role == "athlete", models.User.show_in_ranking == True  # noqa: E712
     )
     if sexo:
         consulta = consulta.filter(models.User.sex == sexo)
+    if grupo_id:
+        miembros = db.query(models.group_members.c.user_id).filter(models.group_members.c.group_id == grupo_id)
+        consulta = consulta.filter(models.User.id.in_(miembros))
     return {u.id: u for u in consulta.all()}
 
 
@@ -74,18 +80,20 @@ def _mejores_marcas(db: Session, atletas: dict[UUID, models.User]) -> dict[str, 
     return por_clave
 
 
-def levantamientos(db: Session, box_id: UUID, sexo: str | None = None) -> list[dict]:
+def levantamientos(db: Session, box_id: UUID, sexo: str | None = None, grupo_id: UUID | None = None) -> list[dict]:
     """Los levantamientos principales, siempre en el mismo orden, con cuántos atletas del ranking
     tienen marca en cada uno (puede ser 0)."""
-    por_clave = _mejores_marcas(db, atletas_del_ranking(db, box_id, sexo))
+    por_clave = _mejores_marcas(db, atletas_del_ranking(db, box_id, sexo, grupo_id))
     return [
         {"key": clave, "name": nombre, "athletes_count": len(por_clave.get(clave, {}))}
         for clave, nombre in _PRINCIPALES.items()
     ]
 
 
-def tabla_de_marcas(db: Session, box_id: UUID, clave: str, yo: UUID, sexo: str | None = None) -> list[dict]:
-    atletas = atletas_del_ranking(db, box_id, sexo)
+def tabla_de_marcas(
+    db: Session, box_id: UUID, clave: str, yo: UUID, sexo: str | None = None, grupo_id: UUID | None = None
+) -> list[dict]:
+    atletas = atletas_del_ranking(db, box_id, sexo, grupo_id)
     por_atleta = _mejores_marcas(db, atletas).get(normalize_exercise_name(clave), {})  # otros levantamientos: vacío
     ordenadas = sorted(por_atleta.values(), key=lambda m: (-m.max_weight_kg, atletas[m.user_id].full_name.lower()))
     posiciones = asignar_posiciones([m.max_weight_kg for m in ordenadas])
@@ -145,9 +153,9 @@ def _mejores_sesiones_de_wod(db: Session, atletas: dict[UUID, models.User]) -> d
     return resultado
 
 
-def wods(db: Session, box_id: UUID, sexo: str | None = None) -> list[dict]:
+def wods(db: Session, box_id: UUID, sexo: str | None = None, grupo_id: UUID | None = None) -> list[dict]:
     """WODs con resultados de atletas del ranking, los más hechos (y más recientes) primero."""
-    atletas = atletas_del_ranking(db, box_id, sexo)
+    atletas = atletas_del_ranking(db, box_id, sexo, grupo_id)
     lista = []
     for (clave, formato), datos in _mejores_sesiones_de_wod(db, atletas).items():
         fechas = [s.scheduled_date for s in datos["por_atleta"].values()]
@@ -157,8 +165,10 @@ def wods(db: Session, box_id: UUID, sexo: str | None = None) -> list[dict]:
     return lista
 
 
-def tabla_de_wod(db: Session, box_id: UUID, clave: str, formato: str, yo: UUID, sexo: str | None = None) -> list[dict]:
-    atletas = atletas_del_ranking(db, box_id, sexo)
+def tabla_de_wod(
+    db: Session, box_id: UUID, clave: str, formato: str, yo: UUID, sexo: str | None = None, grupo_id: UUID | None = None
+) -> list[dict]:
+    atletas = atletas_del_ranking(db, box_id, sexo, grupo_id)
     datos = _mejores_sesiones_de_wod(db, atletas).get((normalize_exercise_name(clave), formato))
     if not datos:
         return []

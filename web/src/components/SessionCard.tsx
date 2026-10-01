@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { IconCheck, IconChevronRight, IconClock } from "@/components/icons";
 import { cx } from "@/components/ui";
 import { parseApiDate, relativeDay } from "@/lib/dates";
-import { groupSets, sessionProgress } from "@/lib/sessions";
+import { gruposEnOrden, sessionProgress } from "@/lib/sessions";
 import type { TrainingSession } from "@/lib/types";
 
 /**
@@ -29,7 +29,7 @@ export function SessionCard({
   const completed = session.status === "completed";
   const { logged, total } = sessionProgress(session);
   const started = logged > 0 && !completed;
-  const nombres = groupSets(session.sets).map((group) => group.name);
+  const nombres = gruposEnOrden(session.sets, session.block_order).map((group) => group.name);
   const date = parseApiDate(session.scheduled_date);
   const weekday = date.toLocaleDateString("es", { weekday: "short" }).replace(".", "");
 

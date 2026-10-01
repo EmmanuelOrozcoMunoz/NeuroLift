@@ -9,11 +9,24 @@ from backend import models, schemas
 from backend.core.errors import Prohibido
 from backend.core.security import get_current_user
 from backend.database import get_db
+from backend.services.group_access import get_owned_group
 from backend.services import ranking as servicio
 
 router = APIRouter(prefix="/ranking", tags=["ranking"])
 
 Sexo = Optional[Literal["male", "female"]]
+
+
+def _grupo_del_ranking(db: Session, user: models.User, grupo_id: Optional[UUID]) -> Optional[UUID]:
+    """Un entrenador puede acotar el ranking a uno de sus grupos. Los atletas no filtran por grupo
+    (los grupos son del coach): se ignora. get_owned_group valida que el grupo sea suyo (o de su
+    box, si es el dueño)."""
+    if grupo_id is None or user.role not in models.COACHING_ROLES:
+        return None
+    grupo = get_owned_group(db, grupo_id, user)
+    if grupo.box_id != user.box_id:
+        raise Prohibido("Este grupo no pertenece a tu box")
+    return grupo.id
 
 
 def _box_del_ranking(user: models.User) -> UUID:
@@ -28,26 +41,28 @@ def _box_del_ranking(user: models.User) -> UUID:
 
 @router.get("/lifts", response_model=List[schemas.RankingLift])
 def listar_levantamientos(
-    sex: Sexo = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    sex: Sexo = Query(None), group_id: Optional[UUID] = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     """Los levantamientos principales (Snatch y Clean & Jerk) con cuántos atletas de tu box tienen marca."""
-    return servicio.levantamientos(db, _box_del_ranking(current_user), sex)
+    return servicio.levantamientos(db, _box_del_ranking(current_user), sex, _grupo_del_ranking(db, current_user, group_id))
 
 
 @router.get("/lifts/{key}", response_model=List[schemas.RankingLiftRow])
 def tabla_de_un_levantamiento(
-    key: str, sex: Sexo = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    key: str, sex: Sexo = Query(None), group_id: Optional[UUID] = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     """Ranking de Snatch o Clean & Jerk (la mejor marca de cada atleta), de mayor a menor. Otro levantamiento devuelve una lista vacía."""
-    return servicio.tabla_de_marcas(db, _box_del_ranking(current_user), key, current_user.id, sex)
+    return servicio.tabla_de_marcas(
+        db, _box_del_ranking(current_user), key, current_user.id, sex, _grupo_del_ranking(db, current_user, group_id)
+    )
 
 
 @router.get("/wods", response_model=List[schemas.RankingWod])
 def listar_wods(
-    sex: Sexo = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    sex: Sexo = Query(None), group_id: Optional[UUID] = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     """WODs que atletas de tu box anotaron a mano con resultado."""
-    return servicio.wods(db, _box_del_ranking(current_user), sex)
+    return servicio.wods(db, _box_del_ranking(current_user), sex, _grupo_del_ranking(db, current_user, group_id))
 
 
 @router.get("/wods/{key}", response_model=List[schemas.RankingWodRow])
@@ -55,8 +70,11 @@ def tabla_de_un_wod(
     key: str,
     wod_format: str = Query(..., min_length=1, max_length=20),
     sex: Sexo = Query(None),
+    group_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """Ranking de un WOD y formato (el mejor intento de cada atleta), del mejor al peor resultado."""
-    return servicio.tabla_de_wod(db, _box_del_ranking(current_user), key, wod_format, current_user.id, sex)
+    return servicio.tabla_de_wod(
+        db, _box_del_ranking(current_user), key, wod_format, current_user.id, sex, _grupo_del_ranking(db, current_user, group_id)
+    )
