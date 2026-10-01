@@ -79,6 +79,13 @@ describe("cargaDelGrupo", () => {
     expect(cargaDelGrupo(g, "kg")).toEqual({ value: "60–97.5", unit: "kg" });
   });
 
+  it("una serie anotada muestra el peso real, no el prescrito", () => {
+    const hecha = serie(2, { prescribed_weight: 97.5, actual_reps: 2, actual_weight: 74 });
+    expect(cargaDelGrupo(grupo(hecha), "kg")).toEqual({ value: "74", unit: "kg" });
+    // sin anotar sigue la prescripción
+    expect(cargaDelGrupo(grupo(serie(2, { prescribed_weight: 97.5, actual_weight: 74 })), "kg")).toEqual({ value: "97.5", unit: "kg" });
+  });
+
   it("porcentajes en rampa y sin carga", () => {
     expect(cargaDelGrupo(grupo(serie(3, { prescribed_percentage: 60 }), serie(3, { prescribed_percentage: 75 })), "kg")).toEqual({ value: "60–75", unit: "%" });
     expect(cargaDelGrupo(grupo(serie(10)), "kg")).toBeNull();

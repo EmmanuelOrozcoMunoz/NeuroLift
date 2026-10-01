@@ -178,10 +178,15 @@ export function groupSummary(group: ExerciseGroup, unit: WeightUnit): string {
   return group.sets.map((set) => `${shortLoad(set, unit)}×${set.prescribed_reps}`).join(" · ");
 }
 
-/** La carga de un ejercicio en cifra y unidad, para las vistas previas. En una rampa (series con
+/** La carga de un ejercicio en cifra y unidad, para las vistas previas: el peso real de las series
+ *  ya anotadas y el prescrito en las demás. En una rampa (series con
  *  cargas distintas) es el rango "mín–máx", no solo la carga de la primera serie. */
 export function cargaDelGrupo(group: ExerciseGroup, unit: WeightUnit): { value: string; unit: string } | null {
-  const pesos = group.sets.filter((set) => set.prescribed_weight).map((set) => kgTo(set.prescribed_weight!, unit));
+  // Una serie ya anotada cuenta con el peso que se levantó, no con el prescrito.
+  const pesos = group.sets
+    .map((set) => (isSetLogged(set) && set.actual_weight ? set.actual_weight : set.prescribed_weight))
+    .filter((peso): peso is number => Boolean(peso))
+    .map((peso) => kgTo(peso, unit));
   const numero = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   const rango = (valores: number[], formato: (v: number) => string) => {
     const [min, max] = [Math.min(...valores), Math.max(...valores)];
