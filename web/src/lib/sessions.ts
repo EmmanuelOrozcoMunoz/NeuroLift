@@ -141,6 +141,76 @@ export function sessionProgress(session: TrainingSession): { logged: number; tot
   };
 }
 
+// ------------------------------------------------ registro de un ejercicio completo
+
+/** Cuántas series de un ejercicio ya están anotadas. */
+export type EstadoDelGrupo = "pendiente" | "parcial" | "completo";
+
+export function estadoDelGrupo(group: ExerciseGroup): EstadoDelGrupo {
+  const anotadas = group.sets.filter(isSetLogged).length;
+  if (anotadas === 0) return "pendiente";
+  return anotadas === group.sets.length ? "completo" : "parcial";
+}
+
+/** Una serie a registrar en bloque (PUT /sessions/{id}/log-sets). null = deshacer. */
+export interface EntradaDeRegistro {
+  set_id: string;
+  actual_reps: number | null;
+  actual_weight: number | null;
+}
+
+/** Lo que se manda al marcar el ejercicio "como estaba programado": cada serie PENDIENTE con sus
+ *  reps y su peso prescritos. Las ya anotadas no se tocan (el atleta puede haber corregido una).
+ *  Sin peso prescrito (peso libre, o un % sin marca que lo resuelva) el peso queda sin registrar
+ *  (null), no en 0: 0 kg sería un dato inventado. */
+export function entradasComoProgramado(group: ExerciseGroup, { sinPeso = false } = {}): EntradaDeRegistro[] {
+  return group.sets
+    .filter((set) => !isSetLogged(set))
+    .map((set) => ({
+      set_id: set.id,
+      actual_reps: set.prescribed_reps ?? 0,
+      actual_weight: sinPeso ? null : (set.prescribed_weight ?? null),
+    }));
+}
+
+/** Lo que se manda para deshacer el registro de TODAS las series del ejercicio. */
+export function entradasParaDeshacer(group: ExerciseGroup): EntradaDeRegistro[] {
+  return group.sets.map((set) => ({ set_id: set.id, actual_reps: null, actual_weight: null }));
+}
+
+/** ¿Todas las series están anotadas y exactamente como se programaron? Solo entonces un toque en
+ *  el ✓ lo deshace; si el atleta registró otra cosa, un toque no debe borrarle sus números.
+ *  Con `sinPeso` (sesión con WOD de tipo "Peso") el peso no se compara: el registro normal no lo
+ *  anota, así que "como se programó" significa solo las repeticiones — y si el atleta SÍ anotó un
+ *  peso, eso es un registro propio que un toque no debe borrar. */
+export function coincideConLoProgramado(group: ExerciseGroup, { sinPeso = false } = {}): boolean {
+  return (
+    group.sets.length > 0 &&
+    group.sets.every(
+      (set) =>
+        isSetLogged(set) &&
+        set.actual_reps === (set.prescribed_reps ?? 0) &&
+        (sinPeso ? !set.actual_weight : (set.actual_weight ?? 0) === (set.prescribed_weight ?? 0)),
+    )
+  );
+}
+
+/** Lo que el atleta anotó de un ejercicio, en pocas letras: "4 x 5 @ 80 kg", o cada serie con su
+ *  peso y sus reps cuando no son iguales: "80 kg×5 · 85 kg×3". Solo las series ya anotadas. */
+export function resumenRegistrado(group: ExerciseGroup, unit: WeightUnit): string {
+  const hechas = group.sets.filter(isSetLogged);
+  const first = hechas[0];
+  if (!first) return "";
+  const peso = (set: SetItem) => (set.actual_weight ? formatWeight(set.actual_weight, unit) : "");
+  const iguales = hechas.every(
+    (set) => set.actual_reps === first.actual_reps && (set.actual_weight ?? 0) === (first.actual_weight ?? 0),
+  );
+  if (iguales) return `${hechas.length} x ${first.actual_reps}${peso(first) ? ` @ ${peso(first)}` : ""}`;
+  // Ejercicio sin peso (dominadas, saltos...): solo las repeticiones de cada serie
+  if (hechas.every((set) => !set.actual_weight)) return `${hechas.map((set) => set.actual_reps).join(" · ")} reps`;
+  return hechas.map((set) => `${peso(set) || "libre"}×${set.actual_reps}`).join(" · ");
+}
+
 /** Texto de la carga prescrita, tal como debe leerlo el atleta. Cuando el coach prescribió un
  *  % de 1RM, el backend ya resolvió el peso en kg (para que el atleta no tenga que calcularlo),
  *  pero el atleta también quiere ver el % que le corresponde, no solo el kg resultante. */

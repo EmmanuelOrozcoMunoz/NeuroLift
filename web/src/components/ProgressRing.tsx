@@ -13,6 +13,8 @@ export function ProgressRing({
   stroke = 8,
   label,
   className,
+  ringClassName = "stroke-brand",
+  animate = true,
   children,
 }: {
   value: number;
@@ -22,6 +24,10 @@ export function ProgressRing({
   /** Texto para lectores de pantalla, ej. "3 de 4 sesiones completadas esta semana". */
   label: string;
   className?: string;
+  /** Clase de trazo del progreso (por defecto el acento; el temporizador del WOD cambia de color). */
+  ringClassName?: string;
+  /** false: sin transición (un anillo que da la vuelta completa no debe "rebobinar" al reiniciar). */
+  animate?: boolean;
   children?: ReactNode;
 }) {
   const radius = (size - stroke) / 2;
@@ -42,7 +48,7 @@ export function ProgressRing({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - progress)}
-          className="stroke-brand transition-[stroke-dashoffset] duration-700 ease-out-expo"
+          className={cx(ringClassName, animate && "transition-[stroke-dashoffset] duration-700 ease-out-expo")}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden>

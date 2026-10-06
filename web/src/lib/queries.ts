@@ -145,6 +145,58 @@ export function useLogSet() {
   });
 }
 
+interface LogSetsVars {
+  mesocycleId: string;
+  sessionId: string;
+  /** Series a registrar; actual_* null = deshacer (vuelve a "pendiente"). */
+  entries: { set_id: string; actual_reps: number | null; actual_weight: number | null }[];
+}
+
+/**
+ * Registra varias series de una sesión en UNA petición (el registro "normal" de un ejercicio:
+ * todas las series como se programaron). Optimista igual que useLogSet: la UI responde al
+ * instante y, si falla de verdad, se revierte la caché.
+ */
+export function useLogSets() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId, entries }: LogSetsVars) =>
+      apiFetch<MessageResponse>(`/sessions/${sessionId}/log-sets`, {
+        method: "PUT",
+        body: { sets: entries },
+      }),
+    retry: 2,
+    onMutate: async (vars) => {
+      const key = queryKeys.mesocycle(vars.mesocycleId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<MesocycleFull>(key);
+      const porId = new Map(vars.entries.map((e) => [e.set_id, e]));
+
+      queryClient.setQueryData<MesocycleFull>(key, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          sessions: old.sessions.map((session) => ({
+            ...session,
+            sets: session.sets.map((set) => {
+              const entrada = porId.get(set.id);
+              return entrada
+                ? { ...set, actual_reps: entrada.actual_reps, actual_weight: entrada.actual_weight }
+                : set;
+            }),
+          })),
+        };
+      });
+
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(context.key, context.previous);
+    },
+  });
+}
+
 interface CompleteSessionVars {
   mesocycleId: string;
   sessionId: string;

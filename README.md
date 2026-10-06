@@ -117,7 +117,7 @@ La dependencia va **en un solo sentido**: `routers → services → core / model
 - **Copiar series.** `services/sets.py::clonar_set` es el único lugar que copia una serie (a un miembro nuevo de un grupo, al adquirir un plan). Cada columna de `Set` está declarada como "se copia" o "es de cada copia", y una prueba falla si se agrega una columna sin decidir.
 - **Cargas en % de 1RM.** Los planes, las clases y la IA prescriben en %; el kg se calcula por atleta con sus marcas. Los nombres de ejercicio se normalizan (tildes, mayúsculas, `&`/`y`, alias en español) para reconocer la misma marca aunque cambie el nombre.
 - **Clases.** Una clase es un `Mesocycle` con `class_id` y sin atleta, visible solo para los entrenadores de ese box (`ensure_can_view_mesocycle`). Los registros antiguos de atletas (`is_class_log`) se conservan como historial hasta que se purguen con `backend/scripts/purgar_registros_de_clase.py`.
-- **Arranque.** `create_all()` y la creación de buckets corren en el `lifespan`, no al importar. Como ninguna migración crea el esquema base, un ambiente nuevo todavía lo necesita; por eso una migración que crea una tabla debe tolerar que ya exista.
+- **Arranque y esquema.** La creación de buckets corre en el `lifespan`, no al importar. La API **no crea tablas**: el esquema nace y cambia solo con Alembic (`0001_baseline` crea todo; `0002_knowledge_base` crea la tabla del RAG si hay pgvector). Correr `alembic upgrade head` en cada despliegue, antes de arrancar. CI lo corre desde cero y además `alembic check`, que falla si un modelo cambia sin su migración.
 - **Planes plantilla y asignación a grupos.** Un plan (`is_template`) es una plantilla del coach: la crea a mano o con IA (`POST /ai/generate-plan-template/`, una sola generación sin atleta, con las cargas en % de 1RM) y la reutiliza. `POST /groups/{id}/assign-plan` la copia a cada miembro con fechas reales y los kg calculados con las marcas de cada atleta (`services/plans.py:asignar_plan_a_grupo`), sin llamar a la IA; asignarla otra vez en la misma fecha solo llega a quienes aún no la tenían. Quien no tenga una marca queda con su carga en % y se le avisa al coach.
 - **WOD generado con IA.** El trabajo metabólico del día se devuelve en el campo `wod` de la sesión (formato, tiempo límite, descripción), no como ejercicios sueltos: `services/ai_mesocycles.py:wod_limpio` lo valida y lo guarda en la plantilla de WOD (`wod_format`, `wod_time_cap_seconds`, `wod_notes`), de donde el atleta obtiene el temporizador configurado. Un WOD inválido se descarta sin romper la generación.
 - **Concurrencia.** Los endpoints son síncronos (40 hilos por proceso) y cada petición retiene una conexión de la base (30 por proceso). Con más peticiones en vuelo que conexiones, se bloqueaban entre sí y el servicio colapsaba (de ~100 a ~3 peticiones por segundo). `core/concurrency.py` limita cuántas se procesan a la vez por proceso: las demás esperan en cola y, si esperan más de 15 s, reciben un 503 con `Retry-After`. El límite va por dentro de CORS y no afecta a `/` (el health check). Con varios procesos (workers) el límite es **por proceso**, y las conexiones a la base se multiplican: hay que revisar el máximo de conexiones del plan de Supabase.
@@ -192,12 +192,18 @@ TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres pytest
 cd web && npm test
 ```
 
-**Migraciones:** `alembic revision -m "..."` y luego `alembic upgrade head`. Mantén cada migración tolerante a re-ejecución y aditiva cuando sea posible.
+**Migraciones:** cambia `models.py` y corre `alembic revision --autogenerate -m "..."`; revisa el archivo generado y luego `alembic upgrade head`. Mantén cada migración aditiva cuando sea posible (las migraciones corren antes de mergear la promoción, con el código anterior todavía arriba). `alembic check` debe quedar limpio.
+
+**Un ambiente que ya tenía el esquema** (de cuando lo creaba `create_all`: Dev y QA) no corre `0001`. Se verifica y se marca una sola vez:
+
+```bash
+alembic check          # debe decir "No new upgrade operations detected"
+alembic stamp 0002     # o 0001 si esa base no tiene la tabla knowledge_base
+```
 
 ---
 
 ## 4. Deuda conocida
 
-- Falta una **migración inicial** que cree el esquema base (hoy lo hace `create_all` al arrancar).
 - El limitador de peticiones guarda su cuenta en memoria: con más de una instancia habrá que moverlo a Redis.
 - Funciones largas que aún conviene partir: `ai_agent.generate_mesocycle_chunk`, `sessions.adapt_session_to_available_time`, `boxes.get_owner_dashboard`.

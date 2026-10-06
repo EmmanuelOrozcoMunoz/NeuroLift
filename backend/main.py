@@ -13,8 +13,8 @@ from backend.core.config import CORS_ORIGINS, DOCS_ENABLED, HTTP_QUEUE_TIMEOUT_S
 from backend.core.errors import ErrorDeDominio
 from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
-from backend.database import MAX_OVERFLOW, POOL_SIZE, engine, get_db
-from backend import models, storage
+from backend.database import MAX_OVERFLOW, POOL_SIZE, get_db
+from backend import storage
 from backend.routers import (
     admin,
     ai,
@@ -36,12 +36,9 @@ async def lifespan(_app: FastAPI):
     """Preparación que antes corría al IMPORTAR este módulo (y por eso importar `backend.main`
     exigía Postgres y red). Ahora solo corre al arrancar el servidor.
 
-    - create_all: crea las tablas que falten. Las migraciones de Alembic asumen que el esquema
-      base ya existe (no hay una migración inicial que lo cree), así que un ambiente nuevo lo
-      sigue necesitando. Si una migración crea una tabla, debe tolerar que ya exista (ver
-      a3b4c5d6e7f8).
+    - El esquema NO se crea aquí: lo crea y lo cambia `alembic upgrade head` (se corre en cada
+      despliegue, antes de arrancar la API). La API nunca modifica tablas por su cuenta.
     - ensure_buckets: buckets de Supabase Storage (avatares, portadas), idempotente."""
-    models.Base.metadata.create_all(bind=engine)
     storage.ensure_buckets()
     yield
 
