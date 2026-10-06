@@ -71,10 +71,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    full_name = Column(String, index=True)
-    email = Column(String, unique=True, index=True)
+    full_name = Column(String(100), index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False) # Contraseña (bcrypt), siempre generada por la app
-    role = Column(String, default="athlete")
+    role = Column(String, nullable=False, default="athlete", server_default="athlete")
     created_at = Column(DateTime, default=datetime.utcnow)
     body_weight = Column(Float, nullable=True)
     sex = Column(String(10), nullable=True)   # "male" | "female" — usado para el Fit Level
@@ -376,8 +376,8 @@ class PersonalRecord(Base):
     __tablename__ = "personal_records"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    exercise_name = Column(String, index=True) # Ej: "Back Squat", "Snatch"
-    max_weight_kg = Column(Float)              # El 1RM en kilos
+    exercise_name = Column(String, index=True, nullable=False) # Ej: "Back Squat", "Snatch"
+    max_weight_kg = Column(Float, nullable=False)  # El 1RM en kilos
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="personal_records")

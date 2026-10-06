@@ -61,6 +61,12 @@ jobs:
       - name: Verificar que el backend importe sin errores
         run: python -c "import backend.main"
 
+      - name: Migraciones desde cero (alembic upgrade head)
+        run: alembic upgrade head
+
+      - name: El esquema coincide con los modelos (alembic check)
+        run: alembic check
+
       - name: Pruebas
         run: python -m pytest
 
