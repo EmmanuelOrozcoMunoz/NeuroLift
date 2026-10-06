@@ -125,14 +125,18 @@ export function ExerciseNoteRow({
           <p className="mt-1 text-xs font-medium text-danger">No se pudo guardar. Revisa tu conexión y vuelve a intentarlo.</p>
         )}
 
-        {avanzado && (
-          <div className="mt-2 space-y-2">
-            {grupo.sets.map((set, indice) => (
-              <SetRow key={set.id} set={set} index={indice + 1} mesocycleId={mesocycleId} />
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* A todo el ancho de la fila (no solo bajo el texto): con la columna del ✓ y los márgenes
+          quedaba un 60% del ancho y los contadores de peso se encimaban. `relative bg-surface`
+          lo pinta por encima de la línea de margen del cuaderno. */}
+      {avanzado && (
+        <div className="relative col-span-2 space-y-2 border-t border-line bg-surface p-3">
+          {grupo.sets.map((set, indice) => (
+            <SetRow key={set.id} set={set} index={indice + 1} mesocycleId={mesocycleId} />
+          ))}
+        </div>
+      )}
     </li>
   );
 }

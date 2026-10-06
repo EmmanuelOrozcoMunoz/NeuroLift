@@ -63,8 +63,8 @@ export function SetRow({
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-done text-ink">
             <IconCheck className="h-3.5 w-3.5" />
           </span>
-          <span className="text-sm font-semibold text-muted">Serie {index}</span>
-          <span className="grow text-right text-sm font-bold tabular-nums">
+          <span className="shrink-0 text-sm font-semibold whitespace-nowrap text-muted">Serie {index}</span>
+          <span className="min-w-0 grow truncate text-right text-sm font-bold tabular-nums">
             {set.actual_reps} reps
             {set.actual_weight ? ` · ${formatWeight(set.actual_weight, unit)}` : ""}
           </span>
@@ -84,32 +84,35 @@ export function SetRow({
 
   return (
     <div className="rounded-xl bg-surface-2/60 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      {/* El objetivo va en su propia línea: junto a "Serie N" no cabe en un teléfono y partía
+          "Serie 1" en dos renglones. */}
+      <div className="mb-2">
         <span className="text-sm font-semibold">Serie {index}</span>
-        <span className="truncate text-xs text-muted">
+        <p className="text-xs text-muted">
           Objetivo: {set.prescribed_reps} reps @ {loadLabel(set, unit)}
           {set.rpe ? ` · RPE ${set.rpe}` : ""}
-        </span>
+        </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="grid min-w-0 grow grid-cols-2 gap-2">
-          <Stepper value={reps} onChange={setReps} min={0} max={200} suffix="reps" compact />
-          <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
-        </div>
-        <button
-          type="button"
-          aria-label={`Registrar serie ${index}`}
-          disabled={readOnly || logSet.isPending}
-          onClick={save}
-          className={cx(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
-            "bg-done text-ink active:bg-done/85 disabled:opacity-50",
-          )}
-        >
-          {logSet.isPending ? <Spinner className="h-5 w-5" /> : <IconCheck className="h-6 w-6" />}
-        </button>
+      {/* Los dos contadores comparten la fila completa (con el ✓ al lado no quedaba ancho para
+          "148.8 lb" entre los botones − y +); el ✓ va debajo, a todo el ancho. */}
+      <div className="grid grid-cols-2 gap-2">
+        <Stepper value={reps} onChange={setReps} min={0} max={200} suffix="reps" compact />
+        <WeightStepper valueKg={weight} onChangeKg={setWeight} compact />
       </div>
+      <button
+        type="button"
+        aria-label={`Registrar serie ${index}`}
+        disabled={readOnly || logSet.isPending}
+        onClick={save}
+        className={cx(
+          "mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold",
+          "bg-done text-ink active:bg-done/85 disabled:opacity-50",
+        )}
+      >
+        {logSet.isPending ? <Spinner className="h-5 w-5" /> : <IconCheck className="h-5 w-5" />}
+        Registrar serie
+      </button>
 
       <button
         type="button"
