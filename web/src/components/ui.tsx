@@ -157,7 +157,7 @@ export function Stepper({
       <button
         type="button"
         aria-label="Restar"
-        className="w-10 shrink-0 text-xl font-bold text-muted active:bg-line"
+        className={cx("shrink-0 text-xl font-bold text-muted active:bg-line", compact ? "w-9" : "w-10")}
         onClick={() => onChange(clamp(value - step))}
       >
         −
@@ -185,7 +185,7 @@ export function Stepper({
           type="button"
           onClick={startEditing}
           className={cx(
-            "flex min-w-0 grow items-baseline justify-center gap-0.5 py-2.5 tabular-nums",
+            "flex min-w-0 grow items-baseline justify-center gap-0.5 py-2.5 whitespace-nowrap tabular-nums",
             compact ? "text-base" : "text-lg",
           )}
         >
@@ -196,7 +196,7 @@ export function Stepper({
       <button
         type="button"
         aria-label="Sumar"
-        className="w-10 shrink-0 text-xl font-bold text-muted active:bg-line"
+        className={cx("shrink-0 text-xl font-bold text-muted active:bg-line", compact ? "w-9" : "w-10")}
         onClick={() => onChange(clamp(value + step))}
       >
         +

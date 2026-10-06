@@ -17,6 +17,20 @@ export function todayIso(): string {
   return toApiDate(new Date());
 }
 
+/**
+ * ¿Un mesociclo sigue en curso? `is_active` es una marca que nada apaga cuando el mesociclo
+ * termina (nace en true y se queda así), así que solo con ella uno que acabó hace semanas seguía
+ * mostrándose "Activo". Está en curso si no se desactivó y su fecha final no ha pasado (sin fecha
+ * final, como el registro personal "Mis entrenamientos", no termina). Se compara contra la fecha
+ * del dispositivo, igual que el resto de la app: el último día todavía cuenta como vigente.
+ */
+export function estaVigente(
+  mesociclo: { is_active: boolean; end_date: string | null },
+  hoy: string = todayIso(),
+): boolean {
+  return mesociclo.is_active && (mesociclo.end_date === null || mesociclo.end_date >= hoy);
+}
+
 export function toApiDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
