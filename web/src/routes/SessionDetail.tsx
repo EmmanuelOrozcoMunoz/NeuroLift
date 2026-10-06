@@ -2,9 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
-import { CoachNoteCallout } from "@/components/CoachNote";
+import { ExerciseNoteRow } from "@/components/ExerciseNoteRow";
 import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
-import { SetRow } from "@/components/SetRow";
 import { WodTimer } from "@/components/WodTimer";
 import {
   Badge,
@@ -22,7 +21,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
 import { useLeaveClass } from "@/lib/classQueries";
 import { useAdaptSession, useCompleteSession, useDeleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
-import { groupByBlock, groupSummary, sessionProgress } from "@/lib/sessions";
+import { groupByBlock, sessionProgress } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
 import type { SessionCompletePayload } from "@/lib/types";
@@ -284,27 +283,26 @@ export default function SessionDetail() {
                 </p>
               )}
               {bloque.key === "metcon" && wodCard}
-              <div className="space-y-3">
-                {bloque.groups.map((grupo, indiceGrupo) => (
-                  <Card key={grupo.sets[0]?.id ?? `${grupo.name}-${indiceGrupo}`} className="p-3">
-                    <div className="mb-2.5 px-1">
-                      <p className="leading-tight font-bold">{grupo.name}</p>
-                      <p className="text-xs text-muted">{groupSummary(grupo, unit)}</p>
-                      <CoachNoteCallout note={grupo.sets.find((st) => st.coach_note)?.coach_note} />
-                    </div>
-                    <div className="space-y-2">
-                      {grupo.sets.map((set, indiceSerie) => (
-                        <SetRow
-                          key={set.id}
-                          set={set}
-                          index={indiceSerie + 1}
-                          mesocycleId={mesocycleId!}
-                        />
-                      ))}
-                    </div>
-                  </Card>
-                ))}
-              </div>
+              {bloque.groups.length > 0 && (
+                // Vista de bloc de notas: una línea por ejercicio con su ✓ a la izquierda, un
+                // margen vertical y renglones entre líneas. El detalle por serie queda detrás de
+                // "Registro avanzado" (ver ExerciseNoteRow).
+                <ul
+                  className={
+                    "relative divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface " +
+                    "before:pointer-events-none before:absolute before:inset-y-0 before:left-12 before:w-px before:bg-brand/30"
+                  }
+                >
+                  {bloque.groups.map((grupo, indiceGrupo) => (
+                    <ExerciseNoteRow
+                      key={grupo.sets[0]?.id ?? `${grupo.name}-${indiceGrupo}`}
+                      grupo={grupo}
+                      mesocycleId={mesocycleId!}
+                      sessionId={activa.id}
+                    />
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>
