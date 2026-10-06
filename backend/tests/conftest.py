@@ -42,12 +42,17 @@ PASSWORD = "password123"
 def client():
     from fastapi.testclient import TestClient
 
-    from backend import models
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
     from backend.core.security import limiter
-    from backend.database import engine
     from backend.main import app
 
-    models.Base.metadata.create_all(bind=engine)
+    # El esquema sale de las migraciones, igual que en cualquier ambiente real: así las pruebas
+    # también detectan una migración rota. env.py lee DATABASE_URL (ya apunta a TEST_DATABASE_URL).
+    command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
     limiter.enabled = False  # los límites por IP (3 registros/hora) romperían la suite
     # Sin `with`: no corre el lifespan, así que no se llama a Supabase Storage.
     return TestClient(app)
