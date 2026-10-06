@@ -49,6 +49,19 @@ class SetLogUpdate(SanitizedModel):
     technique_feedback: str | None = Field(None, max_length=500)
 
 
+class SetLogEntry(SanitizedModel):
+    """Una serie dentro de un registro en bloque: lo que realmente se hizo (null = deshacer)."""
+    set_id: UUID
+    actual_reps: int | None = Field(None, ge=0, le=200)
+    actual_weight: float | None = Field(None, ge=0, le=1000)
+
+
+class SetsLogBulk(SanitizedModel):
+    """Registro de varias series de UNA sesión en una sola petición (el atleta marca un ejercicio
+    completo "como estaba programado" en vez de anotar serie por serie)."""
+    sets: list[SetLogEntry] = Field(..., min_length=1, max_length=100)
+
+
 class SetResponse(BaseModel):
     id: UUID
     set_order: int

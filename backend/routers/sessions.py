@@ -123,6 +123,42 @@ def delete_session(
     return {"message": "Sesión eliminada correctamente"}
 
 
+@router.put("/{session_id}/log-sets", response_model=schemas.MessageResponse)
+def log_sets_in_bulk(
+    session_id: UUID,
+    req: schemas.SetsLogBulk,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Registra de una vez lo hecho en varias series de ESTA sesión (equivale a varios
+    PUT /sets/{id}/log, en una sola petición y una sola transacción: o se guardan todas o ninguna).
+    Mismo permiso que el registro serie a serie: el atleta dueño o su coach."""
+    sesion = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+
+    ids = {entrada.set_id for entrada in req.sets}
+    series = {
+        s.id: s
+        for s in db.query(models.Set).filter(models.Set.session_id == sesion.id, models.Set.id.in_(ids)).all()
+    }
+    if len(series) != len(ids):
+        raise HTTPException(status_code=400, detail="Hay series que no pertenecen a esta sesión")
+
+    for entrada in req.sets:
+        serie = series[entrada.set_id]
+        serie.actual_reps = entrada.actual_reps
+        serie.actual_weight = entrada.actual_weight
+    db.commit()
+    return {"message": f"{len(series)} serie(s) registradas"}
+
+
 @router.post("/{session_id}/complete")
 def complete_session(
     session_id: UUID,
