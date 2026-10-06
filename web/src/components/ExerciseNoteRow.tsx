@@ -30,10 +30,15 @@ export function ExerciseNoteRow({
   grupo,
   mesocycleId,
   sessionId,
+  registrarSinPeso = false,
 }: {
   grupo: ExerciseGroup;
   mesocycleId: string;
   sessionId: string;
+  /** Sesión con WOD de tipo "Peso" (1RM): su resultado ES el mayor peso anotado, así que el
+   *  registro normal anota solo las repeticiones — anotar el peso programado sería inventar una
+   *  marca que el atleta no levantó. El peso real se escribe en el registro avanzado. */
+  registrarSinPeso?: boolean;
 }) {
   const unit = useWeightUnit();
   const logSets = useLogSets();
@@ -41,7 +46,8 @@ export function ExerciseNoteRow({
 
   const estado = estadoDelGrupo(grupo);
   const hecho = estado === "completo";
-  const comoProgramado = hecho && coincideConLoProgramado(grupo);
+  const comoProgramado = hecho && coincideConLoProgramado(grupo, { sinPeso: registrarSinPeso });
+  const faltaElPeso = registrarSinPeso && estado !== "pendiente" && grupo.sets.some((s) => s.prescribed_weight && !s.actual_weight);
   const anotadas = grupo.sets.filter((s) => s.actual_reps !== null && s.actual_reps !== undefined).length;
 
   function alTocarCheck() {
@@ -49,7 +55,7 @@ export function ExerciseNoteRow({
       setAvanzado(true); // anotó otra cosa: no se la borramos de un toque
       return;
     }
-    const entries = hecho ? entradasParaDeshacer(grupo) : entradasComoProgramado(grupo);
+    const entries = hecho ? entradasParaDeshacer(grupo) : entradasComoProgramado(grupo, { sinPeso: registrarSinPeso });
     if (entries.length > 0) logSets.mutate({ mesocycleId, sessionId, entries });
   }
 
@@ -96,7 +102,14 @@ export function ExerciseNoteRow({
           {linea}
           {rpe ? ` · RPE ${rpe}` : ""}
         </p>
-        {hecho && comoProgramado && <p className="mt-0.5 text-xs font-semibold text-done">Hecho como estaba programado</p>}
+        {hecho && comoProgramado && !faltaElPeso && (
+          <p className="mt-0.5 text-xs font-semibold text-done">Hecho como estaba programado</p>
+        )}
+        {faltaElPeso && (
+          <p className="mt-0.5 text-xs font-semibold text-warn">
+            Este WOD se puntúa por peso: anota el que levantaste en el registro avanzado.
+          </p>
+        )}
         <CoachNoteCallout note={grupo.sets.find((st) => st.coach_note)?.coach_note} />
 
         <button

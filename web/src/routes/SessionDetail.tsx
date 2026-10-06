@@ -299,6 +299,7 @@ export default function SessionDetail() {
                       grupo={grupo}
                       mesocycleId={mesocycleId!}
                       sessionId={activa.id}
+                      registrarSinPeso={activa.wod_format === "1rm"}
                     />
                   ))}
                 </ul>

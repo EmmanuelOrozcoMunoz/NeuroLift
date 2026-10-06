@@ -142,6 +142,27 @@ describe("registro de un ejercicio completo", () => {
     expect(coincideConLoProgramado(grupo(serie(5, { actual_reps: 5, actual_weight: null })))).toBe(true);
   });
 
+  it("en una sesión con WOD de peso (1RM) el registro normal no anota el peso programado", () => {
+    // El resultado de ese WOD es el MAYOR peso anotado: anotar el programado inventaría una marca.
+    const a = serie(1, { id: "a", prescribed_weight: 100 });
+    const b = serie(1, { id: "b", prescribed_weight: 110 });
+    expect(entradasComoProgramado(grupo(a, b), { sinPeso: true })).toEqual([
+      { set_id: "a", actual_reps: 1, actual_weight: null },
+      { set_id: "b", actual_reps: 1, actual_weight: null },
+    ]);
+    // lo registrado así cuenta como "como se programó" (un toque lo deshace)...
+    const registradas = grupo(
+      serie(1, { prescribed_weight: 100, actual_reps: 1, actual_weight: null }),
+      serie(1, { prescribed_weight: 110, actual_reps: 1, actual_weight: null }),
+    );
+    expect(coincideConLoProgramado(registradas, { sinPeso: true })).toBe(true);
+    // ...y sin la bandera no, porque el peso programado nunca se anotó
+    expect(coincideConLoProgramado(registradas)).toBe(false);
+    // si el atleta SÍ anotó un peso, es un registro propio: un toque no debe borrarlo
+    const conPeso = grupo(serie(1, { prescribed_weight: 100, actual_reps: 1, actual_weight: 102.5 }));
+    expect(coincideConLoProgramado(conPeso, { sinPeso: true })).toBe(false);
+  });
+
   it("resumenRegistrado: series iguales o cada una con su peso", () => {
     expect(resumenRegistrado(grupo(hecha(5, 80), hecha(5, 80), hecha(5, 80)), "kg")).toBe("3 x 5 @ 80 kg");
     expect(resumenRegistrado(grupo(hecha(5, 80), hecha(3, 85)), "kg")).toBe("80 kg×5 · 85 kg×3");

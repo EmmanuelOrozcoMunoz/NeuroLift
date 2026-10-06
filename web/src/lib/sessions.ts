@@ -163,13 +163,13 @@ export interface EntradaDeRegistro {
  *  reps y su peso prescritos. Las ya anotadas no se tocan (el atleta puede haber corregido una).
  *  Sin peso prescrito (peso libre, o un % sin marca que lo resuelva) el peso queda sin registrar
  *  (null), no en 0: 0 kg sería un dato inventado. */
-export function entradasComoProgramado(group: ExerciseGroup): EntradaDeRegistro[] {
+export function entradasComoProgramado(group: ExerciseGroup, { sinPeso = false } = {}): EntradaDeRegistro[] {
   return group.sets
     .filter((set) => !isSetLogged(set))
     .map((set) => ({
       set_id: set.id,
       actual_reps: set.prescribed_reps ?? 0,
-      actual_weight: set.prescribed_weight ?? null,
+      actual_weight: sinPeso ? null : (set.prescribed_weight ?? null),
     }));
 }
 
@@ -179,15 +179,18 @@ export function entradasParaDeshacer(group: ExerciseGroup): EntradaDeRegistro[] 
 }
 
 /** ¿Todas las series están anotadas y exactamente como se programaron? Solo entonces un toque en
- *  el ✓ lo deshace; si el atleta registró otra cosa, un toque no debe borrarle sus números. */
-export function coincideConLoProgramado(group: ExerciseGroup): boolean {
+ *  el ✓ lo deshace; si el atleta registró otra cosa, un toque no debe borrarle sus números.
+ *  Con `sinPeso` (sesión con WOD de tipo "Peso") el peso no se compara: el registro normal no lo
+ *  anota, así que "como se programó" significa solo las repeticiones — y si el atleta SÍ anotó un
+ *  peso, eso es un registro propio que un toque no debe borrar. */
+export function coincideConLoProgramado(group: ExerciseGroup, { sinPeso = false } = {}): boolean {
   return (
     group.sets.length > 0 &&
     group.sets.every(
       (set) =>
         isSetLogged(set) &&
         set.actual_reps === (set.prescribed_reps ?? 0) &&
-        (set.actual_weight ?? 0) === (set.prescribed_weight ?? 0),
+        (sinPeso ? !set.actual_weight : (set.actual_weight ?? 0) === (set.prescribed_weight ?? 0)),
     )
   );
 }
