@@ -7,7 +7,7 @@ import { NuevaSesionPropiaBoton } from "@/components/SesionPropia";
 import { TrainingCalendar } from "@/components/TrainingCalendar";
 import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
-import { shortDate } from "@/lib/dates";
+import { estaVigente, shortDate } from "@/lib/dates";
 import { useCreatePersonalSession, useMesocycles, useMesocyclesWithSessions } from "@/lib/queries";
 
 type Vista = "lista" | "calendario";
@@ -20,9 +20,10 @@ export default function Mesocycles() {
   const [aviso, setAviso] = useState<string | null>(null);
   const crearSesionPersonal = useCreatePersonalSession(user.id);
 
-  // Activos primero, y dentro de cada grupo el más reciente arriba
+  // En curso primero, y dentro de cada grupo el más reciente arriba
   const mesociclos = [...(data ?? [])].sort((a, b) => {
-    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    const vigenteA = estaVigente(a);
+    if (vigenteA !== estaVigente(b)) return vigenteA ? -1 : 1;
     return b.start_date.localeCompare(a.start_date);
   });
 
@@ -79,7 +80,7 @@ export default function Mesocycles() {
                     <div className="min-w-0 grow">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-bold">{mesocycle.name ?? "Mi rutina"}</span>
-                        {mesocycle.is_active ? <Badge tone="done">Activo</Badge> : <Badge>Finalizado</Badge>}
+                        {estaVigente(mesocycle) ? <Badge tone="done">Activo</Badge> : <Badge>Finalizado</Badge>}
                       </div>
                       <p className="mt-1 text-sm text-muted">
                         {mesocycle.discipline} · desde {shortDate(mesocycle.start_date)}

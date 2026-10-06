@@ -19,7 +19,7 @@ import {
   useRemoveGroupMember,
   useSearchAthleteByEmail,
 } from "@/lib/coachQueries";
-import { shortDate } from "@/lib/dates";
+import { estaVigente, shortDate } from "@/lib/dates";
 import type { AthleteLookup } from "@/lib/types";
 
 /** Busca por correo exacto a un atleta que todavía no es "tuyo" (se auto-registró por su
@@ -253,7 +253,7 @@ export default function GroupDetail() {
 
       <div className="space-y-3">
         {programs.data?.map((program) => {
-          const activo = program.athletes.some((a) => a.is_active);
+          const activo = program.athletes.some((a) => estaVigente({ is_active: a.is_active, end_date: program.end_date }));
           return (
             <Link
               key={`${program.name}-${program.start_date}`}
