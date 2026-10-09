@@ -96,6 +96,7 @@ from backend.schemas.plans import (
     PlanPreviewResponse,
     PlanPublishUpdate,
     PlanSessionPreview,
+    PlanExerciseUpdate,
     PlanSetCreate,
     PlanSummaryResponse,
     PlanUpdate,
@@ -126,5 +127,5 @@ __all__ = [
     "GroupPlanAssign", "GroupPlanAssignAthlete", "GroupPlanAssignResponse",
     "AdminOverview", "AuditLogResponse", "UserRoleUpdate",
     "NivelPlan", "PlanAcquireRequest", "PlanCreate", "PlanPreviewResponse", "PlanPublishUpdate",
-    "PlanSessionPreview", "PlanSetCreate", "PlanSummaryResponse", "PlanUpdate",
+    "PlanExerciseUpdate", "PlanSessionPreview", "PlanSetCreate", "PlanSummaryResponse", "PlanUpdate",
 ]
