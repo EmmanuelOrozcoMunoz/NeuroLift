@@ -5,7 +5,10 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { CoverUploader } from "@/components/CoverImage";
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
+import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
+import { BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Stepper, Toast, cx } from "@/components/ui";
 import {
   coachKeys,
@@ -17,8 +20,7 @@ import {
 } from "@/lib/coachQueries";
 import { camposComunes, nuevoDraft, seriesParaEnviar } from "@/lib/exerciseDraft";
 import { usePlanDetail } from "@/lib/queries";
-import { groupByBlock, groupSummary } from "@/lib/sessions";
-import { useWeightUnit } from "@/lib/units";
+import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { MesocycleFull, PlanLevel, TrainingSession, WodFormat } from "@/lib/types";
 
@@ -289,12 +291,19 @@ function DayEditor({
 }) {
   const addSet = useAddPlanSet(planId);
   const deleteSet = useDeletePlanSet(planId);
+  const updateMeta = useUpdatePlanSessionMeta(planId);
   const sessionId = session.id;
   const sets = session.sets;
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
-  const bloques = groupByBlock(sets, undefined, forzarMetcon);
+  // Se respeta el orden de bloques guardado en este día (al adquirir el plan se copia tal cual)
+  const bloques = groupByBlock(sets, session.block_order, forzarMetcon);
+  const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
-  const unit = useWeightUnit();
+
+  const meta: MetaGuardado = {
+    guardar: (body, alTerminar) => updateMeta.mutate({ sessionId, body }, { onSuccess: alTerminar }),
+    guardando: updateMeta.isPending,
+  };
 
   const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 5, tipo: "porcentaje" }));
   const [error, setError] = useState<string | null>(null);
@@ -329,6 +338,11 @@ function DayEditor({
     <Card>
       <p className="mb-3 font-bold">📆 Día {dayNumber}</p>
 
+      <div className="mb-3 space-y-3">
+        <WarmupNotesCard session={session} meta={meta} integrado onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")} />
+        <BlockOrderEditor blockKeys={blockKeys} meta={meta} integrado onSaved={() => onFeedback("¡Orden de bloques actualizado!")} />
+      </div>
+
       {sets.length === 0 && !tieneMetcon ? (
         <p className="mb-3 text-sm text-muted">Todavía sin ejercicios.</p>
       ) : (
@@ -348,27 +362,12 @@ function DayEditor({
               )}
               <div className="space-y-2">
                 {bloque.groups.map((group, index) => (
-                  <div
+                  <ExerciseSummaryRow
                     key={`${group.name}-${index}`}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
-                      <p className="truncate text-xs text-muted">{groupSummary(group, unit)}</p>
-                      {group.sets.some((s) => s.coach_note) && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-brand">📝 {group.sets.find((s) => s.coach_note)?.coach_note}</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Quitar ejercicio"
-                      disabled={deleteSet.isPending}
-                      onClick={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
-                      className="shrink-0 rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
-                    >
-                      <IconTrash className="h-4 w-4" />
-                    </button>
-                  </div>
+                    group={group}
+                    removing={deleteSet.isPending}
+                    onRemove={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
+                  />
                 ))}
               </div>
             </div>

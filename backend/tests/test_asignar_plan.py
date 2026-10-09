@@ -39,7 +39,7 @@ def plantilla(coach):
     assert r.status_code == 200, r.text
     r = coach.put(f"/plans/{plan['id']}/sessions/{primera}/wod-format", json={"wod_format": "for_time", "time_cap_seconds": 600})
     assert r.status_code == 200, r.text
-    r = coach.put(f"/plans/{plan['id']}/sessions/{primera}/meta", json={"block_order": "metcon,strength"})
+    r = coach.put(f"/plans/{plan['id']}/sessions/{primera}/meta", json={"block_order": "metcon,strength", "warmup_notes": "5 min de movilidad y 3 aproximaciones"})
     assert r.status_code == 200, r.text
     return plan
 
@@ -93,12 +93,22 @@ def test_el_programa_aparece_en_el_grupo_con_los_dos_atletas(coach, grupo, plant
     assert {a["full_name"] for a in programas[0]["athletes"]} == {"Ana", "Beto"}
 
 
-def test_el_wod_y_el_orden_de_bloques_de_la_plantilla_llegan_al_atleta(coach, grupo, plantilla):
+def test_el_wod_el_calentamiento_y_el_orden_de_bloques_de_la_plantilla_llegan_al_atleta(coach, grupo, plantilla):
     g, ana, _ = grupo
     _asignar(coach, g, plantilla)
     sesiones = sorted(ana.get(f"/mesocycles/{_mesociclo(ana)['id']}").json()["sessions"], key=lambda s: s["scheduled_date"])
     assert sesiones[0]["wod_format"] == "for_time" and sesiones[0]["wod_time_cap_seconds"] == 600
     assert sesiones[0]["block_order"] == "metcon,strength"
+    assert sesiones[0]["warmup_notes"] == "5 min de movilidad y 3 aproximaciones"
+
+
+def test_el_calentamiento_y_el_orden_de_un_dia_del_plan_se_pueden_quitar(coach, plantilla):
+    """Mandar "" borra el campo (el editor lo usa al vaciar el texto), no lo deja en blanco."""
+    detalle = coach.get(f"/plans/{plantilla['id']}").json()
+    primera = next(s for s in detalle["sessions"] if s["block_order"])
+    r = coach.put(f"/plans/{plantilla['id']}/sessions/{primera['id']}/meta", json={"block_order": "", "warmup_notes": ""})
+    assert r.status_code == 200, r.text
+    assert r.json()["block_order"] is None and r.json()["warmup_notes"] is None
 
 
 def test_sin_marca_la_carga_queda_en_porcentaje_y_se_avisa(coach, grupo, plantilla):
