@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from backend import models
+from backend.sanitize import clean_multiline, clean_text
 from backend.database import SessionLocal
 from backend.services.exercises import clean_ai_block
 from backend.services.plans import PLAN_EPOCH
@@ -83,10 +84,13 @@ def wod_limpio(wod) -> dict | None:
         if minutos is not None and 0 < minutos <= _MAX_MINUTOS_WOD:
             segundos = int(round(minutos * 60))
 
+    # El nombre va en una línea; la descripción conserva sus saltos de línea (un WOD de varias
+    # líneas se queda así). Ambos pasan por el mismo saneo que el texto que escribe un coach.
     partes = [
-        " ".join(str(wod.get(clave)).split())
+        limpio
         for clave in ("name", "description")
-        if isinstance(wod.get(clave), str) and wod.get(clave).strip()
+        if isinstance(wod.get(clave), str)
+        and (limpio := clean_multiline(wod.get(clave)) if clave == "description" else clean_text(wod.get(clave)))
     ]
     notas = "\n".join(partes)[:_MAX_NOTAS_WOD] or None
 
