@@ -89,7 +89,7 @@ export function ClassCard({
                     </span>
                   </div>
                   {g.sets.some((s) => s.coach_note) && (
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted">📝 {g.sets.find((s) => s.coach_note)?.coach_note}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs whitespace-pre-line text-muted">📝 {g.sets.find((s) => s.coach_note)?.coach_note}</p>
                   )}
                 </li>
               ))}

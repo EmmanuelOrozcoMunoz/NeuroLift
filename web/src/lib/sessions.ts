@@ -60,15 +60,22 @@ export interface SessionBlockGroup {
  * agregó un ejercicio de un bloque nuevo después de fijar el orden) cae al final, en su posición
  * canónica — así nunca desaparece un bloque por no estar en la lista guardada.
  *
- * `forceMetcon` asegura que el bloque "metcon" (Metabólico) exista en el resultado aunque
- * ningún Set real lleve ese bloque -- así el llamador puede mostrar ahí el texto libre + puntaje
- * de `Session.wod_notes`/`wod_format` (ver WodBlockCard) para una sesión que todavía no tiene
- * ejercicios estructurados en ese bloque, sin perder los que ya existan.
+ * `forzar` asegura que ciertos bloques existan en el resultado aunque ningún Set real los lleve --
+ * así el llamador puede mostrar ahí un texto libre para una sesión que todavía no tiene
+ * ejercicios estructurados en ese bloque, sin perder los que ya existan: el "metcon" (Metabólico)
+ * con `Session.wod_notes`/`wod_format` (ver WodBlockCard) y el "warmup" (Calentamiento) con
+ * `Session.warmup_notes`. Acepta las claves de los bloques a forzar, o `true` como atajo de
+ * ["metcon"] (como era antes, cuando solo se podía forzar ese).
  */
-export function groupByBlock(sets: SetItem[], blockOrder?: string | null, forceMetcon?: boolean): SessionBlockGroup[] {
+export function groupByBlock(
+  sets: SetItem[],
+  blockOrder?: string | null,
+  forzar?: boolean | readonly string[],
+): SessionBlockGroup[] {
+  const forzados: readonly string[] = forzar === true ? ["metcon"] : forzar ? forzar : [];
   const ordered = [...sets].sort((a, b) => a.set_order - b.set_order);
   const anyBlocked = ordered.some((set) => set.block);
-  if (!anyBlocked && !forceMetcon) {
+  if (!anyBlocked && forzados.length === 0) {
     return [{ key: null, label: "", groups: groupSets(ordered) }];
   }
 
@@ -79,8 +86,8 @@ export function groupByBlock(sets: SetItem[], blockOrder?: string | null, forceM
     if (list) list.push(set);
     else buckets.set(key, [set]);
   }
-  if (forceMetcon && !buckets.has("metcon")) {
-    buckets.set("metcon", []);
+  for (const clave of forzados) {
+    if (!buckets.has(clave)) buckets.set(clave, []);
   }
 
   const customOrder = (blockOrder ?? "").split(",").filter(Boolean);

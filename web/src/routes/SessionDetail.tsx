@@ -102,7 +102,12 @@ export default function SessionDetail() {
   const { logged, total } = sessionProgress(activa);
   const completada = activa.status === "completed";
   const tieneWod = Boolean(activa.wod_notes) || activa.wod_format != null;
-  const bloques = groupByBlock(activa.sets, activa.block_order, tieneWod);
+  // El texto del calentamiento vive en su bloque (como el del WOD): se fuerza el bloque para que
+  // se vea aunque el coach no haya agregado ejercicios de calentamiento
+  const bloques = groupByBlock(activa.sets, activa.block_order, [
+    ...(tieneWod ? ["metcon"] : []),
+    ...(activa.warmup_notes ? ["warmup"] : []),
+  ]);
 
   function completarConResultado(wodResult?: SessionCompletePayload) {
     completar.mutate(
@@ -174,7 +179,7 @@ export default function SessionDetail() {
 
   const wodCard = tieneWod && (
     <Card className="mb-3">
-      {activa.wod_notes && <p className="mb-2 text-sm leading-relaxed">{activa.wod_notes}</p>}
+      {activa.wod_notes && <p className="mb-2 text-sm leading-relaxed whitespace-pre-line">{activa.wod_notes}</p>}
       {activa.wod_format && (
         <>
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">
@@ -232,16 +237,7 @@ export default function SessionDetail() {
 
       {activa.athlete_notes && (
         <Card className="mb-4 border-brand/30 bg-brand-soft/30">
-          <p className="text-sm leading-relaxed">{activa.athlete_notes}</p>
-        </Card>
-      )}
-
-      {activa.warmup_notes && (
-        <Card className="mb-4">
-          <p className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">
-            🔥 Calentamiento y aproximaciones
-          </p>
-          <p className="text-sm leading-relaxed">{activa.warmup_notes}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-line">{activa.athlete_notes}</p>
         </Card>
       )}
 
@@ -267,7 +263,7 @@ export default function SessionDetail() {
         </div>
       )}
 
-      {activa.sets.length === 0 && !tieneWod ? (
+      {activa.sets.length === 0 && !tieneWod && !activa.warmup_notes ? (
         <EmptyState title="Sin ejercicios asignados">
           {data?.is_self_managed
             ? "Todavía no has agregado ejercicios a esta sesión."
@@ -281,6 +277,11 @@ export default function SessionDetail() {
                 <p className="mb-2 px-1 text-xs font-semibold tracking-wide text-muted uppercase">
                   {bloque.label}
                 </p>
+              )}
+              {bloque.key === "warmup" && activa.warmup_notes && (
+                <Card className="mb-3">
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{activa.warmup_notes}</p>
+                </Card>
               )}
               {bloque.key === "metcon" && wodCard}
               {bloque.groups.length > 0 && (

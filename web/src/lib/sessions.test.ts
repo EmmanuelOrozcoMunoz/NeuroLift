@@ -6,6 +6,7 @@ import {
   entradasComoProgramado,
   entradasParaDeshacer,
   estadoDelGrupo,
+  groupByBlock,
   groupSummary,
   gruposEnOrden,
   resumenRegistrado,
@@ -75,6 +76,41 @@ describe("gruposEnOrden", () => {
   it("sin bloques conserva el orden de las series", () => {
     const sinBloque = [serie(3, { set_order: 2, exercise: { id: "b", name: "B", category: null } }), serie(3, { set_order: 1 })];
     expect(gruposEnOrden(sinBloque, "metcon").map((g) => g.name)).toEqual(["Snatch", "B"]);
+  });
+});
+
+describe("groupByBlock: bloques forzados (texto libre del WOD y del calentamiento)", () => {
+  const con = (block: string | null, order: number) =>
+    serie(5, { block, set_order: order, exercise: { id: `${block}-${order}`, name: `Ej ${order}`, category: null } });
+  const claves = (g: ReturnType<typeof groupByBlock>) => g.map((b) => b.key);
+
+  it("forzar el calentamiento crea el bloque aunque ningún ejercicio lo lleve, y queda primero", () => {
+    const sets = [con("strength", 1), con("metcon", 2)];
+    expect(claves(groupByBlock(sets, null, ["warmup"]))).toEqual(["warmup", "strength", "metcon"]);
+    expect(groupByBlock(sets, null, ["warmup"])[0].groups).toEqual([]);
+  });
+
+  it("el bloque forzado sigue el orden guardado de la sesión, igual que los demás", () => {
+    const sets = [con("strength", 1)];
+    expect(claves(groupByBlock(sets, "strength,warmup", ["warmup"]))).toEqual(["strength", "warmup"]);
+  });
+
+  it("se pueden forzar varios a la vez, y forzar uno que ya existe no lo duplica", () => {
+    const sets = [con("warmup", 1), con("strength", 2)];
+    expect(claves(groupByBlock(sets, null, ["warmup", "metcon"]))).toEqual(["warmup", "strength", "metcon"]);
+  });
+
+  it("true sigue significando forzar el metabólico (como antes)", () => {
+    const sets = [con("strength", 1)];
+    expect(claves(groupByBlock(sets, null, true))).toEqual(["strength", "metcon"]);
+  });
+
+  it("sin nada forzado y sin bloques, una sesión vieja sigue siendo un solo grupo sin título", () => {
+    const sets = [con(null, 1), con(null, 2)];
+    expect(groupByBlock(sets, null)).toHaveLength(1);
+    expect(groupByBlock(sets, null, [])[0]).toMatchObject({ key: null, label: "" });
+    // y con un bloque forzado, los ejercicios sin bloque pasan a "Otros ejercicios"
+    expect(claves(groupByBlock(sets, null, ["warmup"]))).toEqual(["warmup", null]);
   });
 });
 
