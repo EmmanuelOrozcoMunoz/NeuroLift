@@ -10,7 +10,7 @@ from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
 from backend.services.exercises import clean_coach_note, get_or_create_exercise
-from backend.services.plans import PLAN_EPOCH, adquirir_plan
+from backend.services.plans import PLAN_EPOCH, actualizar_ejercicio_del_plan, adquirir_plan
 from backend.services.sets import filas_de, reservar_orden
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -353,6 +353,29 @@ def add_set_to_plan_session(
 
     db.commit()
     return {"message": f"'{req.exercise_name}' agregado al plan ({len(filas)} series)"}
+
+
+@router.put("/{plan_id}/sessions/{session_id}/exercise")
+def update_exercise_in_plan_session(
+    plan_id: UUID,
+    session_id: UUID,
+    req: schemas.PlanExerciseUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Edita un ejercicio ya agregado a un día del plan (nombre, series, repeticiones, RPE, carga,
+    bloque y nota) en una sola petición y una sola transacción: se guardan todos los cambios o
+    ninguno. Si se reducen las series se borran las últimas; si se aumentan, se crean nuevas."""
+    plan = _get_owned_plan(db, plan_id, current_user)
+    sesion = db.query(models.Session).filter(
+        models.Session.id == session_id, models.Session.mesocycle_id == plan.id
+    ).first()
+    if not sesion:
+        raise HTTPException(status_code=404, detail="Ese día no pertenece a este plan")
+
+    series = actualizar_ejercicio_del_plan(db, sesion, req)
+    db.commit()
+    return {"message": f"'{req.exercise_name}' actualizado en el plan ({series} series)"}
 
 
 @router.delete("/{plan_id}/sets/{set_id}")

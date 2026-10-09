@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import models
 from backend.core.errors import NoEncontrado, Prohibido, SolicitudInvalida
+from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
-from backend.services.sets import clonar_set
+from backend.services.sets import clonar_set, filas_de, reservar_orden
 
 # Los planes guardan sus días como offset relativo (day_offset) más una fecha sintética
 # (PLAN_EPOCH + day_offset) para no romper las columnas de fecha obligatorias.
@@ -126,3 +127,60 @@ def asignar_plan_a_grupo(
         resultados.append({"user_id": atleta.id, "full_name": atleta.full_name, "status": "assigned",
                            "mesocycle_id": resultado.mesocycle_id, "missing_prs": resultado.missing_prs})
     return resultados
+
+
+def actualizar_ejercicio_del_plan(db: Session, sesion: models.Session, req) -> int:
+    """Reemplaza lo prescrito de un ejercicio de un día del plan (sin commit). Devuelve cuántas
+    series quedaron.
+
+    Las series se emparejan por posición: la 1.ª existente recibe la 1.ª fila, etc. Si sobran filas
+    se crean series nuevas junto a las del ejercicio; si sobran series, se borran las últimas. Un
+    plan no tiene dueño, así que no hay marcas con las que resolver un % a kg: la carga se guarda
+    como se pidió y el kg se calcula cuando un atleta adquiere el plan."""
+    existentes = (
+        db.query(models.Set)
+        .filter(models.Set.session_id == sesion.id, models.Set.id.in_(req.set_ids))
+        .order_by(models.Set.set_order)
+        .all()
+    )
+    if len(existentes) != len(set(req.set_ids)):
+        raise NoEncontrado("Ese ejercicio no está en este día del plan")
+
+    ejercicio = get_or_create_exercise(db, req.exercise_name)
+    filas = filas_de(req)
+    nota_enviada = "coach_note" in req.model_fields_set
+
+    for serie, fila in zip(existentes, filas):
+        serie.exercise_id = ejercicio.id
+        serie.prescribed_reps = fila.reps
+        serie.rpe = req.rpe
+        serie.prescribed_weight = fila.weight
+        serie.prescribed_percentage = fila.percentage
+        serie.reference_exercise = req.reference_exercise
+        if req.block is not None:
+            serie.block = req.block
+        if nota_enviada:
+            serie.coach_note = clean_coach_note(req.coach_note)
+
+    if len(filas) < len(existentes):
+        for sobrante in existentes[len(filas):]:
+            db.delete(sobrante)
+    elif len(filas) > len(existentes):
+        bloque_nuevas = req.block if req.block is not None else existentes[0].block
+        nota_nuevas = clean_coach_note(req.coach_note) if nota_enviada else existentes[0].coach_note
+        del_dia = db.query(models.Set).filter(models.Set.session_id == sesion.id).all()
+        orden = reservar_orden(del_dia, ejercicio.id, len(filas) - len(existentes))
+        for i in range(len(existentes), len(filas)):
+            db.add(models.Set(
+                session_id=sesion.id,
+                exercise_id=ejercicio.id,
+                set_order=orden + (i - len(existentes)),
+                prescribed_reps=filas[i].reps,
+                rpe=req.rpe,
+                prescribed_weight=filas[i].weight,
+                prescribed_percentage=filas[i].percentage,
+                reference_exercise=req.reference_exercise,
+                block=bloque_nuevas,
+                coach_note=nota_nuevas,
+            ))
+    return len(filas)

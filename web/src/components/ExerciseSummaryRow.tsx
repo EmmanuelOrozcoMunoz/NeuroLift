@@ -6,7 +6,7 @@ import { useWeightUnit } from "@/lib/units";
 /**
  * Un ejercicio del día en una línea compacta (nombre, series x repeticiones @ carga y la nota del
  * coach), para ver todo el día de un vistazo agrupado por bloques. Es la vista del editor de
- * planes, que ahora comparte el de sesiones: ahí el lápiz abre el formulario de ese ejercicio.
+ * planes, que comparte el de sesiones: el lápiz abre el formulario de ese ejercicio.
  */
 export function ExerciseSummaryRow({
   group,
@@ -17,7 +17,7 @@ export function ExerciseSummaryRow({
   group: ExerciseGroup;
   onRemove: () => void;
   removing?: boolean;
-  /** Si se pasa, aparece el lápiz para editar el ejercicio (los planes todavía no lo permiten). */
+  /** Si se pasa, aparece el lápiz para editar el ejercicio. */
   onEdit?: () => void;
 }) {
   const unit = useWeightUnit();

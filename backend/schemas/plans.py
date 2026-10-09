@@ -57,6 +57,13 @@ class PlanSetCreate(SanitizedModel):
     series: List[SerieDeEjercicio] | None = Field(None, min_length=1, max_length=20)
 
 
+class PlanExerciseUpdate(PlanSetCreate):
+    """Reemplaza lo prescrito de UN ejercicio de un día del plan. `set_ids` son sus series actuales
+    (así no se confunden dos ejercicios con el mismo nombre en bloques distintos); el resto es lo
+    mismo que al agregarlo, y `exercise_name` es el nombre NUEVO (puede ser el mismo)."""
+    set_ids: List[UUID] = Field(..., min_length=1, max_length=20)
+
+
 class PlanAcquireRequest(SanitizedModel):
     start_date: date
 
