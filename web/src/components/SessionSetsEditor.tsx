@@ -1,9 +1,11 @@
 import { useState } from "react";
 
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
-import { blockLabel } from "@/lib/blocks";
-import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, Stepper, cx } from "@/components/ui";
+import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
+import { IconTrash } from "@/components/icons";
+import { BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import type { MetaGuardado } from "@/components/SessionMetaCards";
+import { Button, Card, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
 import { camposDeFila, draftDeEjercicio, firmaDeEjercicio, nuevoDraft } from "@/lib/exerciseDraft";
 import { useSetWodFormat } from "@/lib/queries";
@@ -17,11 +19,14 @@ function ExerciseBlock({
   sessionId,
   group,
   onSaved,
+  onClose,
 }: {
   mesocycleId: string;
   sessionId: string;
   group: ExerciseGroup;
   onSaved: () => void;
+  /** Cierra el formulario sin guardar y vuelve a la línea compacta del ejercicio. */
+  onClose: () => void;
 }) {
   const updateSet = useUpdateSet(mesocycleId);
   const addSet = useAddSet(mesocycleId);
@@ -86,9 +91,14 @@ function ExerciseBlock({
 
       {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
 
-      <Button variant="secondary" full className="mt-3" loading={busy} onClick={() => void handleSave()}>
-        Guardar ajustes
-      </Button>
+      <div className="mt-3 flex gap-2">
+        <Button variant="ghost" className="grow" disabled={busy} onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button variant="secondary" className="grow" loading={busy} onClick={() => void handleSave()}>
+          Guardar ajustes
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -124,54 +134,18 @@ function AddExerciseForm({
     }
   }
 
+  // Sin tarjeta propia: va al pie de la tarjeta del día, separado de la lista por una línea,
+  // igual que en el editor de planes.
   return (
-    <Card className="border-dashed">
-      <p className="mb-3 font-bold">➕ Añadir ejercicio</p>
+    <div className="space-y-3 border-t border-line pt-3">
+      <p className="text-sm font-semibold text-muted">➕ Añadir ejercicio</p>
       <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["kg", "porcentaje", "libre"]} modo="porSerie" />
 
-      {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
-      <Button full className="mt-3" loading={addSet.isPending} onClick={() => void handleAdd()}>
+      {error && <p className="text-sm font-medium text-danger">{error}</p>}
+      <Button full loading={addSet.isPending} onClick={() => void handleAdd()}>
         Añadir a la sesión
       </Button>
-    </Card>
-  );
-}
-
-/** Pautas de calentamiento/aproximaciones que el coach escribe para esta sesión — se muestran
- *  al atleta antes del primer bloque. Guarda al perder el foco, sin botón aparte. */
-function WarmupNotesCard({
-  mesocycleId,
-  session,
-  onSaved,
-}: {
-  mesocycleId: string;
-  session: TrainingSession;
-  onSaved: () => void;
-}) {
-  const updateMeta = useUpdateSessionMeta(mesocycleId);
-  const [texto, setTexto] = useState(session.warmup_notes ?? "");
-
-  function guardar() {
-    if (texto === (session.warmup_notes ?? "")) return;
-    updateMeta.mutate(
-      { sessionId: session.id, body: { warmup_notes: texto.trim() || "" } },
-      { onSuccess: onSaved },
-    );
-  }
-
-  return (
-    <Card>
-      <p className="mb-2 text-sm font-semibold text-muted">🔥 Calentamiento y aproximaciones (opcional)</p>
-      <textarea
-        rows={3}
-        maxLength={1000}
-        value={texto}
-        onChange={(e) => setTexto(e.target.value)}
-        onBlur={guardar}
-        placeholder="Ej. 5 min de movilidad de cadera, 3 series de aproximación subiendo desde 40% hasta el primer set de trabajo..."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
-      />
-    </Card>
+    </div>
   );
 }
 
@@ -315,68 +289,13 @@ function WodBlockCard({
   );
 }
 
-/** El orden en que se muestran los bloques de ESTA sesión — el coach lo sube/baja con flechas
- *  (nada de drag-and-drop: más fácil de acertar con el dedo). Solo aparece si hay 2+ bloques. */
-function BlockOrderEditor({
-  mesocycleId,
-  session,
-  blockKeys,
-  onSaved,
-}: {
-  mesocycleId: string;
-  session: TrainingSession;
-  blockKeys: string[];
-  onSaved: () => void;
-}) {
-  const updateMeta = useUpdateSessionMeta(mesocycleId);
-
-  function move(index: number, delta: number) {
-    const target = index + delta;
-    if (target < 0 || target >= blockKeys.length) return;
-    const next = [...blockKeys];
-    [next[index], next[target]] = [next[target], next[index]];
-    updateMeta.mutate({ sessionId: session.id, body: { block_order: next.join(",") } }, { onSuccess: onSaved });
-  }
-
-  if (blockKeys.length < 2) return null;
-
-  return (
-    <Card>
-      <p className="mb-2 text-sm font-semibold text-muted">🔀 Orden de los bloques</p>
-      <div className="space-y-1.5">
-        {blockKeys.map((key, index) => (
-          <div key={key} className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-2">
-            <span className="text-sm font-medium">{blockLabel(key)}</span>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                aria-label={`Subir ${blockLabel(key)}`}
-                disabled={index === 0 || updateMeta.isPending}
-                onClick={() => move(index, -1)}
-                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
-              >
-                <IconChevronRight className="h-4 w-4 -rotate-90" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Bajar ${blockLabel(key)}`}
-                disabled={index === blockKeys.length - 1 || updateMeta.isPending}
-                onClick={() => move(index, 1)}
-                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
-              >
-                <IconChevronRight className="h-4 w-4 rotate-90" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
 /** Editor completo (ver + editar + añadir ejercicios) de UNA sesión. Se usa tanto en la
  *  pantalla dedicada del coach como embebido dentro de la pestaña individual de un atleta
- *  dentro de un programa de grupo. */
+ *  dentro de un programa de grupo, y en el entreno propio del atleta.
+ *
+ *  Mismo diseño que el editor de planes: arriba las pautas de calentamiento y el orden de los
+ *  bloques; luego el día agrupado por bloques, con cada ejercicio en una línea compacta (el lápiz
+ *  abre su formulario); el WOD y, al pie, el formulario para añadir ejercicios. */
 export function SessionSetsEditor({
   mesocycleId,
   session,
@@ -387,65 +306,93 @@ export function SessionSetsEditor({
   session: TrainingSession;
   onFeedback: (message: string) => void;
 }) {
+  const updateMeta = useUpdateSessionMeta(mesocycleId);
+  const deleteSet = useDeleteSet(mesocycleId);
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
+  const [editando, setEditando] = useState<string | null>(null);
   const bloques = groupByBlock(session.sets, session.block_order, forzarMetcon);
   const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
+  const vacia = session.sets.length === 0 && !tieneMetcon;
+
+  const meta: MetaGuardado = {
+    guardar: (body, alTerminar) => updateMeta.mutate({ sessionId: session.id, body }, { onSuccess: alTerminar }),
+    guardando: updateMeta.isPending,
+  };
+
+  const botonWod = (
+    <button
+      type="button"
+      onClick={() => setForzarMetcon(true)}
+      className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+    >
+      🔥 Añadir WOD
+    </button>
+  );
 
   return (
     <div className="space-y-4">
-      <WarmupNotesCard
-        mesocycleId={mesocycleId}
-        session={session}
-        onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")}
-      />
-      <BlockOrderEditor
-        mesocycleId={mesocycleId}
-        session={session}
-        blockKeys={blockKeys}
-        onSaved={() => onFeedback("¡Orden de bloques actualizado!")}
-      />
-      {session.sets.length === 0 && !tieneMetcon && (
-        <EmptyState title="Esta sesión todavía no tiene ejercicios" />
-      )}
-      {bloques.map((bloque, indiceBloque) => (
-        <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
-          {bloque.label && (
-            <p className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
-          )}
-          {bloque.key === "metcon" && (
-            <WodBlockCard
-              mesocycleId={mesocycleId}
-              session={session}
-              onSaved={() => onFeedback("¡WOD guardado!")}
-              onRemoved={() => setForzarMetcon(false)}
-            />
-          )}
-          {bloque.groups.map((group) => (
-            <ExerciseBlock
-              key={firmaDeEjercicio(group)}
-              mesocycleId={mesocycleId}
-              sessionId={session.id}
-              group={group}
-              onSaved={() => onFeedback("¡Ajustes guardados!")}
-            />
-          ))}
-        </div>
-      ))}
-      <AddExerciseForm
-        mesocycleId={mesocycleId}
-        sessionId={session.id}
-        onAdded={() => onFeedback("¡Ejercicio añadido!")}
-      />
-      {!tieneMetcon && (
-        <button
-          type="button"
-          onClick={() => setForzarMetcon(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
-        >
-          🔥 Añadir WOD
-        </button>
-      )}
+      <WarmupNotesCard session={session} meta={meta} onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")} />
+      <BlockOrderEditor blockKeys={blockKeys} meta={meta} onSaved={() => onFeedback("¡Orden de bloques actualizado!")} />
+
+      <Card>
+        {vacia ? (
+          <p className="mb-3 text-sm text-muted">Esta sesión todavía no tiene ejercicios.</p>
+        ) : (
+          <div className="mb-3 space-y-3">
+            {bloques.map((bloque, indiceBloque) => (
+              <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
+                {bloque.label && (
+                  <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+                )}
+                {bloque.key === "metcon" && (
+                  <WodBlockCard
+                    mesocycleId={mesocycleId}
+                    session={session}
+                    onSaved={() => onFeedback("¡WOD guardado!")}
+                    onRemoved={() => setForzarMetcon(false)}
+                  />
+                )}
+                <div className="space-y-2">
+                  {bloque.groups.map((group) => {
+                    const firma = firmaDeEjercicio(group);
+                    return firma === editando ? (
+                      <ExerciseBlock
+                        key={firma}
+                        mesocycleId={mesocycleId}
+                        sessionId={session.id}
+                        group={group}
+                        onSaved={() => {
+                          setEditando(null);
+                          onFeedback("¡Ajustes guardados!");
+                        }}
+                        onClose={() => setEditando(null)}
+                      />
+                    ) : (
+                      <ExerciseSummaryRow
+                        key={firma}
+                        group={group}
+                        removing={deleteSet.isPending}
+                        onEdit={() => setEditando(firma)}
+                        onRemove={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {!tieneMetcon && botonWod}
+          </div>
+        )}
+        {vacia && <div className="mb-3">{botonWod}</div>}
+
+        <AddExerciseForm
+          mesocycleId={mesocycleId}
+          sessionId={session.id}
+          onAdded={() => onFeedback("¡Ejercicio añadido!")}
+        />
+      </Card>
     </div>
   );
 }

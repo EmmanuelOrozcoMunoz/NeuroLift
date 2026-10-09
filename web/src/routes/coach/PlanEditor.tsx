@@ -5,7 +5,10 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { CoverUploader } from "@/components/CoverImage";
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
+import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
+import { BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Stepper, Toast, cx } from "@/components/ui";
 import {
   coachKeys,
@@ -13,12 +16,13 @@ import {
   useDeletePlanSet,
   useSetPlanSessionWodFormat,
   useUpdatePlan,
+  useUpdatePlanExercise,
   useUpdatePlanSessionMeta,
 } from "@/lib/coachQueries";
-import { camposComunes, nuevoDraft, seriesParaEnviar } from "@/lib/exerciseDraft";
+import { camposComunes, draftDeEjercicio, firmaDeEjercicio, nuevoDraft, seriesParaEnviar } from "@/lib/exerciseDraft";
 import { usePlanDetail } from "@/lib/queries";
-import { groupByBlock, groupSummary } from "@/lib/sessions";
-import { useWeightUnit } from "@/lib/units";
+import { groupByBlock } from "@/lib/sessions";
+import type { ExerciseGroup } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { MesocycleFull, PlanLevel, TrainingSession, WodFormat } from "@/lib/types";
 
@@ -276,6 +280,80 @@ function PlanWodBlockCard({
   );
 }
 
+/** Formulario para editar un ejercicio ya agregado a un día del plan: nombre, series (una por una,
+ *  con rampas), repeticiones, carga, RPE, bloque y nota. Se guarda en UNA petición: todas las
+ *  series del ejercicio cambian juntas o ninguna. */
+function PlanExerciseEditor({
+  planId,
+  sessionId,
+  group,
+  onSaved,
+  onClose,
+}: {
+  planId: string;
+  sessionId: string;
+  group: ExerciseGroup;
+  onSaved: (message: string) => void;
+  onClose: () => void;
+}) {
+  const updateExercise = useUpdatePlanExercise(planId);
+  const deleteSet = useDeletePlanSet(planId);
+  const [draft, cambiar] = useExerciseDraft(() => draftDeEjercicio(group, true));
+  const [error, setError] = useState<string | null>(null);
+
+  function guardar() {
+    setError(null);
+    if (!draft.name.trim()) return setError("Escribe el nombre del ejercicio.");
+    updateExercise.mutate(
+      {
+        sessionId,
+        body: {
+          set_ids: group.sets.map((s) => s.id),
+          exercise_name: draft.name.trim(),
+          prescribed_sets: draft.filas.length,
+          prescribed_reps: draft.filas[0].reps,
+          ...camposComunes(draft),
+          series: seriesParaEnviar(draft),
+          coach_note: draft.nota.trim(),
+        },
+      },
+      {
+        onSuccess: (response) => onSaved(response.message ?? "Ejercicio actualizado."),
+        onError: (err) => setError(err instanceof Error ? err.message : "No se pudo guardar."),
+      },
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-line bg-surface-2/40 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="font-bold">{group.name}</p>
+        <button
+          type="button"
+          aria-label="Quitar ejercicio"
+          disabled={deleteSet.isPending || updateExercise.isPending}
+          onClick={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
+
+      <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} modo="porSerie" />
+
+      {error && <p className="mt-2 text-sm font-medium text-danger">{error}</p>}
+      <div className="mt-3 flex gap-2">
+        <Button variant="ghost" className="grow" disabled={updateExercise.isPending} onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button variant="secondary" className="grow" loading={updateExercise.isPending} onClick={guardar}>
+          Guardar ajustes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DayEditor({
   planId,
   session,
@@ -289,12 +367,21 @@ function DayEditor({
 }) {
   const addSet = useAddPlanSet(planId);
   const deleteSet = useDeletePlanSet(planId);
+  const updateMeta = useUpdatePlanSessionMeta(planId);
   const sessionId = session.id;
   const sets = session.sets;
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
-  const bloques = groupByBlock(sets, undefined, forzarMetcon);
+  // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
+  const [editando, setEditando] = useState<string | null>(null);
+  // Se respeta el orden de bloques guardado en este día (al adquirir el plan se copia tal cual)
+  const bloques = groupByBlock(sets, session.block_order, forzarMetcon);
+  const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
-  const unit = useWeightUnit();
+
+  const meta: MetaGuardado = {
+    guardar: (body, alTerminar) => updateMeta.mutate({ sessionId, body }, { onSuccess: alTerminar }),
+    guardando: updateMeta.isPending,
+  };
 
   const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 5, tipo: "porcentaje" }));
   const [error, setError] = useState<string | null>(null);
@@ -329,6 +416,11 @@ function DayEditor({
     <Card>
       <p className="mb-3 font-bold">📆 Día {dayNumber}</p>
 
+      <div className="mb-3 space-y-3">
+        <WarmupNotesCard session={session} meta={meta} integrado onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")} />
+        <BlockOrderEditor blockKeys={blockKeys} meta={meta} integrado onSaved={() => onFeedback("¡Orden de bloques actualizado!")} />
+      </div>
+
       {sets.length === 0 && !tieneMetcon ? (
         <p className="mb-3 text-sm text-muted">Todavía sin ejercicios.</p>
       ) : (
@@ -347,29 +439,30 @@ function DayEditor({
                 />
               )}
               <div className="space-y-2">
-                {bloque.groups.map((group, index) => (
-                  <div
-                    key={`${group.name}-${index}`}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">🏋️ {group.name}</p>
-                      <p className="truncate text-xs text-muted">{groupSummary(group, unit)}</p>
-                      {group.sets.some((s) => s.coach_note) && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-brand">📝 {group.sets.find((s) => s.coach_note)?.coach_note}</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Quitar ejercicio"
-                      disabled={deleteSet.isPending}
-                      onClick={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
-                      className="shrink-0 rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
-                    >
-                      <IconTrash className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                {bloque.groups.map((group) => {
+                  const firma = firmaDeEjercicio(group);
+                  return firma === editando ? (
+                    <PlanExerciseEditor
+                      key={firma}
+                      planId={planId}
+                      sessionId={sessionId}
+                      group={group}
+                      onSaved={(mensaje) => {
+                        setEditando(null);
+                        onFeedback(mensaje);
+                      }}
+                      onClose={() => setEditando(null)}
+                    />
+                  ) : (
+                    <ExerciseSummaryRow
+                      key={firma}
+                      group={group}
+                      removing={deleteSet.isPending}
+                      onEdit={() => setEditando(firma)}
+                      onRemove={() => group.sets.forEach((s) => deleteSet.mutate(s.id))}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}

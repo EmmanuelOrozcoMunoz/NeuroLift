@@ -93,6 +93,12 @@ export interface PlanSetCreatePayload {
 }
 
 /** POST /ai/generate-plan-template/ — una plantilla generada con IA, con cargas en % de 1RM. */
+/** PUT /plans/{id}/sessions/{id}/exercise — reemplaza lo prescrito de UN ejercicio ya agregado.
+ *  `set_ids` son sus series actuales y `exercise_name` el nombre NUEVO (puede ser el mismo). */
+export interface PlanExerciseUpdatePayload extends PlanSetCreatePayload {
+  set_ids: string[];
+}
+
 export interface PlanGenerateAIPayload {
   name: string;
   description: string;

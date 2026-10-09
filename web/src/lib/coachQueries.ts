@@ -27,6 +27,7 @@ import type {
   MessageResponse,
   PlanCreatePayload,
   PlanGenerateAIPayload,
+  PlanExerciseUpdatePayload,
   PlanSetCreatePayload,
   PlanSummary,
   PlanUpdatePayload,
@@ -449,6 +450,17 @@ export function useAddPlanSet(planId: string) {
   });
 }
 
+/** Edita un ejercicio ya agregado a un día del plan, en una sola petición (ver PUT
+ *  /plans/{id}/sessions/{id}/exercise): se guardan todas sus series o ninguna. */
+export function useUpdatePlanExercise(planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, body }: { sessionId: string; body: PlanExerciseUpdatePayload }) =>
+      apiFetch<MessageResponse>(`/plans/${planId}/sessions/${sessionId}/exercise`, { method: "PUT", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
+  });
+}
+
 export function useDeletePlanSet(planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -469,7 +481,7 @@ export function useUpdatePlanSessionMeta(planId: string) {
       body,
     }: {
       sessionId: string;
-      body: { wod_notes?: string | null };
+      body: { block_order?: string | null; warmup_notes?: string | null; wod_notes?: string | null };
     }) => apiFetch<TrainingSession>(`/plans/${planId}/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
   });
