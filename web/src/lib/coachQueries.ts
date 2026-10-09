@@ -469,7 +469,7 @@ export function useUpdatePlanSessionMeta(planId: string) {
       body,
     }: {
       sessionId: string;
-      body: { wod_notes?: string | null };
+      body: { block_order?: string | null; warmup_notes?: string | null; wod_notes?: string | null };
     }) => apiFetch<TrainingSession>(`/plans/${planId}/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
   });
