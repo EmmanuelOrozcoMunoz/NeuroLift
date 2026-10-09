@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { IconChevronRight } from "@/components/icons";
+import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Card } from "@/components/ui";
 import { blockLabel } from "@/lib/blocks";
 import type { TrainingSession } from "@/lib/types";
@@ -23,18 +23,21 @@ function Envoltorio({ integrado, children }: { integrado?: boolean; children: Re
   return integrado ? <div className="border-b border-line pb-3">{children}</div> : <Card>{children}</Card>;
 }
 
-/** Pautas de calentamiento/aproximaciones que el coach escribe para esta sesión — se muestran
- *  al atleta antes del primer bloque. Guarda al perder el foco, sin botón aparte. */
+/** Pautas de calentamiento/aproximaciones que el coach escribe como TEXTO para esta sesión. Vive
+ *  DENTRO del bloque Calentamiento (igual que el texto del WOD dentro del Metabólico), así que
+ *  sigue al bloque si se reordena, y el atleta lo ve bajo el título del bloque. Convive con los
+ *  ejercicios estructurados que ya tenga ese bloque. Guarda al perder el foco, sin botón aparte. */
 export function WarmupNotesCard({
   session,
   meta,
   onSaved,
-  integrado,
+  onRemoved,
 }: {
   session: TrainingSession;
   meta: MetaGuardado;
   onSaved: () => void;
-  integrado?: boolean;
+  /** Se llama al quitar el texto, para que el editor deje de forzar el bloque si no tiene ejercicios. */
+  onRemoved: () => void;
 }) {
   const [texto, setTexto] = useState(session.warmup_notes ?? "");
 
@@ -43,11 +46,28 @@ export function WarmupNotesCard({
     meta.guardar({ warmup_notes: texto.trim() || "" }, onSaved);
   }
 
+  function quitar() {
+    if (texto.trim() && !window.confirm("¿Borrar el texto del calentamiento?")) return;
+    setTexto("");
+    if (session.warmup_notes) meta.guardar({ warmup_notes: "" }, () => {});
+    onRemoved();
+  }
+
   return (
-    <Envoltorio integrado={integrado}>
-      <p className="mb-2 text-sm font-semibold text-muted">🔥 Calentamiento y aproximaciones (opcional)</p>
+    <Card>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-muted">📋 Escribir el calentamiento como texto (opcional)</p>
+        <button
+          type="button"
+          onClick={quitar}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10"
+          aria-label="Borrar el texto del calentamiento"
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
       <textarea
-        rows={3}
+        rows={4}
         maxLength={1000}
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
@@ -55,7 +75,7 @@ export function WarmupNotesCard({
         placeholder="Ej. 5 min de movilidad de cadera, 3 series de aproximación subiendo desde 40% hasta el primer set de trabajo..."
         className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
       />
-    </Envoltorio>
+    </Card>
   );
 }
 

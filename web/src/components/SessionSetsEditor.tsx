@@ -309,31 +309,48 @@ export function SessionSetsEditor({
   const updateMeta = useUpdateSessionMeta(mesocycleId);
   const deleteSet = useDeleteSet(mesocycleId);
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  const [forzarCalentamiento, setForzarCalentamiento] = useState(Boolean(session.warmup_notes));
   // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
   const [editando, setEditando] = useState<string | null>(null);
-  const bloques = groupByBlock(session.sets, session.block_order, forzarMetcon);
+  // Los bloques con texto libre (WOD y calentamiento) se muestran aunque aún no tengan ejercicios
+  const forzados = [...(forzarMetcon ? ["metcon"] : []), ...(forzarCalentamiento ? ["warmup"] : [])];
+  const bloques = groupByBlock(session.sets, session.block_order, forzados);
   const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
-  const vacia = session.sets.length === 0 && !tieneMetcon;
+  const tieneCalentamiento = bloques.some((b) => b.key === "warmup");
+  const vacia = session.sets.length === 0 && !tieneMetcon && !tieneCalentamiento;
 
   const meta: MetaGuardado = {
     guardar: (body, alTerminar) => updateMeta.mutate({ sessionId: session.id, body }, { onSuccess: alTerminar }),
     guardando: updateMeta.isPending,
   };
 
-  const botonWod = (
-    <button
-      type="button"
-      onClick={() => setForzarMetcon(true)}
-      className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-    >
-      🔥 Añadir WOD
-    </button>
+  // Botones para agregar un bloque de texto libre que todavía no está en el día
+  const botonesDeTexto = (
+    <div className="space-y-2">
+      {!tieneCalentamiento && (
+        <button
+          type="button"
+          onClick={() => setForzarCalentamiento(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+        >
+          🔥 Añadir calentamiento
+        </button>
+      )}
+      {!tieneMetcon && (
+        <button
+          type="button"
+          onClick={() => setForzarMetcon(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+        >
+          🔥 Añadir WOD
+        </button>
+      )}
+    </div>
   );
 
   return (
     <div className="space-y-4">
-      <WarmupNotesCard session={session} meta={meta} onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")} />
       <BlockOrderEditor blockKeys={blockKeys} meta={meta} onSaved={() => onFeedback("¡Orden de bloques actualizado!")} />
 
       <Card>
@@ -345,6 +362,14 @@ export function SessionSetsEditor({
               <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
                 {bloque.label && (
                   <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+                )}
+                {bloque.key === "warmup" && (
+                  <WarmupNotesCard
+                    session={session}
+                    meta={meta}
+                    onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")}
+                    onRemoved={() => setForzarCalentamiento(false)}
+                  />
                 )}
                 {bloque.key === "metcon" && (
                   <WodBlockCard
@@ -382,10 +407,10 @@ export function SessionSetsEditor({
                 </div>
               </div>
             ))}
-            {!tieneMetcon && botonWod}
+            {botonesDeTexto}
           </div>
         )}
-        {vacia && <div className="mb-3">{botonWod}</div>}
+        {vacia && <div className="mb-3">{botonesDeTexto}</div>}
 
         <AddExerciseForm
           mesocycleId={mesocycleId}

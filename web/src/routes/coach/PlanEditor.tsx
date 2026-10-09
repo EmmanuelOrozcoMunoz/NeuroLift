@@ -371,17 +371,46 @@ function DayEditor({
   const sessionId = session.id;
   const sets = session.sets;
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
+  const [forzarCalentamiento, setForzarCalentamiento] = useState(Boolean(session.warmup_notes));
   // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
   const [editando, setEditando] = useState<string | null>(null);
-  // Se respeta el orden de bloques guardado en este día (al adquirir el plan se copia tal cual)
-  const bloques = groupByBlock(sets, session.block_order, forzarMetcon);
+  // Los bloques con texto libre (WOD y calentamiento) se muestran aunque aún no tengan ejercicios.
+  // Se respeta el orden de bloques guardado en este día (al adquirir el plan se copia tal cual).
+  const forzados = [...(forzarMetcon ? ["metcon"] : []), ...(forzarCalentamiento ? ["warmup"] : [])];
+  const bloques = groupByBlock(sets, session.block_order, forzados);
   const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
+  const tieneCalentamiento = bloques.some((b) => b.key === "warmup");
+  const vacio = sets.length === 0 && !tieneMetcon && !tieneCalentamiento;
 
   const meta: MetaGuardado = {
     guardar: (body, alTerminar) => updateMeta.mutate({ sessionId, body }, { onSuccess: alTerminar }),
     guardando: updateMeta.isPending,
   };
+
+  // Botones para agregar un bloque de texto libre que todavía no está en el día
+  const botonesDeTexto = (
+    <div className="space-y-2">
+      {!tieneCalentamiento && (
+        <button
+          type="button"
+          onClick={() => setForzarCalentamiento(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+        >
+          🔥 Añadir calentamiento
+        </button>
+      )}
+      {!tieneMetcon && (
+        <button
+          type="button"
+          onClick={() => setForzarMetcon(true)}
+          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
+        >
+          🔥 Añadir WOD
+        </button>
+      )}
+    </div>
+  );
 
   const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 5, tipo: "porcentaje" }));
   const [error, setError] = useState<string | null>(null);
@@ -417,11 +446,10 @@ function DayEditor({
       <p className="mb-3 font-bold">📆 Día {dayNumber}</p>
 
       <div className="mb-3 space-y-3">
-        <WarmupNotesCard session={session} meta={meta} integrado onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")} />
         <BlockOrderEditor blockKeys={blockKeys} meta={meta} integrado onSaved={() => onFeedback("¡Orden de bloques actualizado!")} />
       </div>
 
-      {sets.length === 0 && !tieneMetcon ? (
+      {vacio ? (
         <p className="mb-3 text-sm text-muted">Todavía sin ejercicios.</p>
       ) : (
         <div className="mb-3 space-y-3">
@@ -429,6 +457,14 @@ function DayEditor({
             <div key={bloque.key ?? `sin-bloque-${indiceBloque}`}>
               {bloque.label && (
                 <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+              )}
+              {bloque.key === "warmup" && (
+                <WarmupNotesCard
+                  session={session}
+                  meta={meta}
+                  onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")}
+                  onRemoved={() => setForzarCalentamiento(false)}
+                />
               )}
               {bloque.key === "metcon" && (
                 <PlanWodBlockCard
@@ -466,26 +502,10 @@ function DayEditor({
               </div>
             </div>
           ))}
-          {!tieneMetcon && (
-            <button
-              type="button"
-              onClick={() => setForzarMetcon(true)}
-              className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-            >
-              🔥 Añadir WOD
-            </button>
-          )}
+          {botonesDeTexto}
         </div>
       )}
-      {sets.length === 0 && !tieneMetcon && (
-        <button
-          type="button"
-          onClick={() => setForzarMetcon(true)}
-          className="mb-3 w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-        >
-          🔥 Añadir WOD
-        </button>
-      )}
+      {vacio && <div className="mb-3">{botonesDeTexto}</div>}
 
       <div className="space-y-3 border-t border-line pt-3">
         <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>

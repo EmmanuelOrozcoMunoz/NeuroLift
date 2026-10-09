@@ -68,7 +68,7 @@ export default function PlanDetail() {
             {resumen.level && <Badge>{resumen.level}</Badge>}
             <Badge tone="brand">{resumen.discipline}</Badge>
           </div>
-          {resumen.description && <p className="mt-2 text-sm text-muted">{resumen.description}</p>}
+          {resumen.description && <p className="mt-2 text-sm whitespace-pre-line text-muted">{resumen.description}</p>}
 
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-surface-2 py-2.5">
