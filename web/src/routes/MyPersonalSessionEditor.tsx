@@ -54,10 +54,11 @@ export default function MyPersonalSessionEditor() {
 
       <Link
         to={`/entrenos/${mesocycleId}/sesion/${session.id}`}
-        className="press mb-4 flex min-h-touch items-center justify-between rounded-2xl bg-brand px-4 font-semibold text-on-brand"
+        className="press mb-4 flex min-h-touch flex-col justify-center rounded-2xl bg-brand px-4 py-3 font-semibold text-on-brand"
       >
         <span>{session.status === "completed" ? "Ver mi registro" : "▶ Registrar esta sesión"}</span>
-        <span className="text-sm font-medium opacity-80">
+        {/* Subtítulo bajo el título: lado a lado no cabía en un teléfono y partía los dos textos */}
+        <span className="text-sm font-medium opacity-90">
           {session.sets.length === 0 ? "Agrega ejercicios primero" : `${session.sets.length} series`}
         </span>
       </Link>
