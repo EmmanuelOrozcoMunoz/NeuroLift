@@ -1,261 +1,1081 @@
-# Graph Report - NeuroLift  (2026-09-13)
+# Graph Report - NeuroLift  (2026-10-05)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 322 files · ~343,307 words
+- Verdict: corpus is large enough that graph structure adds value.
+- Unclassified: 66 file(s) not represented in the graph (top: .csv 53, (none) 5, .example 2)
 
 ## Summary
-- 834 nodes · 2437 edges · 70 communities (35 shown, 18 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.85)
+- 4333 nodes · 8997 edges · 243 communities (195 shown, 36 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 140 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `24a18234`
+- Built from commit: `96590abc`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- ui.tsx
-- Leaderboard.tsx
-- main.py
-- Session
-- package.json
-- HTTPException
-- types.ts
-- schemas.py
-- AppShell.tsx
-- Today.tsx
-- _build_smart_mesocycle
-- SessionDetail.tsx
-- wod.ts
-- get
-- ai_agent.py
-- app.py
-- apiFetch
-- compilerOptions
 - App.tsx
-- upload_plan_cover
-- BaseModel
-- queries.ts
-- GroupProgramDetail.tsx
+- models.py
+- schemas/boxes.py
+- Mesocycle
+- package.json
+- routers/ranking.py
+- coachQueries.ts
+- Session
+- ui.tsx
+- BoxHome.tsx
+- HTTPException
+- validate_data.py
+- cip/generate.py
+- gray
+- test_design_system_mode.py
+- slide_search_core.py
+- routers/classes.py
+- compilerOptions
+- Prohibido
+- routers/users.py
+- Tailwind CSS Utility Reference
+- Brand Guidelines v1.0
+- Ranking.tsx
 - fitness_scoring.py
-- PlanDetail.tsx
-- read_and_validate_upload
-- get_plan_cover
-- ExerciseBlock
-- migrate_uploads_to_storage.py
-- CreateMesocycleSheet
+- Design
+- parse_decision_rules
+- Canvas Design System
+- Form & Input Components
+- get_athlete_prs
+- Tailwind CSS Responsive Design
 - env.py
-- clean_text
-- AddMembersSheet
-- DayEditor
-- GroupDetail
-- useRegisterAthlete
-- useCreatePlan
-- useSearchAthleteByEmail
-- useUpdatePlan
-- GroupSessionExerciseDelete
-- AthleteActivityResponse
-- GroupMesocycleProgram
-- GroupSessionExerciseAdd
-- PlanPreviewResponse
-- PlanSessionPreview
-- PlanSetCreate
-- WodFormatUpdate
-- SessionCompleteRequest
-- RecentSessionExercise
-- UserRoleUpdate
-- WodDaySummary
-- WodLeaderboardRow
-- useGroupBulkAdd
+- Cuenta
+- search_stack
+- Typography Specifications
+- TestTailwindConfigGenerator
+- search
+- test_cargas_congeladas.py
+- Base
+- generate_and_save_smart_mesocycle_for_group
+- crear_box_activo
+- WodTimer.tsx
+- schemas/fitness.py
+- $type
+- radius
+- lg
+- sm
+- padding-y
+- xl
+- none
+- Logo Usage Rules
+- Component Specifications
+- html-token-validator.py
+- shadcn/ui Accessibility Patterns
+- scripts/core.py
+- logo/core.py
+- What You Must Do When Invoked
+- Asset Approval Checklist
+- Logo AI Prompt Engineering
+- design_system.py
+- Color Palette Management
+- CIP Deliverable Guide
+- States and Variants
+- UI Styling Skill
+- AppShell.tsx
+- Workflow
+- test_ranking.py
+- Design System
+- Tailwind CSS Customization
+- spacing
+- TailwindConfigGenerator
+- schemas/__init__.py
+- SanitizedModel
+- routers/sessions.py
+- generate-slide.py
+- 16
+- test_ia_mesociclos.py
+- InviteCard
+- Routing by Task Type
+- shadcn/ui Theming & Customization
+- Asset Organization Guide
+- Primary Color Meanings
+- Core Logo Types
+- fetch-background.py
+- color
+- Brand Consistency Checklist
+- CIP Mockup Prompt Engineering
+- Color Semantics
+- TestThresholdGate
+- icon/generate.py
+- BM25
+- CatalogRefreshTest
+- test_coach_notes.py
+- DesignSystemGenerator
+- Design Principles
+- Design Principles
+- fontSize
+- TestShadcnInstaller
+- CIP Design Reference
+- Icon Design Reference
+- Copywriting Formulas
+- Copywriting Formulas
+- detect_domain
+- common.py
+- schemas/classes.py
+- _style_is_dark_primary
+- test_solo_athlete.py
+- Banner Design - Multi-Format Creative Banner System
+- Messaging Framework
+- Brand Voice Framework
+- extract-colors.cjs
+- validate-asset.cjs
+- Layout Patterns
+- Tailwind Integration
+- radius
+- Layout Patterns
+- test_tailwind_config_gen.py
+- timedelta
+- schemas/users.py
+- brand/references/update.md
+- Logo Design Reference
+- Token Architecture
+- design-tokens-starter.json
+- test_errores_http.py
+- Primitive Tokens
+- validate-tokens.cjs
+- button
+- .check_shadcn_config
+- .generate_config_string
+- Core Visual Elements
+- inject-brand-context.cjs
+- CIP Design Style Guide
+- logo/generate.py
+- embed-tokens.cjs
+- ShadcnInstaller
+- patch
+- test_text_layout_resilience.py
+- Quick Reference
+- ._base_config
+- Brand
+- Slide Strategies
+- Component Tokens
+- generate-tokens.cjs
+- 1
+- duration
+- Slide Strategies
+- routers/mesocycles.py
+- BarbellPlates.tsx
+- MesocycleFullResponse
+- sync-brand-to-tokens.cjs
+- _run
+- graphify reference: extra exports and benchmark
+- LimitarConcurrencia
+- test_data_contracts.py
+- UI/UX Pro Max - Design Intelligence
+- schemas/plans.py
+- Slides Reference
+- HTML Slide Template
+- HTML Slide Template
+- Query Contract
+- graphify reference: query, path, explain
+- Slides
+- Pre-Delivery Checklist
+- Prerequisites
+- Brand Guidelines Template
+- card
+- _normalize
+- input
+- 3
+- Common Rules for Professional UI
+- Example Workflow
+- _AuditLogHandler
+- cargar_pdf.py
+- slide-token-validator.py
+- RegisterAthleteSheet
+- 8
+- ai_mesocycles.py
+- graphify reference: add a URL and watch a folder
+- graphify reference: commit hook and native CLAUDE.md integration
+- graphify reference: incremental update and cluster-only
+- apiFetch
+- Tips for Better Results
+- destructive
+- destructive-foreground
+- muted
+- primary-foreground
+- ring
+- secondary-foreground
+- test_sync_brand_to_tokens.py
+- schemas/ranking.py
+- test_grupos_masivo.py
+- graphify reference: GitHub clone and cross-repo merge
+- graphify reference: transcribe video and audio
+- .__init__
+- .temp_project
+- CLAUDE.md
+- .claude/CLAUDE.md
+- slides-create.md
+- extraction-spec.md
+- create.md
+- .test_add_components_no_config
+- .test_init_default_project_root
+- .test_get_installed_components_no_config
+- .test_init_dry_run
+- .test_check_shadcn_config_not_exists
+- .test_get_installed_components_empty
+- .test_get_installed_components_with_files
+- .test_add_components_no_components
+- .test_add_colors_multiple_times
+- .test_add_fonts
+- .test_add_spacing
+- .test_add_breakpoints
+- .test_add_plugins_no_duplicates
+- .test_recommend_plugins
+- .test_recommend_plugins_nextjs
+- .test_generate_typescript_config
+- .test_generate_javascript_config
+- .test_generate_config_with_colors
+- .test_write_config
+- .test_write_config_creates_content
+- .test_default_content_paths_react
+- .test_default_content_paths_nextjs
+- .test_add_colors
+- 1. Modelo de negocio (cómo funciona hoy)
+- brand.ts
+- schemas/admin.py
+- GroupProgramDetail.tsx
+- test_clases_horario.py
+- .generate
+- _row_identities
+- test_copias_de_programacion.py
+- scripts/search.py
 
 ## God Nodes (most connected - your core abstractions)
-1. `Session` - 81 edges
-2. `apiFetch()` - 58 edges
-3. `SanitizedModel` - 33 edges
-4. `cx()` - 28 edges
-5. `react` - 28 edges
-6. `ensure_owner_or_coach()` - 26 edges
-7. `react-router-dom` - 24 edges
-8. `Button()` - 22 edges
-9. `PageHeader()` - 20 edges
-10. `compilerOptions` - 20 edges
+1. `Session` - 171 edges
+2. `apiFetch()` - 112 edges
+3. `SanitizedModel` - 67 edges
+4. `cx()` - 63 edges
+5. `TailwindConfigGenerator` - 58 edges
+6. `useCurrentUser()` - 51 edges
+7. `react` - 50 edges
+8. `search()` - 43 edges
+9. `react-router-dom` - 37 edges
+10. `TestTailwindConfigGenerator` - 35 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `AthleteDetail()` --indirect_call--> `formatKg()`  [INFERRED]
-  web/src/routes/coach/AthleteDetail.tsx → web/src/lib/dates.ts
-- `AuthState` --references--> `User`  [EXTRACTED]
-  web/src/lib/auth.tsx → web/src/lib/types.ts
-- `update_fitness_benchmarks()` --calls--> `FitnessBenchmark`  [EXTRACTED]
-  backend/main.py → backend/models.py
-- `_get_owned_group()` --references--> `Group`  [EXTRACTED]
-  backend/main.py → backend/models.py
-- `_build_manual_mesocycle()` --calls--> `Mesocycle`  [EXTRACTED]
-  backend/main.py → backend/models.py
+- `parse_decision_rules()` --indirect_call--> `error()`  [INFERRED]
+  .claude/skills/ui-ux-pro-max/scripts/reasoning_contract.py → backend/tests/test_errores_http.py
+- `TestBm25CoreBehavior` --uses--> `BM25`  [INFERRED]
+  .claude/skills/ui-ux-pro-max/scripts/tests/test_core.py → .claude/skills/design/scripts/cip/core.py
+- `TestTokenizer` --uses--> `BM25`  [INFERRED]
+  .claude/skills/ui-ux-pro-max/scripts/tests/test_core.py → .claude/skills/design/scripts/cip/core.py
+- `TestShadcnInstaller` --uses--> `ShadcnInstaller`  [INFERRED]
+  .claude/skills/ui-styling/scripts/tests/test_shadcn_add.py → .claude/skills/ui-styling/scripts/shadcn_add.py
+- `TestGeneratedConfigIsValidJs` --uses--> `TailwindConfigGenerator`  [INFERRED]
+  .claude/skills/ui-styling/scripts/tests/test_tailwind_config_gen.py → .claude/skills/ui-styling/scripts/tailwind_config_gen.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (70 total, 18 thin omitted)
+## Communities (243 total, 36 thin omitted)
 
-### Community 0 - "ui.tsx"
-Cohesion: 0.10
-Nodes (36): react, FitLevel, ACCEPTED_TYPES, CoverThumbnail(), DISCIPLINAS, Badge(), Button(), ButtonProps (+28 more)
+### Community 0 - "App.tsx"
+Cohesion: 0.06
+Nodes (52): BoxRoot(), COACH_ROLES, FitLevel, homeForRole(), RedirectIfLogged(), RequireAppAccess(), RoleGate(), RootRoute() (+44 more)
 
-### Community 1 - "Leaderboard.tsx"
-Cohesion: 0.08
-Nodes (34): @tanstack/react-query, App(), ACCEPTED_TYPES, AvatarUploader(), CoverUploader(), handleFileChange(), ApiError, apiFetchBlob() (+26 more)
+### Community 1 - "models.py"
+Cohesion: 0.04
+Nodes (100): Backfill de una sola vez: llena users.coach_id para atletas que ya existian…, athletes_count(), ensure_can_add_athlete(), max_athletes(), Planes de suscripción. La unidad que paga es la CUENTA (tabla boxes): un box, o…, active" (pagado y vigente) | "trial" (en periodo de prueba) | "expired". Un…, Se llama en TODO camino por el que un atleta nuevo entra a una cuenta…, subscription_status() (+92 more)
 
-### Community 2 - "main.py"
+### Community 2 - "schemas/boxes.py"
 Cohesion: 0.07
-Nodes (42): add_security_headers(), _build_manual_mesocycle(), _client_ip(), create_access_token(), create_manual_mesocycle_for_group(), create_plan(), _format_wod_summary(), get_athlete_leaderboard() (+34 more)
+Nodes (38): AdminBoxPlanUpdate, AdminBoxRow, AdminBoxStatusUpdate, AdminPaymentCreate, AthleteCoachAssign, AttentionAthlete, BoxAddress, BoxDetail (+30 more)
 
-### Community 3 - "Session"
-Cohesion: 0.16
-Nodes (38): add_exercise_to_group_session(), add_group_members(), add_set_to_plan_session(), delete_exercise_from_group_session(), delete_group(), delete_group_cover(), delete_my_avatar(), delete_plan() (+30 more)
+### Community 3 - "Mesocycle"
+Cohesion: 0.06
+Nodes (63): Exercise, Mesocycle, Set, agregar_serie(), delete_set(), log_set_performance(), delete, post (+55 more)
 
 ### Community 4 - "package.json"
+Cohesion: 0.05
+Nodes (42): @fontsource-variable/inter, react-dom, tailwindcss, @tailwindcss/vite, @types/node, @types/react, @types/react-dom, typescript (+34 more)
+
+### Community 5 - "routers/ranking.py"
+Cohesion: 0.27
+Nodes (17): _box_del_ranking(), _grupo_del_ranking(), listar_levantamientos(), listar_wods(), get, User, UUID, Ranking del box entre atletas: marcas (1RM) y WODs. Ver… (+9 more)
+
+### Community 6 - "coachQueries.ts"
+Cohesion: 0.04
+Nodes (92): AssignPlanSheet(), Elegible, CreateMesocycleSheet(), handleSubmit(), reset(), DISCIPLINAS, RetirarAtletaSheet(), Segmented() (+84 more)
+
+### Community 7 - "Session"
+Cohesion: 0.09
+Nodes (60): get, test_connection(), Group, Session, add_exercise_to_group_session(), add_group_members(), assign_plan_to_group(), create_group() (+52 more)
+
+### Community 8 - "ui.tsx"
 Cohesion: 0.06
-Nodes (34): react-dom, tailwindcss, @tailwindcss/vite, @types/node, @types/react, @types/react-dom, typescript, vite (+26 more)
+Nodes (83): react-router-dom, PageHeader(), ClassCard(), formatClassTime(), IconBack(), IconChevronRight(), IconStore(), NuevaSesionPropiaBoton() (+75 more)
 
-### Community 5 - "HTTPException"
+### Community 9 - "BoxHome.tsx"
+Cohesion: 0.04
+Nodes (86): react, @tanstack/react-query, App(), ACCEPTED_TYPES, BoxLogo(), ACCEPTED_TYPES, CoverThumbnail(), CoverUploader() (+78 more)
+
+### Community 10 - "HTTPException"
 Cohesion: 0.11
-Nodes (35): adapt_session_to_available_time(), agregar_serie(), _build_fitness_level_response(), _clean_ai_block(), complete_session(), create_manual_mesocycle(), create_mesocycle(), create_session() (+27 more)
+Nodes (45): delete_box_logo(), delete, acquire_plan(), add_set_to_plan_session(), _can_see_plan(), create_plan(), delete_plan(), delete_plan_cover() (+37 more)
 
-### Community 6 - "types.ts"
-Cohesion: 0.10
-Nodes (30): AIGenerateSmartGroupPayload, AIGenerateSmartPayload, BulkResponse, BulkResultRow, CreateGroupPayload, Exercise, FitCategory, GroupBulkAddPayload (+22 more)
+### Community 11 - "validate_data.py"
+Cohesion: 0.07
+Nodes (47): Semantic quality contracts for the core UI/UX datasets., read_rows(), TestAccessibilityGuidance, TestChartsTypographyAndIcons, TestCurrentReactGuidance, TestSemanticColors, _catalog_date(), _check_app_interface_contract() (+39 more)
 
-### Community 7 - "schemas.py"
-Cohesion: 0.11
-Nodes (30): AIGenerateRequest, AIGenerateSmart, AIGenerateSmartGroup, FitnessBenchmarkUpdate, GroupCreate, GroupMemberAdd, GroupSessionExerciseUpdate, GroupSessionWodFormatUpdate (+22 more)
+### Community 12 - "cip/generate.py"
+Cohesion: 0.06
+Nodes (46): BM25, detect_domain(), get_cip_brief(), _load_csv(), Load CSV and return list of dicts, Core search function using BM25, Auto-detect the most relevant domain from query, Main search function with auto-domain detection (+38 more)
 
-### Community 8 - "AppShell.tsx"
-Cohesion: 0.19
-Nodes (21): react-router-dom, ATHLETE_NAV, COACH_NAV, PageHeader(), IconBack(), IconCamera(), IconChevronRight(), IconDumbbell() (+13 more)
+### Community 13 - "gray"
+Cohesion: 0.05
+Nodes (53): $type, $value, $type, $value, $type, $value, $type, $value (+45 more)
 
-### Community 9 - "Today.tsx"
-Cohesion: 0.19
-Nodes (23): SectionTitle(), daysFromToday(), DIAS, DIAS_CORTOS, longDate(), MESES, parseApiDate(), shortWeekdayName() (+15 more)
+### Community 14 - "test_design_system_mode.py"
+Cohesion: 0.14
+Nodes (13): _contrast_ratio(), _derive_dark_palette(), _palette_is_dark(), WCAG relative luminance of a #RRGGBB string, or None if unparseable., True when a colors.csv row's Background is a dark surface., WCAG contrast ratio for two hex colors, or None if either is invalid., Keep product brand tokens while deriving accessible dark surfaces., Pick the highest-ranked palette matching the resolved mode. Only the dark case… (+5 more)
 
-### Community 10 - "_build_smart_mesocycle"
-Cohesion: 0.11
-Nodes (22): main(), acquire_plan(), _build_smart_mesocycle(), _clone_mesocycle_for_athlete(), create_group(), Genera con IA un mesociclo inteligente completo para UN atleta. Hace commit…, Convierte un % de 1RM a kg usando las marcas del atleta, redondeando a…, El atleta adquiere un plan publicado: se clona a un mesociclo propio con las… (+14 more)
-
-### Community 11 - "SessionDetail.tsx"
-Cohesion: 0.17
-Nodes (19): IconCheck(), IconClock(), SessionCard(), SetRow(), formatKg(), relativeDay(), useAdaptSession(), useCompleteSession() (+11 more)
-
-### Community 12 - "wod.ts"
-Cohesion: 0.10
-Nodes (21): WodFormatCard(), elegir(), guardar(), Fase, Modo, pitar(), resolverModo(), WodTimer() (+13 more)
-
-### Community 13 - "get"
+### Community 15 - "slide_search_core.py"
 Cohesion: 0.08
-Nodes (25): _coach_athlete_ids(), get_admin_overview(), get_athletes(), get_full_mesocycle(), get_plan_detail(), get_recent_activity(), get_users(), list_my_groups() (+17 more)
+Nodes (38): format_context(), format_result(), main(), Format a single search result for display, Slide Search CLI - Search slide design databases for strategies, layouts, copy,…, Format contextual recommendations for display., BM25, calculate_pattern_break() (+30 more)
 
-### Community 14 - "ai_agent.py"
-Cohesion: 0.12
-Nodes (16): adapt_session_to_time(), _generate_json_with_fallback(), generate_mesocycle_chunk(), generate_workout_session(), _post_to_gemini(), Busca en el PDF inyectado los párrafos más relevantes para el atleta., `literatura_cientifica` se calcula UNA sola vez por mesociclo…, Toma los ejercicios YA prescritos para una sesión y los adapta (menos series,… (+8 more)
-
-### Community 15 - "app.py"
-Cohesion: 0.15
-Nodes (20): _check_revoked_session(), get_headers(), _patched_delete(), _patched_get(), _patched_post(), _patched_put(), Editor de 'grupo completo': igual que el editor individual (ver ejercicios…, Lista los mesociclos programados para un grupo y, para cada uno, una pestaña… (+12 more)
-
-### Community 16 - "apiFetch"
-Cohesion: 0.17
-Nodes (18): apiFetch(), useAthletes(), useCreateGroup(), useDeletePlan(), useGroupBulkDelete(), useGroupBulkUpdate(), useGroups(), useMyPlans() (+10 more)
+### Community 16 - "routers/classes.py"
+Cohesion: 0.09
+Nodes (46): can_program_class(), ensure_can_program_class(), BoxClass, User, Dueño de un box (cualquier estado del box: un dueño con el box pendiente sí…, Programar el contenido de una clase: su profesor o el dueño del box (de un box…, require_owner(), _class_response() (+38 more)
 
 ### Community 17 - "compilerOptions"
 Cohesion: 0.09
 Nodes (21): compilerOptions, allowImportingTsExtensions, baseUrl, isolatedModules, jsx, lib, module, moduleDetection (+13 more)
 
-### Community 18 - "App.tsx"
-Cohesion: 0.16
-Nodes (15): RedirectIfLogged(), RequireAppAccess(), RoleGate(), RootRoute(), AppShell(), useOnline(), useAuth(), useCurrentUser() (+7 more)
+### Community 18 - "Prohibido"
+Cohesion: 0.06
+Nodes (47): AvatarRejected, UploadFile, Validación y saneo de imágenes subidas por el usuario (avatar, portada de…, Identifica el formato real por su firma binaria. Devuelve None si no coincide…, Imagen rechazada (400): tamaño, formato o contenido no válidos., Lee el archivo del request respetando el límite de tamaño DESDE la lectura…, Decodifica la imagen y la reconstruye en un lienzo completamente nuevo,…, read_and_validate_upload() (+39 more)
 
-### Community 19 - "upload_plan_cover"
-Cohesion: 0.15
-Nodes (19): Decodifica la imagen y la reconstruye en un lienzo completamente nuevo,…, rerender_and_strip_metadata(), generate_and_save_smart_mesocycle_for_group(), _plan_summary(), UploadFile, Genera con IA el mismo mesociclo (contexto compartido + marcas propias de cada…, Edita nombre/descripción/disciplina/nivel/precio de un plan — funciona igual…, Sube (o reemplaza) la foto de perfil del usuario autenticado. Solo uno mismo… (+11 more)
+### Community 19 - "routers/users.py"
+Cohesion: 0.10
+Nodes (41): _coach_athlete_ids(), ensure_owner_or_coach(), UUID, IDs de los atletas que este coach puede gestionar. Es la definición única de…, Verifica que el usuario autenticado sea el dueño del recurso, un admin, o un…, crear_sesion_personal(), delete_my_avatar(), eliminar_marca_atleta() (+33 more)
 
-### Community 20 - "BaseModel"
-Cohesion: 0.15
-Nodes (20): AdminOverview, Config, ExerciseResponse, FitnessLevelResponse, GroupMemberResponse, GroupMesocycleAthlete, GroupResponse, GroupSummaryResponse (+12 more)
+### Community 20 - "Tailwind CSS Utility Reference"
+Cohesion: 0.05
+Nodes (43): Arbitrary Values, Aspect Ratio, Background Colors, Border Color, Border Radius, Border Style, Border Width, Borders (+35 more)
 
-### Community 21 - "queries.ts"
-Cohesion: 0.12
-Nodes (18): CompleteSessionVars, LogSetVars, queryKeys, useFitnessLevel(), useSaveBenchmarks(), FitnessLevel, MesocycleSummary, MessageResponse (+10 more)
+### Community 21 - "Brand Guidelines v1.0"
+Cohesion: 0.05
+Nodes (37): 1. Color Palette, 2. Typography, 3. Logo Usage, 4. Voice & Tone, 5. Imagery Guidelines, 6. Design Components, Accessibility, AI Image Generation (+29 more)
 
-### Community 22 - "GroupProgramDetail.tsx"
-Cohesion: 0.20
-Nodes (14): BlockSelect(), IconTrash(), SessionSetsEditor(), useGroupMesocycles(), shortDate(), groupByBlock(), TrainingSession, WOD_OTHER_SCORE_TYPES (+6 more)
+### Community 22 - "Ranking.tsx"
+Cohesion: 0.07
+Nodes (42): IconUser(), useAthleteLeaderboard(), useGroupWodDays(), useGroupWodLeaderboard(), shortDate(), consulta(), FiltrosRanking, rankingKeys (+34 more)
 
 ### Community 23 - "fitness_scoring.py"
 Cohesion: 0.22
 Nodes (12): _age_multiplier(), _bounds_for(), compute_fitness_level(), Calculadora de 'Fit Level' para CrossFit: halterofilia, gimnasia y metcon.…, values: {metric_key: value} solo con las métricas que el atleta ya registró., bounds = [max_principiante, max_intermedio, max_avanzado] (ascendente)., bounds = [max_elite, max_avanzado, max_intermedio] (ascendente, en segundos)., Cuánto se 'relajan' los estándares por edad (1.0 = sin ajuste, edades <=35).… (+4 more)
 
-### Community 24 - "PlanDetail.tsx"
-Cohesion: 0.26
-Nodes (10): BLOCK_KEYS, BLOCK_LABELS, BLOCK_OPTIONS, BlockKey, blockLabel(), formatPrice(), useAcquirePlan(), usePlanCatalog() (+2 more)
+### Community 24 - "Design"
+Cohesion: 0.06
+Nodes (35): Banner Design (Built-in), Banner: Design Rules, Banner: Quick Size Reference, Banner: Top Art Styles, Banner: Workflow, CIP Design (Built-in), CIP: Generate Brief, CIP: Generate Mockups (+27 more)
 
-### Community 25 - "read_and_validate_upload"
-Cohesion: 0.24
-Nodes (8): AvatarRejected, HTTPException, UploadFile, Validación y saneo de imágenes subidas por el usuario (avatar, portada de…, Identifica el formato real por su firma binaria. Devuelve None si no coincide…, Lee el archivo del request respetando el límite de tamaño DESDE la lectura…, read_and_validate_upload(), _sniff_magic_number()
+### Community 25 - "parse_decision_rules"
+Cohesion: 0.17
+Nodes (9): Find matching reasoning rule for a category., Apply reasoning rules to search results., apply_decision_rules(), _object_without_duplicates(), parse_decision_rules(), Return deterministic mutations and an audit trail; never execute data., Closed, non-executable grammar for design-system decision rules., Parse the canonical condition -> action-array representation. (+1 more)
 
-### Community 26 - "get_plan_cover"
-Cohesion: 0.25
-Nodes (8): get_plan_cover(), get_user_avatar(), Mismo criterio de visibilidad que GET /plans/{id}: el autor/admin ve la portada…, Cualquier usuario autenticado puede ver la foto de perfil de otro (no es…, Redirige a una URL firmada de corta duración de Supabase Storage — los buckets…, _redirect_to_image(), create_signed_url(), Pide una URL firmada de corta duración (el navegador la usa de inmediato, así…
+### Community 26 - "Canvas Design System"
+Cohesion: 0.06
+Nodes (35): 1. Visual Communication First, 2. Minimal Text Integration, 3. Expert Craftsmanship, 4. Systematic Patterns, Analog Meditation, Approach, Canvas Boundaries, Canvas Design System (+27 more)
 
-### Community 27 - "ExerciseBlock"
-Cohesion: 0.25
-Nodes (5): AddExerciseForm(), ExerciseBlock(), useAddSet(), useDeleteSet(), useUpdateSet()
+### Community 27 - "Form & Input Components"
+Cohesion: 0.06
+Nodes (32): Accordion, Alert, Alert Dialog, Avatar, Badge, Button, Card, Checkbox (+24 more)
 
-### Community 28 - "migrate_uploads_to_storage.py"
-Cohesion: 0.29
-Nodes (6): main(), Sube a Supabase Storage lo que haya quedado en backend/uploads/ (del…, ensure_buckets(), Crea los buckets privados si todavía no existen. Idempotente: seguro de llamar…, Como upload_object, pero con una key EXPLÍCITA en vez de generar una nueva —…, upload_object_as()
+### Community 28 - "get_athlete_prs"
+Cohesion: 0.08
+Nodes (47): _build_fitness_level_response(), get_fitness_level(), get, put, User, UUID, Guarda las marcas que el atleta (dueño) o su coach hayan llenado, y devuelve el…, Devuelve las marcas guardadas y el Fit Level calculado a partir de ellas. (+39 more)
 
-### Community 29 - "CreateMesocycleSheet"
-Cohesion: 0.33
-Nodes (7): CreateMesocycleSheet(), handleSubmit(), reset(), useCreateManualMesocycle(), useCreateManualMesocycleForGroup(), useGenerateAIMesocycle(), useGenerateAIMesocycleForGroup()
+### Community 29 - "Tailwind CSS Responsive Design"
+Cohesion: 0.06
+Nodes (32): 1. Mobile-First Design, 2. Consistent Breakpoint Usage, 3. Test at Breakpoint Boundaries, 4. Use Container for Content Width, 5. Progressive Enhancement, 6. Avoid Too Many Breakpoints, Best Practices, Breakpoint System (+24 more)
 
 ### Community 30 - "env.py"
+Cohesion: 0.47
+Nodes (5): include_object(), Run migrations in 'offline' mode. This configures the context with just a URL…, Run migrations in 'online' mode. In this scenario we need to create an Engine…, run_migrations_offline(), run_migrations_online()
+
+### Community 31 - "Cuenta"
+Cohesion: 0.13
+Nodes (19): atleta_de_box(), atleta_de_coach(), atleta_solo(), client(), coach(), codigo_coach(), crear_atleta_de_box(), Cuenta (+11 more)
+
+### Community 32 - "search_stack"
+Cohesion: 0.10
+Nodes (8): Search stack-specific guidelines, search_stack(), Freshness and migration contracts for native, desktop, and 3D stacks., _rows(), TestNativeDesktopStackFreshness, Freshness and generation-isolation contracts for web stack guidance., _rows(), TestWebStackFreshness
+
+### Community 33 - "Typography Specifications"
+Cohesion: 0.06
+Nodes (30): Accessibility, Base System, Best Practices, Clean & Modern, Common Font Pairings, Contrast Requirements, CSS Implementation, Editorial (+22 more)
+
+### Community 34 - "TestTailwindConfigGenerator"
+Cohesion: 0.06
+Nodes (16): Test TailwindConfigGenerator class., Test initialization with default settings., Test generating config with plugins., Test validating valid configuration., Test validating config with no content paths., Test validating config with empty theme extensions., Test initialization for JavaScript config., Test writing config to invalid path. (+8 more)
+
+### Community 35 - "search"
+Cohesion: 0.13
+Nodes (6): Resolve a deprecated in-domain alias, or expose a cross-domain redirect., Main search function with auto-domain detection, search(), _style_search_destination(), TestSearchDomains, TestStyleTaxonomy
+
+### Community 36 - "test_cargas_congeladas.py"
+Cohesion: 0.26
+Nodes (13): _estado(), _marca(), fixture, Una serie prescrita en % de 1RM se recalcula con la marca vigente mientras la…, Sesión de hoy con Front Squat al 80% de su Back Squat y Power Clean al 80% de…, El caso real: la sesión se generó con marcas equivocadas, el atleta corrigió…, _series(), sesion() (+5 more)
+
+### Community 37 - "Base"
+Cohesion: 0.18
+Nodes (10): main(), Backfill de una sola vez: sincroniza Fit Level <-> "Récords (PRs)" para datos…, AuditLog, BoxClass, FitnessBenchmark, PersonalRecord, Una clase recurrente del box (ej. "CrossFit 6:00 am", lunes a viernes) con el…, Una marca del calculador de 'Fit Level' (halterofilia/gimnasia/metcon). Diseño… (+2 more)
+
+### Community 38 - "generate_and_save_smart_mesocycle_for_group"
 Cohesion: 0.40
-Nodes (4): Run migrations in 'offline' mode. This configures the context with just a URL…, Run migrations in 'online' mode. In this scenario we need to create an Engine…, run_migrations_offline(), run_migrations_online()
+Nodes (10): generate_and_save_session(), generate_and_save_smart_mesocycle(), generate_and_save_smart_mesocycle_for_group(), generate_plan_template(), limit, post, Request, User (+2 more)
 
-### Community 31 - "clean_text"
+### Community 39 - "crear_box_activo"
+Cohesion: 0.22
+Nodes (7): crear_box_activo(), Dueño de un box ya aprobado (el registro público lo deja pendiente hasta que un…, atleta_ajeno_con_mi_coach_id(), fixture, Un coach que, por un dato inconsistente, tiene "como suyo" a un atleta de OTRA…, Atleta de OTRO box cuyo coach_id apunta a `coach` (lo que pasaría con un dato…, test_el_coach_solo_puede_asignar_atletas_de_su_propio_box()
+
+### Community 40 - "WodTimer.tsx"
+Cohesion: 0.28
+Nodes (5): Fase, Modo, pitar(), resolverModo(), WodTimer()
+
+### Community 41 - "schemas/fitness.py"
 Cohesion: 0.40
-Nodes (3): clean_text(), Sanea un texto libre antes de guardarlo: quita cualquier HTML/script (bleach,…, model_validator
+Nodes (4): FitnessBenchmarkUpdate, FitnessLevelResponse, BaseModel, Todos los campos son opcionales: el atleta llena solo las marcas que ya tiene.
 
-### Community 33 - "DayEditor"
-Cohesion: 0.50
-Nodes (3): useAddPlanSet(), useDeletePlanSet(), DayEditor()
+### Community 42 - "$type"
+Cohesion: 0.60
+Nodes (5): $type, $value, border, border, border
 
-### Community 34 - "GroupDetail"
-Cohesion: 0.50
-Nodes (4): useDeleteGroup(), useGroupDetail(), useRemoveGroupMember(), GroupDetail()
+### Community 43 - "radius"
+Cohesion: 0.60
+Nodes (5): radius, radius, radius, $type, $value
 
-### Community 35 - "useRegisterAthlete"
+### Community 44 - "lg"
+Cohesion: 0.60
+Nodes (5): lg, $type, $value, lg, lg
+
+### Community 45 - "sm"
+Cohesion: 0.60
+Nodes (5): sm, sm, sm, $type, $value
+
+### Community 46 - "padding-y"
 Cohesion: 0.67
-Nodes (4): useRegisterAthlete(), RegisterAthleteSheet(), handleSubmit(), reset()
+Nodes (4): padding-y, padding-y, $type, $value
+
+### Community 47 - "xl"
+Cohesion: 0.67
+Nodes (4): xl, xl, $type, $value
+
+### Community 48 - "none"
+Cohesion: 0.67
+Nodes (4): $type, $value, none, none
+
+### Community 51 - "Logo Usage Rules"
+Cohesion: 0.07
+Nodes (28): Absolute Don'ts, Approved Backgrounds, Before Using Logo, Clear Space, Co-branding, Color Rules, Color Usage, Color Variants (+20 more)
+
+### Community 52 - "Component Specifications"
+Cohesion: 0.07
+Nodes (28): Alert, Anatomy, Anatomy, Anatomy, Anatomy, Anatomy, Badge, Button (+20 more)
+
+### Community 53 - "html-token-validator.py"
+Cohesion: 0.12
+Nodes (25): get_context(), is_allowed_exception(), is_allowed_rgba(), is_inside_block(), load_css_variables(), main(), print_result(), print_summary() (+17 more)
+
+### Community 54 - "shadcn/ui Accessibility Patterns"
+Cohesion: 0.07
+Nodes (28): Accordion, Alert, ARIA Labels, Checkbox and Radio, Color Contrast, Command Palette Navigation, Component-Specific Patterns, Dialog/Modal Navigation (+20 more)
+
+### Community 55 - "scripts/core.py"
+Cohesion: 0.11
+Nodes (28): _contains_phrase(), _domain_keywords(), _exact_stack_identifier(), _file_signature(), _get_bm25(), _load_csv(), _load_csv_snapshot(), _load_product_keywords() (+20 more)
+
+### Community 56 - "logo/core.py"
+Cohesion: 0.10
+Nodes (21): BM25, detect_domain(), _load_csv(), Load CSV and return list of dicts, Core search function using BM25, Auto-detect the most relevant domain from query, Main search function with auto-domain detection, Search across all domains and combine results (+13 more)
+
+### Community 57 - "What You Must Do When Invoked"
+Cohesion: 0.07
+Nodes (26): For /graphify add and --watch, For /graphify query, For the commit hook and native CLAUDE.md integration, For --update and --cluster-only, /graphify, Honesty Rules, Interpreter guard for subcommands, Part A - Structural extraction for code files (+18 more)
+
+### Community 58 - "Asset Approval Checklist"
+Cohesion: 0.08
+Nodes (25): Accessibility, Archival, Asset Approval Checklist, Automation Support, Color Compliance, Common Issues & Fixes, Content Accessibility, Content Quality (+17 more)
+
+### Community 59 - "Logo AI Prompt Engineering"
+Cohesion: 0.08
+Nodes (25): Common Pitfalls, Core Prompt Structure, Detailed Brief, Eco/Sustainable, Effective Keywords by Style, Fashion Brand, Healthcare, Industry-Specific Prompts (+17 more)
+
+### Community 60 - "design_system.py"
+Cohesion: 0.08
+Nodes (29): ansi_ljust(), _detect_page_type(), format_ascii_box(), format_markdown(), format_master_md(), format_page_override_md(), generate_design_system(), _generate_intelligent_overrides() (+21 more)
+
+### Community 61 - "Color Palette Management"
+Cohesion: 0.08
+Nodes (24): Accessibility Requirements, Brand Compliance Validation, Checking Contrast, Color Documentation Format, Color Extraction, Color Palette Examples, Color Palette Management, Color System Structure (+16 more)
+
+### Community 62 - "CIP Deliverable Guide"
+Cohesion: 0.08
+Nodes (24): Apparel, Business Card, Car/Sedan, CIP Deliverable Guide, Core Identity, Digital Assets, Email Signature, Envelope (+16 more)
+
+### Community 63 - "States and Variants"
+Cohesion: 0.08
+Nodes (24): Accessibility, Accessibility Requirements, ARIA States, Color Contrast, Color Variants, Disabled States, Error Messages, Error States (+16 more)
+
+### Community 64 - "UI Styling Skill"
+Cohesion: 0.08
+Nodes (24): Accessibility Patterns, Alternative: Tailwind-Only Setup, Best Practices, Common Patterns, Component Layer: shadcn/ui, Component Library Guide, Component + Styling Setup, Core Stack (+16 more)
+
+### Community 65 - "AppShell.tsx"
+Cohesion: 0.04
+Nodes (75): ADMIN_NAV, AppShell(), ATHLETE_NAV, ATHLETE_RANKING_NAV, COACH_NAV, EXACT_ROUTES, INDEPENDENT_COACH_NAV, navFor() (+67 more)
+
+### Community 66 - "Workflow"
+Cohesion: 0.08
+Nodes (23): Art Direction Styles (Reuse from Banner), Color & Contrast, Design Best Practices, HTML Design Rules, HTML Template Structure, Option A: Chrome Headless CLI (Recommended — zero dependencies), Option B: chrome-devtools skill, Option C: Playwright script (+15 more)
+
+### Community 68 - "test_ranking.py"
+Cohesion: 0.14
+Nodes (27): nombre_mas_comun(), Cómo mostrar un ejercicio o WOD que varios escribieron distinto ("Fran" /…, _atleta(), equipo(), _marca(), fixture, Ranking del box entre atletas: marcas (1RM) y WODs., El atleta anota a mano un WOD: sesión propia + ejercicio metabólico + formato +… (+19 more)
+
+### Community 70 - "Design System"
+Cohesion: 0.09
+Nodes (22): Best Practices, Chart.js Integration, Command, Component Spec Pattern, Contextual Decision Flow, Decision System CSVs, Design System, Integration (+14 more)
+
+### Community 71 - "Tailwind CSS Customization"
+Cohesion: 0.09
+Nodes (22): @apply Directive, Best Practices, Color Customization, Complete Tailwind Config, Configuration Examples, Content Configuration, Custom Color Palette, Custom Font Sizes (+14 more)
+
+### Community 72 - "spacing"
+Cohesion: 0.09
+Nodes (22): $type, $value, $type, $value, $type, $value, $type, $value (+14 more)
+
+### Community 73 - "TailwindConfigGenerator"
+Cohesion: 0.09
+Nodes (12): Add custom font families. Args: fonts: Dict of font_type: [font_names] e.g.,…, Add custom spacing values. Args: spacing: Dict of name: value e.g., {'18':…, Add custom breakpoints. Args: breakpoints: Dict of name: width e.g., {'3xl':…, Add plugin requirements. Args: plugins: List of plugin names e.g.,…, Get plugin recommendations based on configuration. Returns: List of recommended…, Generate Tailwind CSS configuration files., Validate configuration. Returns: Tuple of (valid, message), Add custom colors to theme. Args: colors: Dict of color_name: color_value Value… (+4 more)
+
+### Community 74 - "schemas/__init__.py"
+Cohesion: 0.11
+Nodes (32): Config, GroupCreate, GroupMemberAdd, GroupMemberResponse, GroupMesocycleAthlete, GroupMesocycleProgram, GroupPlanAssign, GroupPlanAssignAthlete (+24 more)
+
+### Community 75 - "SanitizedModel"
+Cohesion: 0.11
+Nodes (26): Alta de un ATLETA. Dos caminos (ver routers/auth.py): - Autoregistro: sin…, UserLogin, UserRegister, Base para esquemas de ENTRADA: sanea todo campo string (quita HTML/scripts,…, SanitizedModel, MesocycleCreate, MesocycleManualCreate, MesocycleManualGroupCreate (+18 more)
+
+### Community 76 - "routers/sessions.py"
+Cohesion: 0.15
+Nodes (24): ensure_can_manage_mesocycle(), ensure_owner_or_coach_editable(), Como ensure_owner_or_coach, pero entiende la programación de una clase (sin…, Como ensure_owner_or_coach, pero además: si quien edita ES el propio atleta (no…, adapt_session_to_available_time(), complete_session(), create_session(), delete_session() (+16 more)
+
+### Community 77 - "generate-slide.py"
+Cohesion: 0.14
+Nodes (20): _e(), generate_chart_slide(), generate_cta_slide(), generate_deck(), generate_metrics_slide(), generate_problem_slide(), generate_solution_slide(), generate_testimonial_slide() (+12 more)
+
+### Community 78 - "16"
+Cohesion: 0.67
+Nodes (3): $type, $value, 16
+
+### Community 79 - "test_ia_mesociclos.py"
+Cohesion: 0.08
+Nodes (41): _asignar(), _atleta(), grupo(), _marca(), _mesociclo(), plantilla(), fixture, Asignar una plantilla (plan) del coach a un grupo: cada atleta recibe su copia… (+33 more)
+
+### Community 81 - "Routing by Task Type"
+Cohesion: 0.10
+Nodes (19): Banner Design Tasks, Brand Identity Tasks, Component Creation, Corporate Identity Program Tasks, Design Routing Guide, Design System Migration, Icon Design Tasks, Implementation Tasks (+11 more)
+
+### Community 82 - "shadcn/ui Theming & Customization"
+Cohesion: 0.10
+Nodes (19): Base Color Presets, Best Practices, Color Customization, Color Format, Component Customization, CSS Variable System, Customize Styles, Customize Variants (+11 more)
+
+### Community 83 - "Asset Organization Guide"
+Cohesion: 0.11
+Nodes (18): Asset Entry (manifest.json), Asset Organization Guide, By Campaign, By Status, By Type, Cleanup Workflow, Components, Directory Structure (+10 more)
+
+### Community 84 - "Primary Color Meanings"
+Cohesion: 0.11
+Nodes (18): Accessibility Considerations, Analogous, Black, Blue, Color Combinations by Industry, Color Harmony Types, Complementary, Green (+10 more)
+
+### Community 85 - "Core Logo Types"
+Cohesion: 0.11
+Nodes (18): 1. Wordmark (Logotype), 2. Lettermark (Monogram), 3. Pictorial Mark (Brand Mark), 4. Abstract Mark, 5. Mascot, 6. Emblem, 7. Combination Mark, Aesthetic Styles (+10 more)
+
+### Community 86 - "fetch-background.py"
+Cohesion: 0.16
+Nodes (18): generate_css_for_background(), get_background_image(), get_curated_images(), get_overlay_css(), get_pexels_search_url(), load_backgrounds_config(), load_brand_colors(), main() (+10 more)
+
+### Community 87 - "color"
+Cohesion: 0.11
+Nodes (19): $type, $value, background, foreground, muted-foreground, primary, primary-hover, secondary (+11 more)
+
+### Community 88 - "Brand Consistency Checklist"
+Cohesion: 0.11
+Nodes (17): Audit Frequency, Brand Consistency Checklist, Channel Audit, Collateral, Colors, Common Issues, Email, Imagery (+9 more)
+
+### Community 89 - "CIP Mockup Prompt Engineering"
+Cohesion: 0.11
+Nodes (17): Apparel (Polo/T-Shirt), Base Prompt Structure, Business Card, CIP Mockup Prompt Engineering, Context Modifiers, Corporate Minimal, Deliverable-Specific Modifiers, Letterhead (+9 more)
+
+### Community 90 - "Color Semantics"
+Cohesion: 0.11
+Nodes (17): Accent, Applying Semantic Tokens, Background & Foreground, Border & Ring, Color Semantics, Dark Mode Overrides, Destructive, Interactive States (+9 more)
+
+### Community 91 - "TestThresholdGate"
+Cohesion: 0.12
+Nodes (4): Unit tests for metric math and relevance fixture validation., TestFixtureValidation, TestMetricMath, TestThresholdGate
+
+### Community 92 - "icon/generate.py"
+Cohesion: 0.18
+Nodes (16): apply_color(), apply_viewbox_size(), extract_svgs(), generate_batch(), generate_icon(), generate_sizes(), load_env(), main() (+8 more)
+
+### Community 93 - "BM25"
+Cohesion: 0.10
+Nodes (10): BM25, BM25 ranking algorithm for text search, Lowercase, normalize synonyms, split, remove punctuation, filter stopwords, Build BM25 index from documents, Score all documents against query, All indexed terms, for suggestion/typo-recovery purposes., Stdlib-only regression tests for core.py / design_system.py (unittest, not…, TestBm25CoreBehavior (+2 more)
+
+### Community 95 - "test_coach_notes.py"
+Cohesion: 0.30
+Nodes (13): _agregar(), _orden(), Nota del coach por ejercicio: se guarda, se edita sin borrarse y viaja en las…, Crea un mesociclo manual (1 semana, todos los días) y devuelve (meso_id,…, _series(), _sesion_del_atleta(), test_borrar_una_serie_no_hace_que_la_siguiente_choque_de_orden(), test_editar_sin_mandar_la_nota_no_la_borra_y_con_vacio_si() (+5 more)
+
+### Community 96 - "DesignSystemGenerator"
+Cohesion: 0.16
+Nodes (7): DesignSystemGenerator, Generates design system recommendations from aggregated searches., Load reasoning rules from CSV., Select best matching result based on priority keywords., TestReasoningMatch, The exact reproduction from issue #428., TestEndToEndCoherence
+
+### Community 97 - "Design Principles"
+Cohesion: 0.12
+Nodes (15): 22 Art Direction Styles, Banner Sizes & Art Direction Styles Reference, Complete Banner Sizes, CTA Rules, Design Principles, Pinterest Research Queries, Print, Print Specs (+7 more)
+
+### Community 98 - "Design Principles"
+Cohesion: 0.12
+Nodes (15): 22 Art Direction Styles, Banner Sizes & Art Direction Styles Reference, Complete Banner Sizes, CTA Rules, Design Principles, Pinterest Research Queries, Print, Print Specs (+7 more)
+
+### Community 99 - "fontSize"
+Cohesion: 0.12
+Nodes (16): $type, $value, $type, $value, $type, $value, $type, $value (+8 more)
+
+### Community 100 - "TestShadcnInstaller"
+Cohesion: 0.12
+Nodes (9): Test adding components in dry run mode., Test ShadcnInstaller class., Test adding all components without config., Test adding all components in dry run mode., Test listing installed components without config., Test listing installed components when none exist., Test listing installed components when they exist., Test checking for existing shadcn config. (+1 more)
+
+### Community 101 - "CIP Design Reference"
+Cohesion: 0.13
+Nodes (14): CIP Brief (Start Here), CIP Design Reference, Commands, Deliverable Categories, Design Styles, Detailed References, Generate Mockups, HTML Presentation Features (+6 more)
+
+### Community 102 - "Icon Design Reference"
+Cohesion: 0.13
+Nodes (14): Available Styles, CLI Options, Commands, Generate Batch Variations, Generate Multiple Sizes, Generate Single Icon, Icon Categories, Icon Design Reference (+6 more)
+
+### Community 103 - "Copywriting Formulas"
+Cohesion: 0.13
+Nodes (14): AIDA (Attention-Interest-Desire-Action), Before-After-Bridge, Contrast Patterns, Copywriting Formulas, Core Formulas, Cost of Inaction, FAB (Features-Advantages-Benefits), Formula-to-Slide Mapping (+6 more)
+
+### Community 104 - "Copywriting Formulas"
+Cohesion: 0.13
+Nodes (14): AIDA (Attention-Interest-Desire-Action), Before-After-Bridge, Contrast Patterns, Copywriting Formulas, Core Formulas, Cost of Inaction, FAB (Features-Advantages-Benefits), Formula-to-Slide Mapping (+6 more)
+
+### Community 105 - "detect_domain"
+Cohesion: 0.23
+Nodes (3): detect_domain(), Auto-detect the most relevant domain from query. Matches are weighted by…, TestDomainDetection
+
+### Community 106 - "common.py"
+Cohesion: 0.15
+Nodes (13): clean_text(), Sanea un texto libre antes de guardarlo: quita cualquier HTML/script (bleach,…, AIGeneratePlanTemplate, AIGenerateRequest, AIGenerateSmart, AIGenerateSmartGroup, _clean_day_focus(), field_validator (+5 more)
+
+### Community 107 - "schemas/classes.py"
+Cohesion: 0.14
+Nodes (16): ClassCreate, ClassDayCreate, ClassDayResponse, ClassOccurrence, ClassProgramCreate, ClassProgramResponse, ClassResponse, ClassUpdate (+8 more)
+
+### Community 108 - "_style_is_dark_primary"
+Cohesion: 0.15
+Nodes (9): _query_wants_dark(), True when a styles.csv row describes itself as dark-first., True when the query explicitly asks for a dark theme., Resolve the mode the rest of the output has to agree with., _resolve_color_mode(), _style_is_dark_primary(), TestModeResolution, Regression tests for the public style taxonomy and search contract. (+1 more)
+
+### Community 110 - "Banner Design - Multi-Format Creative Banner System"
+Cohesion: 0.14
+Nodes (13): Art Direction Styles (Top 10), Banner Design - Multi-Format Creative Banner System, Banner Size Quick Reference, Design Rules, Prerequisites, Security, Step 1: Gather Requirements (AskUserQuestion), Step 2: Research & Art Direction (+5 more)
+
+### Community 111 - "Messaging Framework"
+Cohesion: 0.14
+Nodes (13): Core Statements, Elevator Pitches, Framework Structure, Message Architecture, Message by Audience, Message Testing, Messaging Framework, Mission Statement (+5 more)
+
+### Community 112 - "Brand Voice Framework"
+Cohesion: 0.14
+Nodes (13): Brand Voice Framework, Character Spectrum, Emotion Spectrum, Language Spectrum, Step 1: Define Personality Traits, Step 2: Create Voice Chart, Step 3: Context Adaptation, Tone Spectrum (+5 more)
+
+### Community 113 - "extract-colors.cjs"
+Cohesion: 0.22
+Nodes (11): calculateCompliance(), colorDistance(), displayPalette(), extractHexColors(), findNearestBrandColor(), fs, generateImageMagickCommand(), hexToRgb() (+3 more)
+
+### Community 114 - "validate-asset.cjs"
+Cohesion: 0.25
+Nodes (13): checkManifest(), formatBytes(), formatOutput(), fs, main(), parseFilename(), path, RULES (+5 more)
+
+### Community 115 - "Layout Patterns"
+Cohesion: 0.14
+Nodes (13): Card Styles, Component Variants, CSS Structures, Feature Grid (3 columns), Layout Decision Flow, Layout Patterns, Layout Selection by Use Case, Metric Styles (+5 more)
+
+### Community 116 - "Tailwind Integration"
+Cohesion: 0.14
+Nodes (13): Animation Tokens, Base Layer, Button Example, Component Classes, CSS Variables Setup, Dark Mode Toggle, HSL Format Benefits, shadcn/ui Alignment (+5 more)
+
+### Community 117 - "radius"
+Cohesion: 0.19
+Nodes (14): $type, $value, $type, $value, $type, $value, primitive, radius (+6 more)
+
+### Community 118 - "Layout Patterns"
+Cohesion: 0.14
+Nodes (13): Card Styles, Component Variants, CSS Structures, Feature Grid (3 columns), Layout Decision Flow, Layout Patterns, Layout Selection by Use Case, Metric Styles (+5 more)
+
+### Community 119 - "test_tailwind_config_gen.py"
+Cohesion: 0.16
+Nodes (10): main(), Tailwind CSS Configuration Generator Generate tailwind.config.js/ts with custom…, Tests for tailwind_config_gen.py, Reduce a generated TS/JS config to a bare assignable object so it can be handed…, Regression guard for the missing-comma bug between the ``theme`` block and…, The property preceding ``plugins`` must end with a comma (pure-Python check, so…, The emitted config parses as valid JS via ``node --check``., _strip_to_object() (+2 more)
+
+### Community 120 - "timedelta"
+Cohesion: 0.14
+Nodes (20): get_admin_overview(), get_audit_logs(), get, post, put, User, UUID, Fuerza la revocación de TODOS los tokens de un usuario (todos sus… (+12 more)
+
+### Community 121 - "schemas/users.py"
+Cohesion: 0.22
+Nodes (13): AthleteActivityResponse, AthleteLookupResponse, Config, PRCreate, PRResponse, BaseModel, Resultado mínimo de GET /users/search -- a propósito NO reutiliza UserResponse:…, Una fila de la 'tabla de posiciones': cuántos entrenamientos ha completado este… (+5 more)
+
+### Community 122 - "brand/references/update.md"
+Cohesion: 0.15
+Nodes (12): Color Presets, Examples, Files Modified, Important, Overview, Skills Used, Step 1: Gather Brand Input, Step 2: Update Brand Guidelines (+4 more)
+
+### Community 123 - "Logo Design Reference"
+Cohesion: 0.15
+Nodes (12): Available Styles, Color Psychology, Commands, Design Brief (Start Here), Detailed References, Generate Logo, Industry Defaults, Logo Design Reference (+4 more)
+
+### Community 124 - "Token Architecture"
+Cohesion: 0.15
+Nodes (12): Categories, Dark Mode, File Organization, Layer 1: Primitive Tokens, Layer 2: Semantic Tokens, Layer 3: Component Tokens, Layer Overview, Migration from Flat Tokens (+4 more)
+
+### Community 125 - "design-tokens-starter.json"
+Cohesion: 0.15
+Nodes (12): component, $type, $value, dark, semantic, $schema, $type, $value (+4 more)
+
+### Community 126 - "test_errores_http.py"
+Cohesion: 0.15
+Nodes (28): _admin(), _login(), Los admins no se registran por la API: se crea uno directo en la BD de pruebas., _entradas_de_auditoria(), error(), Códigos y mensajes de error que ve el frontend, fijados uno por uno. Sirven de…, _registrar_coach(), test_agregar_atletas_de_otro_box_o_de_otro_coach() (+20 more)
+
+### Community 127 - "Primitive Tokens"
+Cohesion: 0.17
+Nodes (11): Border Radius, Color Scales, Gray Scale, Motion / Duration, Primary Colors (Blue), Primitive Tokens, Shadows, Spacing Scale (+3 more)
+
+### Community 128 - "validate-tokens.cjs"
+Cohesion: 0.26
+Nodes (11): extensions, formatReport(), fs, getFiles(), main(), parseArgs(), path, patterns (+3 more)
+
+### Community 129 - "button"
+Cohesion: 0.20
+Nodes (10): fg, font-size, hover-bg, button, $type, $value, $type, $value (+2 more)
+
+### Community 130 - ".check_shadcn_config"
+Cohesion: 0.21
+Nodes (6): Add all available shadcn/ui components. Args: overwrite: If True, overwrite…, List installed components. Returns: Tuple of (success, message with component…, Check if shadcn is initialized in project. Returns: True if components.json…, Get list of already installed components. Returns: List of installed component…, Read shadcn version from project package.json; fall back to a pinned default., Add shadcn/ui components. Args: components: List of component names to add…
+
+### Community 131 - ".generate_config_string"
+Cohesion: 0.20
+Nodes (6): Generate configuration file content. Returns: Configuration file as string, Generate TypeScript configuration., Generate JavaScript configuration., Format plugins array for config. Validates each plugin name against a strict…, Add indentation to JSON string., Write configuration to file. Returns: Tuple of (success, message)
+
+### Community 132 - "Core Visual Elements"
+Cohesion: 0.18
+Nodes (10): Color Palette, Colors, Core Visual Elements, Logo, Logo, Quick Checks, Typography, Typography (+2 more)
+
+### Community 133 - "inject-brand-context.cjs"
+Cohesion: 0.31
+Nodes (10): extractColorsFromTable(), extractCoreAttributes(), extractHexColors(), extractImageStyle(), extractTypography(), extractVoice(), fs, generatePromptAddition() (+2 more)
+
+### Community 134 - "CIP Design Style Guide"
+Cohesion: 0.18
+Nodes (10): Bold Dynamic, CIP Design Style Guide, Classic Traditional, Color Psychology, Corporate Minimal, Fresh Modern, Luxury Premium, Modern Tech (+2 more)
+
+### Community 135 - "logo/generate.py"
+Cohesion: 0.25
+Nodes (10): enhance_prompt(), generate_batch(), generate_logo(), load_env(), main(), Enhance the logo prompt with style and industry modifiers, Generate a logo using Gemini models with image generation Args: aspect_ratio:…, Generate multiple logo variants with different styles (+2 more)
+
+### Community 136 - "embed-tokens.cjs"
+Cohesion: 0.18
+Nodes (8): args, fs, minimal, MINIMAL_TOKENS, path, projectRoot, tokensPath, wrapStyle
+
+### Community 137 - "ShadcnInstaller"
+Cohesion: 0.22
+Nodes (7): main(), Handle shadcn/ui component installation., shadcn/ui Component Installer Add shadcn/ui components to project with…, ShadcnInstaller, Tests for shadcn_add.py, Test adding components that are already installed., Test initialization with custom project root.
+
+### Community 138 - "patch"
+Cohesion: 0.18
+Nodes (6): Test adding components with overwrite flag., Test successful component addition., Test component addition with subprocess error., Test component addition when npx is not found., Test successful addition of all components., patch
+
+### Community 139 - "test_text_layout_resilience.py"
+Cohesion: 0.20
+Nodes (4): Canonical regression contracts for resilient UI text layouts., read_rows(), TestTextLayoutDataContracts, TestTextLayoutRetrieval
+
+### Community 140 - "Quick Reference"
+Cohesion: 0.18
+Nodes (11): 10. Charts & Data (LOW), 1. Accessibility (CRITICAL), 2. Touch & Interaction (CRITICAL), 3. Performance (HIGH), 4. Style Selection (HIGH), 5. Layout & Responsive (HIGH), 6. Typography & Color (MEDIUM), 7. Animation (MEDIUM) (+3 more)
+
+### Community 141 - "._base_config"
+Cohesion: 0.22
+Nodes (6): Any, Path, Initialize generator. Args: typescript: If True, generate .ts config, else .js…, Determine default output path., Create base configuration structure., Get default content paths for framework.
+
+### Community 142 - "Brand"
+Cohesion: 0.20
+Nodes (9): Brand, Brand Sync Workflow, Quick Start, References, Routing, Scripts, Subcommands, Templates (+1 more)
+
+### Community 143 - "Slide Strategies"
+Cohesion: 0.20
+Nodes (9): Common Structures, Duarte Sparkline Pattern, Matching Strategy to Context, Product Demo (6 slides), Sales Pitch (9 slides), Search Commands, Slide Strategies, Strategy Selection (+1 more)
+
+### Community 144 - "Component Tokens"
+Cohesion: 0.20
+Nodes (9): Alert Tokens, Badge Tokens, Button Tokens, Card Tokens, Component Tokens, Dialog/Modal Tokens, Input Tokens, Table Tokens (+1 more)
+
+### Community 145 - "generate-tokens.cjs"
+Cohesion: 0.40
+Nodes (9): flattenTokens(), fs, generateCSS(), generateTailwind(), main(), parseArgs(), path, resolveReference() (+1 more)
+
+### Community 146 - "1"
+Cohesion: 0.67
+Nodes (3): $type, $value, 1
+
+### Community 147 - "duration"
+Cohesion: 0.20
+Nodes (10): fast, normal, slow, $type, $value, $type, $value, duration (+2 more)
+
+### Community 148 - "Slide Strategies"
+Cohesion: 0.20
+Nodes (9): Common Structures, Duarte Sparkline Pattern, Matching Strategy to Context, Product Demo (6 slides), Sales Pitch (9 slides), Search Commands, Slide Strategies, Strategy Selection (+1 more)
+
+### Community 149 - "routers/mesocycles.py"
+Cohesion: 0.14
+Nodes (24): ensure_can_view_mesocycle(), ensure_has_personal_coach(), Ver un mesociclo: el de una clase, solo los entrenadores de ese box (y el…, Los mesociclos son exclusivos de los atletas con coach personal: un atleta del…, _build_manual_mesocycle(), create_manual_mesocycle(), create_manual_mesocycle_for_group(), create_mesocycle() (+16 more)
+
+### Community 150 - "BarbellPlates.tsx"
+Cohesion: 0.33
+Nodes (8): BarbellPlates(), plateSize(), PlateStack(), barWeightKg(), calculatePlates(), PLATE_COLORS, PLATE_DENOMINATIONS_KG, PlateBreakdown
+
+### Community 151 - "MesocycleFullResponse"
+Cohesion: 0.47
+Nodes (6): Config, MesocycleFullResponse, MesocycleResponse, MesocycleSummaryResponse, BaseModel, GET /users/{id}/mesocycles/ — exactamente los campos que ya consume el frontend…
+
+### Community 152 - "sync-brand-to-tokens.cjs"
+Cohesion: 0.33
+Nodes (8): adjustBrightness(), { execFileSync }, extractColorsFromMarkdown(), fs, generateColorScale(), main(), path, updateDesignTokens()
+
+### Community 153 - "_run"
+Cohesion: 0.28
+Nodes (8): Path, Regression tests for validate-tokens.cjs. The validator used to skip any line…, A hardcoded hex on the same line as a var() token is still a violation., A line that references only tokens produces no false positives., _run(), test_flags_hardcoded_hex_sharing_line_with_token(), test_token_only_line_reports_no_violation(), CompletedProcess
+
+### Community 154 - "graphify reference: extra exports and benchmark"
+Cohesion: 0.22
+Nodes (8): graphify reference: extra exports and benchmark, Step 6b - Wiki (only if --wiki flag), Step 7 - Neo4j export (only if --neo4j or --neo4j-push flag), Step 7a - FalkorDB export (only if --falkordb or --falkordb-push flag), Step 7b - SVG export (only if --svg flag), Step 7c - GraphML export (only if --graphml flag), Step 7d - MCP server (only if --mcp flag), Step 8 - Token reduction benchmark (only if total_words > 5000)
+
+### Community 155 - "LimitarConcurrencia"
+Cohesion: 0.14
+Nodes (16): AsyncClient, LimitarConcurrencia, AppLenta, _cliente(), Límite de peticiones simultáneas: que no se procesen de más y que la API no se…, Sin el límite, unas decenas de peticiones a la vez agotaban las conexiones de…, App ASGI de mentira: cada petición dura `duracion` y se anota cuántas había a…, test_con_maximo_cero_el_limite_esta_desactivado_y_lifespan_pasa_de_largo() (+8 more)
+
+### Community 156 - "test_data_contracts.py"
+Cohesion: 0.10
+Nodes (9): Cross-file semantic contracts for curated design data., read_rows(), split_values(), style_identities(), TestGeneratedCatalogContract, TestLandingAndStackContract, TestReasoningContract, TestStyleIdentityContract (+1 more)
+
+### Community 157 - "UI/UX Pro Max - Design Intelligence"
+Cohesion: 0.25
+Nodes (7): How to Use, Primary Use Cases, Recommended, Rule Categories by Priority, Skip, UI/UX Pro Max - Design Intelligence, When to Apply
+
+### Community 158 - "schemas/plans.py"
+Cohesion: 0.15
+Nodes (15): Una serie de un ejercicio con sus propias repeticiones y su propia carga (kg…, SerieDeEjercicio, PlanAcquireRequest, PlanCreate, PlanPreviewResponse, PlanPublishUpdate, PlanSessionPreview, PlanSetCreate (+7 more)
+
+### Community 159 - "Slides Reference"
+Cohesion: 0.29
+Nodes (6): Key Features, Knowledge Base, Slides Reference, Usage, When to Use, Workflow
+
+### Community 160 - "HTML Slide Template"
+Cohesion: 0.29
+Nodes (6): Animation Classes, Background Images, Base Structure, Chart.js Integration, CSS Variables Reference, HTML Slide Template
+
+### Community 161 - "HTML Slide Template"
+Cohesion: 0.29
+Nodes (6): Animation Classes, Background Images, Base Structure, Chart.js Integration, CSS Variables Reference, HTML Slide Template
+
+### Community 162 - "Query Contract"
+Cohesion: 0.29
+Nodes (7): Query Contract, Step 1: Analyze User Requirements, Step 2: Generate Design System (new projects/pages), Step 2b: Persist Design System (Master + Overrides Pattern), Step 2c: Design Dials (optional), Step 3: Supplement with Detailed Searches (as needed), Step 4: Stack Guidelines
+
+### Community 163 - "graphify reference: query, path, explain"
+Cohesion: 0.33
+Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
+
+### Community 164 - "Slides"
+Cohesion: 0.33
+Nodes (5): References (Knowledge Base), Routing, Slides, Subcommands, When to Use
+
+### Community 165 - "Pre-Delivery Checklist"
+Cohesion: 0.33
+Nodes (6): Accessibility, Interaction, Layout, Light/Dark Mode, Pre-Delivery Checklist, Visual Quality
+
+### Community 166 - "Prerequisites"
+Cohesion: 0.33
+Nodes (6): Available Domains, Available Stacks, How to Use This Skill, Output Formats, Prerequisites, Search Reference
+
+### Community 167 - "Brand Guidelines Template"
+Cohesion: 0.40
+Nodes (4): Brand Guidelines Template, Document Structure, Extractable Fields, Usage
+
+### Community 168 - "card"
+Cohesion: 0.20
+Nodes (12): $type, $value, bg, bg, padding, shadow, card, bg (+4 more)
+
+### Community 169 - "_normalize"
+Cohesion: 0.22
+Nodes (9): _exact_match_diagnostic(), _legacy_successor_guidance(), _normalize(), Apply longest-first synonym substitution at token boundaries., Whether a stack query explicitly targets an older framework generation., Choose one coherent applicability generation for stack retrieval., Prefer the explicit successor row for a brand-new app on legacy-only stacks., _stack_query_requests_legacy() (+1 more)
+
+### Community 170 - "input"
+Cohesion: 0.29
+Nodes (8): padding-x, input, $type, $value, focus-ring, padding-x, $type, $value
+
+### Community 171 - "3"
+Cohesion: 0.67
+Nodes (3): $type, $value, 3
+
+### Community 172 - "Common Rules for Professional UI"
+Cohesion: 0.40
+Nodes (5): Common Rules for Professional UI, Icons & Visual Elements, Interaction (App), Layout & Spacing, Light/Dark Mode Contrast
+
+### Community 173 - "Example Workflow"
+Cohesion: 0.40
+Nodes (5): Example Workflow, Step 1: Analyze Requirements, Step 2: Generate Design System, Step 3: Supplement with Detailed Searches (as needed), Step 4: Stack Guidelines
+
+### Community 174 - "_AuditLogHandler"
+Cohesion: 0.50
+Nodes (3): _AuditLogHandler, Espejo de security_logger en la tabla audit_logs (ver backend/models.py): antes…, LogRecord
+
+### Community 175 - "cargar_pdf.py"
+Cohesion: 0.67
+Nodes (3): get_embedding(), process_and_upload_pdf(), Llama a Google Gemini para convertir un fragmento de texto en un vector…
+
+### Community 176 - "slide-token-validator.py"
+Cohesion: 0.50
+Nodes (3): main(), Slide Token Validator (Legacy Wrapper) Now delegates to html-token-validator.py…, Delegate to unified html-token-validator.py with --type slides.
+
+### Community 177 - "RegisterAthleteSheet"
+Cohesion: 1.00
+Nodes (3): RegisterAthleteSheet(), handleSubmit(), reset()
+
+### Community 178 - "8"
+Cohesion: 0.67
+Nodes (3): $type, $value, 8
+
+### Community 179 - "ai_mesocycles.py"
+Cohesion: 0.06
+Nodes (62): adapt_session_to_time(), _generate_json_with_fallback(), generate_mesocycle_chunk(), generate_workout_session(), _post_to_gemini(), Genera contenido JSON probando cada modelo de `modelos` en orden: si el primero…, `literatura_cientifica` se calcula UNA sola vez por mesociclo…, Toma los ejercicios YA prescritos para una sesión y los adapta (menos series,… (+54 more)
+
+### Community 180 - "graphify reference: add a URL and watch a folder"
+Cohesion: 0.50
+Nodes (3): For /graphify add, For --watch, graphify reference: add a URL and watch a folder
+
+### Community 181 - "graphify reference: commit hook and native CLAUDE.md integration"
+Cohesion: 0.50
+Nodes (3): For git commit hook, For native CLAUDE.md integration, graphify reference: commit hook and native CLAUDE.md integration
+
+### Community 182 - "graphify reference: incremental update and cluster-only"
+Cohesion: 0.50
+Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
+
+### Community 183 - "apiFetch"
+Cohesion: 0.05
+Nodes (57): BlockSelect(), SetRow(), Spinner(), apiFetch(), BLOCK_KEYS, BLOCK_LABELS, BLOCK_OPTIONS, BlockKey (+49 more)
+
+### Community 184 - "Tips for Better Results"
+Cohesion: 0.50
+Nodes (4): Common Sticking Points, Pre-Delivery Checklist, Query Strategy, Tips for Better Results
+
+### Community 185 - "destructive"
+Cohesion: 0.67
+Nodes (3): destructive, $type, $value
+
+### Community 186 - "destructive-foreground"
+Cohesion: 0.67
+Nodes (3): destructive-foreground, $type, $value
+
+### Community 187 - "muted"
+Cohesion: 0.67
+Nodes (3): muted, $type, $value
+
+### Community 188 - "primary-foreground"
+Cohesion: 0.67
+Nodes (3): primary-foreground, $type, $value
+
+### Community 189 - "ring"
+Cohesion: 0.67
+Nodes (3): ring, $type, $value
+
+### Community 190 - "secondary-foreground"
+Cohesion: 0.67
+Nodes (3): secondary-foreground, $type, $value
+
+### Community 195 - "schemas/ranking.py"
+Cohesion: 0.36
+Nodes (7): BaseModel, RankingLift, RankingLiftRow, RankingWod, RankingWodRow, Un WOD que atletas del box anotaron con resultado, agrupado por nombre y…, Un levantamiento con marcas en el ranking del box.
+
+### Community 202 - "test_grupos_masivo.py"
+Cohesion: 0.16
+Nodes (21): _agregar(), _atletas_del_programa(), _mesociclos_de(), programa(), fixture, _rampa_de(), Edición masiva de un ejercicio en un programa de grupo (añadir, actualizar,…, Grupo con dos atletas y un programa de un día (hoy). Devuelve un dict con todo… (+13 more)
+
+### Community 240 - "1. Modelo de negocio (cómo funciona hoy)"
+Cohesion: 0.11
+Nodes (18): 1. Modelo de negocio (cómo funciona hoy), 2. Arquitectura, 3. Desarrollo local, 4. Deuda conocida, Ambientes y flujo de trabajo, Backend (`backend/`), Clases del box (solo entrenadores), Frontend (`web/`) (+10 more)
+
+### Community 242 - "brand.ts"
+Cohesion: 0.42
+Nodes (11): accentPreviewVars(), applyAccent(), contrast(), DEFAULT_ACCENT, initAccent(), luminance(), normalizeHex(), resetAccent() (+3 more)
+
+### Community 245 - "schemas/admin.py"
+Cohesion: 0.33
+Nodes (6): AdminOverview, AuditLogResponse, Config, BaseModel, Solo un admin puede cambiar el rol de un usuario (incluyendo promover a otro…, UserRoleUpdate
+
+### Community 257 - "GroupProgramDetail.tsx"
+Cohesion: 0.04
+Nodes (78): CAMPOS_WOD, ETIQUETA_TIPO, ExerciseFormFields(), ModoSeries, PesosWodFields(), useExerciseDraft(), IconTrash(), AddExerciseForm() (+70 more)
+
+### Community 258 - "test_clases_horario.py"
+Cohesion: 0.17
+Nodes (18): main(), mensaje(), purgar_registros_de_clase(), Borra los registros ANTIGUOS de clases que los atletas tienen en su historial.…, Cuenta (y, si `ejecutar`, borra) los mesociclos de registro de clases de los…, El resultado en una línea. Solo caracteres que la consola de Windows (cp1252)…, _clase_con_contenido(), _coach_del_box() (+10 more)
+
+### Community 262 - ".generate"
+Cohesion: 0.16
+Nodes (8): _filter_anti_patterns_for_mode(), Drop "avoid dark mode" advice once dark mode is the resolved answer., Execute searches across multiple domains., Extract results list from search result dict., Generate complete design system recommendation. variance/motion/density are…, Bucket a 1-10 dial value into its tier config. Returns None if value is None., _resolve_dial(), TestAntiPatternGating
+
+### Community 264 - "_row_identities"
+Cohesion: 0.25
+Nodes (8): _exact_row_identity(), Suggest complete public identities so a retry can bypass score thresholds., Return non-empty public identities from ordinary and alias fields., Resolve an explicit style identity without opening generic variant ranking., Return one row whose stable public identity exactly matches the query., _row_identities(), _style_identity(), _suggest_identities()
+
+### Community 265 - "test_copias_de_programacion.py"
+Cohesion: 0.67
+Nodes (3): Lo que se copia al sumarse a un grupo: nota del coach y cargas por atleta., _series_de(), test_un_miembro_nuevo_del_grupo_recibe_lo_ya_programado_con_su_nota()
+
+### Community 266 - "scripts/search.py"
+Cohesion: 0.50
+Nodes (3): format_output(), UI/UX Pro Max Search - BM25 search engine for UI/UX style guides Usage: python…, Format results for Claude consumption (token-optimized)
 
 ## Knowledge Gaps
-- **92 isolated node(s):** `ButtonProps`, `ButtonVariant`, `FieldProps`, `TipoCarga`, `TimeValue` (+87 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 285 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **1142 isolated node(s):** `fs`, `path`, `fs`, `path`, `fs` (+1137 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2021 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **36 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `ui.tsx` to `Leaderboard.tsx`, `package.json`, `AppShell.tsx`, `SessionDetail.tsx`, `wod.ts`, `apiFetch`, `App.tsx`, `GroupProgramDetail.tsx`, `PlanDetail.tsx`?**
+- **Why does `Session` connect `Session` to `models.py`, `test_clases_horario.py`, `Mesocycle`, `Base`, `generate_and_save_smart_mesocycle_for_group`, `routers/ranking.py`, `HTTPException`, `routers/sessions.py`, `routers/classes.py`, `Prohibido`, `routers/users.py`, `ai_mesocycles.py`, `routers/mesocycles.py`, `timedelta`, `get_athlete_prs`?**
   _High betweenness centrality (0.021) - this node is a cross-community bridge._
-- **Why does `Session` connect `Session` to `main.py`, `HTTPException`, `_build_smart_mesocycle`, `get`, `upload_plan_cover`, `get_plan_cover`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Why does `apiFetch()` connect `apiFetch` to `ui.tsx`, `Leaderboard.tsx`, `types.ts`, `Today.tsx`, `SessionDetail.tsx`, `wod.ts`, `queries.ts`, `GroupProgramDetail.tsx`, `PlanDetail.tsx`, `ExerciseBlock`, `CreateMesocycleSheet`, `AddMembersSheet`, `DayEditor`, `GroupDetail`, `useRegisterAthlete`, `useCreatePlan`, `useSearchAthleteByEmail`, `useUpdatePlan`, `useGroupBulkAdd`?**
-  _High betweenness centrality (0.015) - this node is a cross-community bridge._
-- **What connects `ButtonProps`, `ButtonVariant`, `FieldProps` to the rest of the system?**
-  _92 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `ui.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.09568627450980392 - nodes in this community are weakly interconnected._
-- **Should `Leaderboard.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.07536231884057971 - nodes in this community are weakly interconnected._
-- **Should `main.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.07188160676532769 - nodes in this community are weakly interconnected._
+- **Why does `DesignSystemGenerator` connect `DesignSystemGenerator` to `.generate`, `test_design_system_mode.py`, `test_data_contracts.py`, `parse_decision_rules`, `design_system.py`, `BM25`?**
+  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `search()` connect `search` to `.generate`, `_row_identities`, `detect_domain`, `_normalize`, `scripts/search.py`, `validate_data.py`, `_style_is_dark_primary`, `test_text_layout_resilience.py`, `scripts/core.py`, `design_system.py`, `BM25`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **Are the 58 inferred relationships involving `HTTPException` (e.g. with `register_box_payment()` and `revoke_user_sessions()`) actually correct?**
+  _`HTTPException` has 58 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `fs`, `path`, `fs` to the rest of the system?**
+  _1142 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `App.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.06416275430359937 - nodes in this community are weakly interconnected._
+- **Should `models.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.03988035892323031 - nodes in this community are weakly interconnected._
