@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverThumbnail } from "@/components/CoverImage";
+import { ImportPlanSheet } from "@/components/ImportPlanSheet";
 import { WEEKDAY_NAMES, WeekdayPicker } from "@/components/WeekdayPicker";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
 import { useCreatePlan, useDeletePlan, useGeneratePlanWithAI, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
@@ -309,6 +310,7 @@ export default function Plans() {
   const publish = usePublishPlan();
   const deletePlan = useDeletePlan();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [publishing, setPublishing] = useState<PlanSummary | null>(null);
   const [asignando, setAsignando] = useState<PlanSummary | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -319,13 +321,22 @@ export default function Plans() {
         title="Mis planes"
         subtitle="Tus plantillas: asígnalas a tus grupos o publícalas en el catálogo"
         action={
-          <button
-            type="button"
-            onClick={() => setSheetOpen(true)}
-            className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
-          >
-            + Nuevo
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="min-h-10 rounded-xl border border-line bg-surface-2 px-3 text-sm font-semibold active:bg-line"
+            >
+              Importar
+            </button>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
+            >
+              + Nuevo
+            </button>
+          </div>
         }
       />
 
@@ -409,6 +420,7 @@ export default function Plans() {
         onClose={() => setAsignando(null)}
         plan={asignando ? { id: asignando.id, name: asignando.name } : undefined}
       />
+      <ImportPlanSheet open={importOpen} onClose={() => setImportOpen(false)} onCreated={setToast} />
       <PublishSheet plan={publishing} onClose={() => setPublishing(null)} onDone={setToast} />
       <CreatePlanSheet
         open={sheetOpen}

@@ -94,6 +94,8 @@ from backend.schemas.plans import (
     NivelPlan,
     PlanAcquireRequest,
     PlanCreate,
+    PlanImportConfirm,
+    PlanImportPreviewResponse,
     PlanPreviewResponse,
     PlanPublishUpdate,
     PlanSessionPreview,
@@ -127,6 +129,6 @@ __all__ = [
     "AIGenerateRequest", "AIGenerateSmart", "AIGenerateSmartGroup", "AIGeneratePlanTemplate",
     "AthletePlanAssign", "GroupPlanAssign", "GroupPlanAssignAthlete", "GroupPlanAssignResponse",
     "AdminOverview", "AuditLogResponse", "UserRoleUpdate",
-    "NivelPlan", "PlanAcquireRequest", "PlanCreate", "PlanPreviewResponse", "PlanPublishUpdate",
+    "NivelPlan", "PlanAcquireRequest", "PlanCreate", "PlanImportConfirm", "PlanImportPreviewResponse", "PlanPreviewResponse", "PlanPublishUpdate",
     "PlanExerciseUpdate", "PlanSessionPreview", "PlanSetCreate", "PlanSummaryResponse", "PlanUpdate",
 ]

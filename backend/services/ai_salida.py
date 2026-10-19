@@ -183,13 +183,16 @@ def _primero(ej_data: dict, *claves) -> Any:
     return None
 
 
-def limpiar_ejercicio(ej_data: dict, prs: dict | None) -> EjercicioLimpio:
+def limpiar_ejercicio(ej_data: dict, prs: dict | None, conservar_kg: bool = False) -> EjercicioLimpio:
     """Valida los tipos que devuelve la IA y resuelve la carga con las marcas ACTUALES del atleta.
 
     `prs` es el diccionario de marcas del atleta (ver prs.get_athlete_prs). `None` significa que NO
     hay atleta (una plantilla de plan o la programación de una clase): los % se conservan como
     están y ningún kg fijo de un levantamiento de barra se acepta, porque no hay marca con qué
-    respaldarlo."""
+    respaldarlo.
+
+    `conservar_kg` es para un documento que escribió el propio coach (importar un plan): ahí un kg fijo
+    NO lo inventó la IA, es lo que el coach prescribió, y se respeta tal cual aunque no haya marca."""
     advertencias: list[str] = []
     es_plantilla = prs is None
     prs = prs or {}
@@ -230,6 +233,8 @@ def limpiar_ejercicio(ej_data: dict, prs: dict | None) -> EjercicioLimpio:
             return FilaLimpia(reps, resolve_weight_from_percentage(porcentaje, peso, referencia, prs), porcentaje)
         if peso is None:
             return FilaLimpia(reps, None, None)
+        if conservar_kg:
+            return FilaLimpia(reps, peso, None)
         if marca_propia:
             # La IA ignoró la instrucción y dio un kg fijo (pasa seguido): si coincide con una marca
             # de ESTE atleta para el mismo ejercicio, se deriva el % para que quede igual de "vivo".
@@ -319,7 +324,7 @@ def orden_de_bloques_limpio(valor, presentes: set[str]) -> str | None:
     return ",".join(orden) if len(orden) > 1 else None
 
 
-def limpiar_sesion(sesion_data: dict, fecha: date, prs: dict | None) -> SesionLimpia:
+def limpiar_sesion(sesion_data: dict, fecha: date, prs: dict | None, conservar_kg: bool = False) -> SesionLimpia:
     """Una sesión de la IA lista para guardar. Un ejercicio roto se descarta (con aviso) sin tumbar
     la sesión, y una sesión rota no tumba el mesociclo."""
     advertencias: list[str] = []
@@ -330,7 +335,7 @@ def limpiar_sesion(sesion_data: dict, fecha: date, prs: dict | None) -> SesionLi
             advertencias.append("se descartó un ejercicio que no tenía el formato esperado")
             continue
         try:
-            ejercicio = limpiar_ejercicio(ej_data, prs)
+            ejercicio = limpiar_ejercicio(ej_data, prs, conservar_kg)
         except Exception as e:  # noqa: BLE001 — cualquier dato raro de la IA: descartar el ejercicio, no la sesión
             advertencias.append(f"se descartó un ejercicio ilegible ({type(e).__name__})")
             continue

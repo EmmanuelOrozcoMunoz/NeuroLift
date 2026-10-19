@@ -25,6 +25,7 @@ from backend.routers import (
     groups,
     mesocycles,
     plans,
+    plan_import,
     ranking,
     sessions,
     sets,
@@ -119,6 +120,7 @@ app.include_router(sets.router)
 app.include_router(ai.router)
 app.include_router(admin.router)
 app.include_router(plans.router)
+app.include_router(plan_import.router)
 app.include_router(ranking.router)
 
 

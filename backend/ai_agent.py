@@ -567,3 +567,132 @@ def adapt_session_to_time(
     except Exception as e:
         logger.error("adapt_session_to_time: fallo llamando a Gemini: %s", e)
         return {"error": _MENSAJE_ERROR_GENERICO}
+
+
+# ------------------------------------------------------------ importar un plan desde un documento
+
+def esquema_documento() -> dict:
+    """Esquema de lo que se extrae de un documento (PDF, Word o Excel) con un plan de entrenamiento:
+    semanas, y en cada una sus días con las mismas partes de una sesión armada a mano."""
+    sesion = {
+        "type": "OBJECT",
+        "properties": {
+            "weekday": {"type": "INTEGER", "nullable": True},
+            "day_label": {"type": "STRING", "nullable": True},
+            **_propiedades_de_sesion(),
+        },
+        "required": ["exercises"],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "plan_name": {"type": "STRING", "nullable": True},
+            "description": {"type": "STRING", "nullable": True},
+            "discipline": {"type": "STRING", "nullable": True},
+            "level": {"type": "STRING", "nullable": True},
+            "weeks": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {"week_number": {"type": "INTEGER"}, "sessions": {"type": "ARRAY", "items": sesion}},
+                    "required": ["sessions"],
+                },
+            },
+        },
+        "required": ["weeks"],
+    }
+
+
+_REGLA_DE_TRANSCRIPCION = """
+Tu trabajo es TRANSCRIBIR el plan que ya escribió el coach en el documento, no crear uno nuevo:
+- No inventes ejercicios, series, repeticiones, cargas, notas ni días que el documento no diga. Lo que
+  falte déjalo en null (o con el valor mínimo obligatorio del esquema).
+- Las cargas se copian TAL COMO están escritas: "80%" o "al 80 %" -> prescribed_percentage 80;
+  "100 kg" -> prescribed_weight 100; "RPE 8" o "@8" -> rpe_target 8; sin carga -> null. Nunca calcules
+  kg a partir de un porcentaje ni al revés.
+- Cuando la carga es un porcentaje de 1RM, pon en reference_exercise el nombre estándar en inglés del
+  levantamiento del que es el porcentaje (Back Squat, Front Squat, Deadlift, Bench Press, Overhead
+  Press, Snatch, Clean & Jerk, Clean, Jerk, Power Clean, Power Snatch...). Para esos levantamientos
+  usa también ese nombre estándar en exercise_name; los demás ejercicios, tal como los nombra el
+  documento (sin traducirlos).
+- Si lo prescrito es por TIEMPO o DISTANCIA ("40 segundos", "200 m", "2 min"), pon prescribed_reps 1 y
+  escribe esa duración o distancia en coach_note (no la conviertas en repeticiones).
+- "3x5" son prescribed_sets 3 y prescribed_reps 5. Si cada serie es distinta (una rampa: 5-3-1-1-1,
+  o 60 %/70 %/80 %), usa "series" con una fila por serie.
+- Un texto de calentamiento va completo en warmup_notes. Si el día tiene un WOD / metcon / "for time" /
+  AMRAP / EMOM, va en "wod" con su formato; si no tiene, wod es null.
+- Estructura: week_number es el número de la semana según el documento; weekday es el día (0 = lunes ...
+  6 = domingo) SOLO si el documento dice el día de la semana; si dice "Día 1", "Día 2"... o no lo dice,
+  deja weekday en null y day_label con el nombre que le da el documento. Si el documento no separa por
+  semanas, ponlo todo en la semana 1. Si dice que unas semanas son iguales a otra ("semanas 2-4 igual
+  que la 1"), escribe cada semana completa.
+- plan_name y description salen del título y la introducción del documento (null si no los hay);
+  discipline y level solo si el documento los dice.
+- Si el documento NO contiene un plan de entrenamiento, devuelve weeks como lista vacía.
+"""
+
+
+def parse_training_document(texto: str) -> dict:
+    """Interpreta con IA el texto de un documento con un plan de entrenamiento (extraído de un PDF,
+    Word o Excel) y lo devuelve en la forma de `esquema_documento`. El texto del documento es DATO
+    no confiable (lo escribió un tercero): va delimitado y se le dice al modelo que nunca lo trate
+    como instrucciones."""
+    # Nada del documento puede cerrar la etiqueta que lo delimita
+    texto_seguro = texto.replace("<", "‹").replace(">", "›")
+    prompt = f"""
+    Eres el Head Coach de IA de NeuroLift. Te paso el texto de un documento con un plan de
+    entrenamiento y debes devolverlo como datos estructurados.
+
+    Documento: {_wrap_untrusted("DOCUMENTO", texto_seguro)}
+
+    {_INSTRUCCION_ANTIINYECCION}
+    {_REGLA_DE_TRANSCRIPCION}
+    {_INSTRUCCION_BLOQUES}
+    {_INSTRUCCION_COMPONENTES}
+    {_INSTRUCCION_WOD}
+
+    Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional ni markdown, con esta estructura:
+    {{
+        "plan_name": "string | null",
+        "description": "string | null",
+        "discipline": "string | null",
+        "level": "string | null",
+        "weeks": [
+            {{
+                "week_number": int,
+                "sessions": [
+                    {{
+                        "weekday": int | null,
+                        "day_label": "string | null",
+                        "athlete_notes": "string",
+                        "warmup_notes": "string | null",
+                        "block_order": ["string"] | null,
+                        "wod": {{"name": "string", "format": "string", "time_cap_minutes": int | null, "description": "string"}} | null,
+                        "exercises": [
+                            {{
+                                "exercise_name": "string",
+                                "block": "string",
+                                "prescribed_sets": int,
+                                "prescribed_reps": int,
+                                "rpe_target": int | null,
+                                "prescribed_weight": float | null,
+                                "prescribed_percentage": float | null,
+                                "reference_exercise": "string | null",
+                                "coach_note": "string | null",
+                                "series": [{{"prescribed_reps": int, "prescribed_percentage": float | null, "prescribed_weight": float | null}}] | null
+                            }}
+                        ]
+                    }}
+                ]
+            }}
+        ]
+    }}
+    """
+    try:
+        data = _generate_json_with_fallback(prompt, esquema=esquema_documento())
+        uso = _extraer_uso(data)
+        _registrar_uso("importar documento", uso)
+        return {**json.loads(_texto_de_respuesta(data, "parse_training_document")), "_uso": uso}
+    except Exception as e:  # noqa: BLE001
+        logger.error("parse_training_document: fallo llamando a Gemini: %s", e)
+        return {"error": "No se pudo interpretar el documento en este momento. Intenta de nuevo."}

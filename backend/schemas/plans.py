@@ -112,3 +112,18 @@ class PlanPreviewResponse(BaseModel):
     has_cover_image: bool = False
     is_preview: bool = True
     sessions: List[PlanSessionPreview] = []
+
+
+class PlanImportPreviewResponse(BaseModel):
+    """Lo que se ve antes de importar un plan desde un documento. `document` es el documento ya
+    interpretado: el cliente lo devuelve tal cual al confirmar (el servidor lo limpia otra vez)."""
+    preview: dict
+    document: dict
+
+
+class PlanImportConfirm(SanitizedModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=2000)
+    discipline: str = Field(..., min_length=1, max_length=50)
+    level: NivelPlan = "Intermedio"
+    document: dict
