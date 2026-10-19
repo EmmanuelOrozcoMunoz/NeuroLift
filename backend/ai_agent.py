@@ -5,6 +5,10 @@ import requests
 import json
 from dotenv import load_dotenv
 
+# Las listas válidas de bloques y de formatos de WOD viven en un solo lugar (el mismo que valida
+# lo que devuelve la IA al guardarlo): así el esquema que se le pide y la validación no se desfasan.
+from backend.services.ai_salida import BLOQUES, FORMATOS_DE_WOD
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -56,20 +60,163 @@ salvo que el ejercicio sea literalmente eso.
 # guarda en backend/services/ai_mesocycles.py:wod_limpio.
 _INSTRUCCION_WOD = """
 REGLA DEL WOD (solo para CrossFit): el trabajo metabólico del día (AMRAP, EMOM, por tiempo,
-Tabata) se devuelve en el campo "wod" de la sesión, NO como ejercicios sueltos. Si la sesión no
+Tabata...) se devuelve en el campo "wod" de la sesión, NO como ejercicios sueltos. Si la sesión no
 tiene WOD, "wod" es null. Estructura:
     "wod": {
         "name": "string corto, p. ej. 'Fran' o 'AMRAP 12'",
-        "format": EXACTAMENTE uno de: "for_time", "amrap", "emom", "tabata",
+        "format": EXACTAMENTE uno de: "for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts",
         "time_cap_minutes": int | null,
-        "description": "qué hay que hacer, p. ej. '21-15-9 Thrusters (43/30 kg) y Pull-ups'"
+        "description": "qué hay que hacer, una línea por movimiento o ronda, p. ej. '21-15-9\\nThrusters (43/30 kg)\\nPull-ups'"
     }
 - "for_time": gana el menor tiempo; "time_cap_minutes" es el tiempo máximo.
-- "amrap": más rondas/reps en una ventana; "time_cap_minutes" es la duración del AMRAP.
+- "amrap": más rondas + repeticiones en una ventana; "time_cap_minutes" es la duración del AMRAP.
+- "amrap_reps": como "amrap" pero se puntúa solo en repeticiones totales (sin rondas completas).
 - "emom": una ronda por minuto; "time_cap_minutes" es la duración total.
 - "tabata": protocolo fijo; "time_cap_minutes" va en null.
+- "calories" / "distance" / "watts": total de calorías, metros o vatios promedio en la ventana de
+  "time_cap_minutes" (remo, bici, ski, correr).
+- "1rm": SOLO para una prueba de peso máximo ese día; el movimiento va además en "exercises" con
+  block "metcon" y una sola serie, "time_cap_minutes" va en null.
 Mezcla WODs cortos, medios y largos a lo largo del mesociclo y varía las modalidades.
 """
+
+# Los componentes que tiene una sesión armada a mano y que la IA también debe usar: son lo que el
+# coach terminaba escribiendo a mano después de cada generación.
+_INSTRUCCION_COMPONENTES = """
+COMPONENTES DE LA SESIÓN (úsalos, no los omitas):
+- "warmup_notes": el calentamiento y las aproximaciones como lo escribiría un coach, en texto corto
+  (2 a 6 líneas, una idea por línea): movilidad, activación y las series de aproximación al primer
+  ejercicio de fuerza. Si el calentamiento es un párrafo va AQUÍ, no como ejercicios sueltos con
+  block "warmup"; usa ejercicios con block "warmup" solo si necesitan series y cargas concretas.
+- "block_order": lista con el orden de los bloques de ESA sesión cuando conviene uno distinto del
+  normal (calentamiento, fuerza, weightlifting, skills, metabólico, accesorios) — p. ej. ["warmup",
+  "skills", "strength", "metcon"] si la gimnasia va antes de la fuerza. null si el orden normal sirve.
+- "coach_note": indicación técnica o de ejecución MUY breve (máximo 150 caracteres) SOLO en los
+  ejercicios donde aporte (técnica, tempo, qué sentir); null en los demás.
+- "series": para los ejercicios con series distintas (rampas, p. ej. 50% x3, 60% x3, 70% x1, 80% x1)
+  una fila por serie con "prescribed_reps" y "prescribed_percentage" (o "prescribed_weight"). Si
+  todas las series son iguales, "series" va null y usas "prescribed_sets" x "prescribed_reps".
+Nombres de ejercicios: para los levantamientos usa estos nombres estándar en inglés: Back Squat,
+Front Squat, Overhead Squat, Deadlift, Bench Press, Strict Press, Push Press, Snatch, Power Snatch,
+Clean, Power Clean, Clean & Jerk, Split Jerk. Para los demás, un nombre corto y común.
+"""
+
+
+# Cómo se prescribe la carga. Una carga adivinada va directo al atleta, así que sin marca de 1RM en
+# un levantamiento de barra NO se inventa un kg (aunque el modelo lo "estime" bien casi siempre: el
+# caso malo es una lesión). Lo que se descarta al guardar está en ai_salida.py:limpiar_ejercicio.
+_REGLA_DE_CARGAS = """
+REGLA DE CARGAS (OBLIGATORIA, no la ignores):
+1. Si el ejercicio tiene una marca de 1RM registrada que aplique (el mismo movimiento, o uno
+   claramente derivado — p. ej. la marca de Back Squat aplica a Front Squat), TIENES PROHIBIDO
+   calcular el kg tú mismo y ponerlo en "prescribed_weight". En vez de eso, DEBES dejar
+   "prescribed_weight" en null y usar "prescribed_percentage" + "reference_exercise".
+   Ejemplo EXACTO de lo que se espera si la marca es "Back Squat: 100kg" y quieres prescribir 75%
+   de esa marca para un Back Squat:
+       "prescribed_weight": null,
+       "prescribed_percentage": 75,
+       "reference_exercise": "Back Squat"
+   Esto es INCORRECTO (no lo hagas): "prescribed_weight": 75.0, "prescribed_percentage": null.
+   "reference_exercise" debe ser el nombre EXACTO del ejercicio tal como aparece en "Marcas
+   Actuales". El sistema calculará el kg real a partir de esa marca — así el peso se mantiene
+   correcto aunque el atleta actualice su 1RM después (un kg fijo que calcules tú no se
+   actualizaría solo).
+2. Si NO hay ninguna marca de 1RM aplicable y el ejercicio es un levantamiento de barra (squat,
+   deadlift, bench o strict press, snatch, clean, jerk y sus derivados), NO inventes un kg: deja
+   "prescribed_weight" y "prescribed_percentage" en null y prescribe por esfuerzo con "rpe_target".
+   El coach o el atleta registrarán la marca. Excepción: si el contexto dice que es una PLANTILLA
+   sin atleta, prescribe siempre en % con "reference_exercise" aunque no haya marcas.
+3. "prescribed_weight" (un kg fijo, estimación prudente) es solo para accesorios y ejercicios con
+   carga externa que no se prescriben en % de 1RM (mancuernas, kettlebell, wall ball...).
+Los % de trabajo van entre 40 y 100; no prescribas por encima de 100 % salvo que el coach lo pida.
+"""
+
+
+def _esquema_ejercicio() -> dict:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "exercise_name": {"type": "STRING"},
+            "block": {"type": "STRING", "enum": list(BLOQUES)},
+            "prescribed_sets": {"type": "INTEGER"},
+            "prescribed_reps": {"type": "INTEGER"},
+            "rpe_target": {"type": "INTEGER", "nullable": True},
+            "prescribed_weight": {"type": "NUMBER", "nullable": True},
+            "prescribed_percentage": {"type": "NUMBER", "nullable": True},
+            "reference_exercise": {"type": "STRING", "nullable": True},
+            "coach_note": {"type": "STRING", "nullable": True},
+            "series": {
+                "type": "ARRAY",
+                "nullable": True,
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "prescribed_reps": {"type": "INTEGER"},
+                        "prescribed_weight": {"type": "NUMBER", "nullable": True},
+                        "prescribed_percentage": {"type": "NUMBER", "nullable": True},
+                    },
+                    "required": ["prescribed_reps"],
+                },
+            },
+        },
+        "required": ["exercise_name", "block", "prescribed_sets", "prescribed_reps"],
+    }
+
+
+def _propiedades_de_sesion() -> dict:
+    """Los campos de UNA sesión, comunes a la sesión suelta y a las sesiones de un mesociclo."""
+    return {
+        "athlete_notes": {"type": "STRING"},
+        "warmup_notes": {"type": "STRING", "nullable": True},
+        "block_order": {"type": "ARRAY", "nullable": True, "items": {"type": "STRING", "enum": list(BLOQUES)}},
+        "wod": {
+            "type": "OBJECT",
+            "nullable": True,
+            "properties": {
+                "name": {"type": "STRING"},
+                "format": {"type": "STRING", "enum": list(FORMATOS_DE_WOD)},
+                "time_cap_minutes": {"type": "INTEGER", "nullable": True},
+                "description": {"type": "STRING"},
+            },
+            "required": ["format", "description"],
+        },
+        "exercises": {"type": "ARRAY", "items": _esquema_ejercicio()},
+    }
+
+
+def esquema_mesociclo() -> dict:
+    """Esquema formal de la respuesta de un mesociclo (subconjunto OpenAPI que acepta Gemini en
+    `responseSchema`): con él el modelo no puede devolver un bloque o un formato de WOD fuera de la
+    lista ni un número como texto. Aun así todo se valida de nuevo al guardar (ai_salida.py): el
+    esquema reduce los errores, no los elimina."""
+    sesion = {
+        "type": "OBJECT",
+        "properties": {"scheduled_date": {"type": "STRING"}, **_propiedades_de_sesion()},
+        "required": ["scheduled_date", "exercises"],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "mesocycle_focus": {"type": "STRING"},
+            "weeks": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {"week_number": {"type": "INTEGER"}, "sessions": {"type": "ARRAY", "items": sesion}},
+                    "required": ["sessions"],
+                },
+            },
+        },
+        "required": ["weeks"],
+    }
+
+
+def esquema_sesion_suelta() -> dict:
+    return {
+        "type": "OBJECT",
+        "properties": {"session_focus": {"type": "STRING"}, **_propiedades_de_sesion()},
+        "required": ["exercises"],
+    }
 
 # Instrucción anti-inyección compartida: se incluye una vez por prompt, junto a los campos que
 # el coach/atleta escribió a mano (contexto del mesociclo, notas, enfoque por día, nombre). Ese
@@ -113,15 +260,25 @@ def _post_to_gemini(url: str, payload: dict, headers: dict) -> dict:
     raise last_exception
 
 
-def _generate_json_with_fallback(prompt: str, modelos: list[str] = _MODELOS_CON_FALLBACK) -> dict:
+def _payload(prompt: str, esquema: dict | None = None) -> dict:
+    config = {"responseMimeType": "application/json"}
+    if esquema is not None:
+        config["responseSchema"] = esquema
+    return {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": config}
+
+
+def _generate_json_with_fallback(
+    prompt: str, modelos: list[str] = _MODELOS_CON_FALLBACK, esquema: dict | None = None
+) -> dict:
     """Genera contenido JSON probando cada modelo de `modelos` en orden: si el primero está
     saturado/caído (tras agotar sus reintentos), prueba automáticamente con el siguiente antes
-    de darse por vencido — un modelo momentáneamente sobrecargado no debería tumbar la función."""
+    de darse por vencido — un modelo momentáneamente sobrecargado no debería tumbar la función.
+
+    Con `esquema` se le pide a Gemini la salida con ESQUEMA FORMAL (`responseSchema`). Si la API
+    rechaza el esquema (HTTP 400: un modelo que no lo soporta, una palabra clave que no acepta) se
+    repite la misma llamada SIN esquema en vez de fallar: es la forma de siempre y todo se valida
+    igual al guardar. Devuelve la respuesta con `_modelo` y `_con_esquema` para el registro de uso."""
     api_key = os.getenv("GEMINI_API_KEY").strip()
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
     # La key va en un header, nunca en la URL: una URL con `?key=...` queda embebida tal cual
     # en el mensaje de cualquier excepción de `requests` (timeouts, HTTPError, etc.), y ese
     # mensaje es exactamente lo que _generate_json_with_fallback captura y podría propagar.
@@ -130,12 +287,58 @@ def _generate_json_with_fallback(prompt: str, modelos: list[str] = _MODELOS_CON_
     last_exception = None
     for modelo in modelos:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
-        try:
-            return _post_to_gemini(url, payload, headers)
-        except requests.exceptions.RequestException as e:
-            last_exception = e
-            continue
+        payloads = [_payload(prompt, esquema), _payload(prompt)] if esquema is not None else [_payload(prompt)]
+        for intento, payload in enumerate(payloads):
+            try:
+                data = _post_to_gemini(url, payload, headers)
+                data["_modelo"] = modelo
+                data["_con_esquema"] = esquema is not None and intento == 0
+                return data
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                status = getattr(e.response, "status_code", None)
+                if esquema is not None and intento == 0 and status == 400:
+                    logger.warning("Gemini (%s) rechazó el esquema de respuesta; se reintenta sin esquema", modelo)
+                    continue
+                break  # otro error: se prueba con el siguiente modelo
     raise last_exception
+
+
+def _extraer_uso(data: dict) -> dict:
+    """Los tokens que gastó una llamada (lo que cobra Gemini): entrada, salida y, en los modelos que
+    "piensan", los de razonamiento (que también cuentan como salida)."""
+    meta = data.get("usageMetadata") if isinstance(data, dict) else None
+    meta = meta if isinstance(meta, dict) else {}
+
+    def cuenta(clave: str) -> int:
+        valor = meta.get(clave)
+        return int(valor) if isinstance(valor, (int, float)) else 0
+
+    return {
+        "modelo": data.get("_modelo") if isinstance(data, dict) else None,
+        "con_esquema": bool(data.get("_con_esquema")) if isinstance(data, dict) else False,
+        "tokens_prompt": cuenta("promptTokenCount"),
+        "tokens_salida": cuenta("candidatesTokenCount"),
+        "tokens_pensamiento": cuenta("thoughtsTokenCount"),
+        "tokens_total": cuenta("totalTokenCount"),
+    }
+
+
+def _texto_de_respuesta(data: dict, etiqueta: str) -> str:
+    """El texto JSON de la respuesta, avisando (en el log) si el modelo se quedó sin espacio para
+    terminarlo: un JSON cortado a la mitad es la causa más común de una generación que "falla"."""
+    candidato = data["candidates"][0]
+    if candidato.get("finishReason") == "MAX_TOKENS":
+        logger.warning("%s: la salida de Gemini se cortó por límite de tokens (JSON incompleto)", etiqueta)
+    return candidato["content"]["parts"][0]["text"].replace("```json", "").replace("```", "").strip()
+
+
+def _registrar_uso(etiqueta: str, uso: dict) -> None:
+    logger.info(
+        "IA %s: modelo=%s esquema=%s tokens entrada=%s salida=%s pensamiento=%s total=%s",
+        etiqueta, uso["modelo"], uso["con_esquema"], uso["tokens_prompt"], uso["tokens_salida"],
+        uso["tokens_pensamiento"], uso["tokens_total"],
+    )
 
 
 def generate_workout_session(athlete_name: str, discipline: str, experience_notes: str) -> dict:
@@ -146,13 +349,17 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
     Contexto: {_wrap_untrusted("ATHLETE_CONTEXT", experience_notes)}
 
     {_INSTRUCCION_ANTIINYECCION}
+    {_REGLA_DE_CARGAS}
     {_INSTRUCCION_BLOQUES}
+    {_INSTRUCCION_COMPONENTES}
     {_INSTRUCCION_WOD}
 
     DEBES responder ÚNICAMENTE con un objeto JSON válido que siga exactamente esta estructura, sin texto adicional ni formato markdown:
     {{
         "session_focus": "string",
         "athlete_notes": "string",
+        "warmup_notes": "string | null",
+        "block_order": ["string"] | null,
         "wod": {{"name": "string", "format": "string", "time_cap_minutes": int | null, "description": "string"}} | null,
         "exercises": [
             {{
@@ -160,7 +367,12 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
                 "block": "string",
                 "prescribed_sets": int,
                 "prescribed_reps": int,
-                "rpe_target": int
+                "rpe_target": int,
+                "prescribed_weight": float | null,
+                "prescribed_percentage": float | null,
+                "reference_exercise": "string | null",
+                "coach_note": "string | null",
+                "series": [{{"prescribed_reps": int, "prescribed_percentage": float | null, "prescribed_weight": float | null}}] | null
             }}
         ]
     }}
@@ -169,14 +381,12 @@ def generate_workout_session(athlete_name: str, discipline: str, experience_note
     try:
         # Preferimos gemini-3.6-flash (mejor calidad); si está saturado/caído, cae
         # automáticamente a gemini-3.5-flash-lite en vez de fallar la sesión completa.
-        data = _generate_json_with_fallback(prompt)
+        data = _generate_json_with_fallback(prompt, esquema=esquema_sesion_suelta())
+        uso = _extraer_uso(data)
+        _registrar_uso("sesión suelta", uso)
 
-        # Extraemos el texto de la respuesta (que ahora sabemos que es un JSON)
-        raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
-
-        # Convertimos ese texto en un diccionario real de Python
-        structured_data = json.loads(raw_json_text)
-        return structured_data
+        # Convertimos el texto de la respuesta (un JSON) en un diccionario real de Python
+        return {**json.loads(_texto_de_respuesta(data, "generate_workout_session")), "_uso": uso}
 
     except Exception as e:
         logger.error("generate_workout_session: fallo llamando a Gemini: %s", e)
@@ -238,26 +448,10 @@ def generate_mesocycle_chunk(
 
     {_INSTRUCCION_ANTIINYECCION}
 
-    REGLA DE INTENSIDAD (OBLIGATORIA, no la ignores): Para CUALQUIER ejercicio que tenga una marca
-    de 1RM registrada que aplique (el mismo movimiento, o uno claramente derivado — p. ej. la marca
-    de Back Squat aplica a Front Squat), TIENES PROHIBIDO calcular el kg tú mismo y ponerlo en
-    "prescribed_weight". En vez de eso, DEBES dejar "prescribed_weight" en null y usar
-    "prescribed_percentage" + "reference_exercise".
-
-    Ejemplo EXACTO de lo que se espera si la marca es "Back Squat: 100kg" y quieres prescribir 75%
-    de esa marca para un Back Squat:
-        "prescribed_weight": null,
-        "prescribed_percentage": 75,
-        "reference_exercise": "Back Squat"
-    Esto es INCORRECTO (no lo hagas): "prescribed_weight": 75.0, "prescribed_percentage": null.
-
-    "reference_exercise" debe ser el nombre EXACTO del ejercicio tal como aparece en "Marcas
-    Actuales" arriba. El sistema calculará el kg real a partir de esa marca — así el peso se
-    mantiene correcto aunque el atleta actualice su 1RM después (un kg fijo que calcules tú no se
-    actualizaría solo). Usa "prescribed_weight" (un kg fijo, tu mejor estimación) ÚNICAMENTE cuando
-    el ejercicio no tenga ninguna marca de 1RM relacionada para referenciar.
+    {_REGLA_DE_CARGAS}
 
     {_INSTRUCCION_BLOQUES}
+    {_INSTRUCCION_COMPONENTES}
     {_INSTRUCCION_WOD}
 
     DEBES responder ÚNICAMENTE con un objeto JSON válido con esta estructura, sin texto adicional:
@@ -268,8 +462,10 @@ def generate_mesocycle_chunk(
                 "week_number": int (debe estar entre {start_week} y {end_week}),
                 "sessions": [
                     {{
-                        "scheduled_date": "YYYY-MM-DD",  <-- ¡LA IA INYECTARÁ LA FECHA AQUÍ!
+                        "scheduled_date": "YYYY-MM-DD" (EXACTAMENTE una de las fechas de la REGLA CRÍTICA DE CALENDARIO, una sesión por fecha),
                         "athlete_notes": "string",
+                        "warmup_notes": "string | null",
+                        "block_order": ["string"] | null,
                         "wod": {{"name": "string", "format": "string", "time_cap_minutes": int | null, "description": "string"}} | null,
                         "exercises": [
                             {{
@@ -280,7 +476,9 @@ def generate_mesocycle_chunk(
                                 "rpe_target": int,
                                 "prescribed_weight": float | null,
                                 "prescribed_percentage": float | null,
-                                "reference_exercise": "string | null"
+                                "reference_exercise": "string | null",
+                                "coach_note": "string | null",
+                                "series": [{{"prescribed_reps": int, "prescribed_percentage": float | null, "prescribed_weight": float | null}}] | null
                             }}
                         ]
                     }}
@@ -293,14 +491,12 @@ def generate_mesocycle_chunk(
     try:
         # gemini-3.6-flash primero (sigue mejor la REGLA DE INTENSIDAD que 3.5-flash-lite, que
         # tendía a ignorarla y calcular el kg fijo de todos modos); cae a 3.5-flash-lite si está
-        # saturado. Antes esta función llamaba directo a 3.5-flash-lite sin fallback ni modo JSON.
-        data = _generate_json_with_fallback(prompt)
-        raw_json_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        # saturado. Con esquema formal de respuesta (ver esquema_mesociclo).
+        data = _generate_json_with_fallback(prompt, esquema=esquema_mesociclo())
+        uso = _extraer_uso(data)
+        _registrar_uso(f"semanas {start_week}-{end_week}", uso)
 
-        # Limpieza de seguridad
-        raw_json_text = raw_json_text.replace("```json", "").replace("```", "").strip()
-
-        return json.loads(raw_json_text)
+        return {**json.loads(_texto_de_respuesta(data, "generate_mesocycle_chunk")), "_uso": uso}
     except Exception as e:
         logger.error("generate_mesocycle_chunk: fallo llamando a Gemini: %s", e)
         return {"error": _MENSAJE_ERROR_GENERICO}

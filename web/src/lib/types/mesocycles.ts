@@ -68,6 +68,14 @@ export interface ManualMesocycleGroupPayload {
   training_days: Weekday[];
 }
 
+/** Respuesta de POST /ai/generate-smart-mesocycle/. `advertencias`: lo que la IA hizo mal y el servidor
+ *  corrigió o descartó (p. ej. un kg sin marca de 1RM) para que el coach lo revise; `uso`: tokens gastados. */
+export interface AIGenerateResponse {
+  message: string;
+  advertencias: string[];
+  uso: { llamadas: number; tokens_prompt: number; tokens_salida: number; tokens_pensamiento: number };
+}
+
 export interface AIGenerateSmartPayload {
   user_id: string;
   name: string;
