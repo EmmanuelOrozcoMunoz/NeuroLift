@@ -329,7 +329,11 @@ def obtener_mesociclos_usuario(
     user_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     ensure_owner_or_coach(db, user_id, current_user)
-    return db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id).all()
+    consulta = db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id)
+    if current_user.id == user_id:
+        # el atleta no ve lo que su coach todavía está preparando
+        consulta = consulta.filter(models.Mesocycle.is_draft == False)  # noqa: E712
+    return consulta.all()
 
 
 @router.post("/users/{user_id}/assign-plan", response_model=schemas.GroupPlanAssignResponse)

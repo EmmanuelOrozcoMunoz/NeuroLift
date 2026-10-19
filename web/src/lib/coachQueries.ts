@@ -304,6 +304,19 @@ export function useGenerateAIMesocycleForGroup(groupId: string) {
   });
 }
 
+/** Publica un mesociclo en borrador: desde ahí el atleta lo ve y puede registrar en él. */
+export function usePublishMesocycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mesocycleId: string) =>
+      apiFetch<MessageResponse>(`/mesocycles/${mesocycleId}/publish`, { method: "POST" }),
+    onSuccess: (_data, mesocycleId) => {
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) });
+    },
+  });
+}
+
 export function useDeleteMesocycle() {
   const queryClient = useQueryClient();
   return useMutation({
