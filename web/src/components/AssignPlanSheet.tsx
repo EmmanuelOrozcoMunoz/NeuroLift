@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Button, Field, Sheet } from "@/components/ui";
-import { useAssignPlanToGroup, useGroups, useMyPlans } from "@/lib/coachQueries";
+import { Button, Field, Segmented, Sheet } from "@/components/ui";
+import { useAssignPlanToAthlete, useAssignPlanToGroup, useAthletes, useGroups, useMyPlans } from "@/lib/coachQueries";
 import { todayIso } from "@/lib/dates";
 import type { GroupPlanAssignResponse } from "@/lib/types";
 
@@ -9,23 +9,31 @@ type Elegible = { id: string; name: string };
 
 const selectClass = "min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg";
 
-/** Asigna una plantilla a un grupo. Se abre desde un plan (elige el grupo) o desde un grupo
- *  (elige el plan): lo que ya viene fijo no se pregunta. Las cargas en % se calculan con las marcas
+type Destino = "grupo" | "atleta";
+
+/** Asigna una plantilla a un grupo o a un solo atleta. Se abre desde un plan (elige a quién), desde un
+ *  grupo o desde un atleta (elige el plan): lo que ya viene fijo no se pregunta. Las cargas en % se calculan con las marcas
  *  de cada atleta; si a alguien le falta una marca, se le avisa al entrenador. */
 export function AssignPlanSheet({
   open,
   onClose,
   plan,
   group,
+  athlete,
 }: {
   open: boolean;
   onClose: () => void;
   plan?: Elegible;
   group?: Elegible;
+  athlete?: Elegible;
 }) {
   const plans = useMyPlans();
   const groups = useGroups();
-  const assign = useAssignPlanToGroup();
+  const athletes = useAthletes();
+  const assignGroup = useAssignPlanToGroup();
+  const assignAthlete = useAssignPlanToAthlete();
+  const [destino, setDestino] = useState<Destino>("grupo");
+  const [athleteId, setAthleteId] = useState("");
   const [planId, setPlanId] = useState("");
   const [groupId, setGroupId] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
@@ -34,6 +42,10 @@ export function AssignPlanSheet({
 
   const planElegido = plan?.id ?? planId;
   const grupoElegido = group?.id ?? groupId;
+  const atletaElegido = athlete?.id ?? athleteId;
+  // Si viene un grupo o un atleta fijo, el destino ya está decidido.
+  const destinoFinal: Destino = athlete ? "atleta" : group ? "grupo" : destino;
+  const assign = destinoFinal === "atleta" ? assignAthlete : assignGroup;
 
   function cerrar() {
     setResultado(null);
@@ -44,21 +56,24 @@ export function AssignPlanSheet({
   function asignar() {
     setError(null);
     if (!planElegido) return setError("Elige un plan.");
-    if (!grupoElegido) return setError("Elige un grupo.");
+    if (destinoFinal === "grupo" && !grupoElegido) return setError("Elige un grupo.");
+    if (destinoFinal === "atleta" && !atletaElegido) return setError("Elige un atleta.");
     if (!startDate) return setError("Elige la fecha de inicio.");
-    assign.mutate(
-      { groupId: grupoElegido, plan_id: planElegido, start_date: startDate },
-      {
-        onSuccess: setResultado,
-        onError: (err) => setError(err instanceof Error ? err.message : "No se pudo asignar el plan."),
-      },
-    );
+    const opciones = {
+      onSuccess: setResultado,
+      onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo asignar el plan."),
+    };
+    if (destinoFinal === "atleta") {
+      assignAthlete.mutate({ athleteId: atletaElegido, plan_id: planElegido, start_date: startDate }, opciones);
+    } else {
+      assignGroup.mutate({ groupId: grupoElegido, plan_id: planElegido, start_date: startDate }, opciones);
+    }
   }
 
   const sinMarca = resultado?.results.filter((r) => r.status === "assigned" && r.missing_prs.length > 0) ?? [];
 
   return (
-    <Sheet open={open} onClose={cerrar} title={resultado ? "Plan asignado" : "Asignar plan a un grupo"}>
+    <Sheet open={open} onClose={cerrar} title={resultado ? "Plan asignado" : "Asignar plan"}>
       {resultado ? (
         <div className="space-y-3 pb-4">
           <p className="text-sm">{resultado.message}</p>
@@ -104,7 +119,36 @@ export function AssignPlanSheet({
             </label>
           )}
 
-          {group ? (
+          {!group && !athlete && (
+            <Segmented<Destino>
+              value={destino}
+              onChange={setDestino}
+              options={[
+                { value: "grupo", label: "A un grupo" },
+                { value: "atleta", label: "A un atleta" },
+              ]}
+            />
+          )}
+
+          {athlete ? (
+            <p className="text-sm">
+              Atleta: <span className="font-semibold">{athlete.name}</span>
+            </p>
+          ) : destinoFinal === "atleta" ? (
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-muted">Atleta</span>
+              <select value={athleteId} onChange={(e) => setAthleteId(e.target.value)} className={selectClass}>
+                <option value="">Elige un atleta…</option>
+                {athletes.data
+                  ?.filter((u) => u.coach_id)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : group ? (
             <p className="text-sm">
               Grupo: <span className="font-semibold">{group.name}</span>
             </p>
@@ -129,8 +173,9 @@ export function AssignPlanSheet({
             onChange={(e) => setStartDate(e.target.value)}
           />
           <p className="text-xs text-muted">
-            La primera sesión cae en esa fecha. Cada atleta recibe su copia con los kg calculados con sus propias
-            marcas. Si vuelves a asignar el mismo plan en la misma fecha, solo llega a quienes aún no lo tienen.
+            La primera sesión cae en esa fecha. {destinoFinal === "atleta" ? "El atleta recibe" : "Cada atleta recibe"}{" "}
+            su copia con los kg calculados con sus propias marcas. Si vuelves a asignar el mismo plan en la misma
+            fecha, {destinoFinal === "atleta" ? "no se duplica" : "solo llega a quienes aún no lo tienen"}.
           </p>
 
           {error && <p className="text-sm font-medium text-danger">{error}</p>}

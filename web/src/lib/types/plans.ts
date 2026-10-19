@@ -108,6 +108,7 @@ export interface PlanGenerateAIPayload {
   training_days: Weekday[];
   context: string;
   session_duration_minutes: number | null;
+  day_focus?: Partial<Record<Weekday, string>>;
 }
 
 /** POST /groups/{id}/assign-plan — copia la plantilla a cada miembro del grupo. */

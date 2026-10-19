@@ -12,6 +12,7 @@ from backend.core.security import (
     _client_ip,
     _coach_athlete_ids,
     _ip_and_user_key,
+    ensure_has_personal_coach,
     ensure_owner_or_coach,
     get_current_user,
     limiter,
@@ -19,6 +20,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
+from backend.services.plans import asignar_plan_a_atleta, obtener_plan_propio
 from backend.services.prs import find_personal_record, fit_level_lift_for
 from backend.wod_scoring import format_wod_summary
 
@@ -328,6 +330,34 @@ def obtener_mesociclos_usuario(
 ):
     ensure_owner_or_coach(db, user_id, current_user)
     return db.query(models.Mesocycle).filter(models.Mesocycle.user_id == user_id).all()
+
+
+@router.post("/users/{user_id}/assign-plan", response_model=schemas.GroupPlanAssignResponse)
+def asignar_plan_a_un_atleta(
+    user_id: UUID,
+    req: schemas.AthletePlanAssign,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Asigna una plantilla (plan) del coach a UN atleta suyo: recibe su propio mesociclo con las
+    fechas desde `start_date` y las cargas en % calculadas con SUS marcas de 1RM. Sin IA: es copiar
+    y calcular, así que es inmediato. Igual que con un grupo, asignarlo de nuevo en la misma fecha
+    no lo duplica."""
+    ensure_owner_or_coach(db, user_id, current_user)
+    atleta = db.query(models.User).filter(models.User.id == user_id).first()
+    if not atleta:
+        raise HTTPException(status_code=404, detail="Atleta no encontrado")
+    ensure_has_personal_coach([atleta])
+    plan = obtener_plan_propio(db, req.plan_id, current_user)
+
+    resultado = asignar_plan_a_atleta(db, plan, atleta, req.start_date)
+    db.commit()
+
+    if resultado["status"] == "assigned":
+        mensaje = f"Plan '{plan.name}' asignado a {atleta.full_name}."
+    else:
+        mensaje = f"{atleta.full_name} ya tenía el plan '{plan.name}' en esa fecha."
+    return {"message": mensaje, "results": [resultado]}
 
 
 @router.post("/users/{user_id}/records/")
