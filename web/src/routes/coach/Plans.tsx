@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverThumbnail } from "@/components/CoverImage";
-import { WeekdayPicker } from "@/components/WeekdayPicker";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Toast } from "@/components/ui";
+import { WEEKDAY_NAMES, WeekdayPicker } from "@/components/WeekdayPicker";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
 import { useCreatePlan, useDeletePlan, useGeneratePlanWithAI, useMyPlans, usePublishPlan } from "@/lib/coachQueries";
 import { formatPrice } from "@/lib/dates";
 import type { PlanLevel, PlanSummary, PlanVisibility, Weekday } from "@/lib/types";
@@ -27,6 +27,8 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
   const [price, setPrice] = useState("");
   const [weeks, setWeeks] = useState(8);
   const [days, setDays] = useState<Weekday[]>([0, 2, 4]);
+  const [dayFocus, setDayFocus] = useState<Partial<Record<Weekday, string>>>({});
+  const [sessionMinutes, setSessionMinutes] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit() {
@@ -36,6 +38,10 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
     const precioNum = Number(price);
 
     if (modo === "ia") {
+      // Solo los días que siguen seleccionados Y con texto (si se desmarca un día, su texto no viaja).
+      const dayFocusPayload = Object.fromEntries(
+        days.filter((d) => dayFocus[d]?.trim()).map((d) => [d, dayFocus[d]!.trim()]),
+      );
       generateAI.mutate(
         {
           name: name.trim(),
@@ -45,13 +51,16 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           weeks_count: Math.min(weeks, 16),
           training_days: days,
           context: context.trim(),
-          session_duration_minutes: null,
+          session_duration_minutes: sessionMinutes > 0 ? sessionMinutes : null,
+          ...(Object.keys(dayFocusPayload).length > 0 ? { day_focus: dayFocusPayload } : {}),
         },
         {
           onSuccess: () => {
             setName("");
             setDescription("");
             setContext("");
+            setDayFocus({});
+            setSessionMinutes(0);
             onCreated("¡Plantilla generada! Revísala y edítala, luego asígnala a un grupo.");
             onClose();
           },
@@ -174,19 +183,47 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           </label>
         )}
 
-        <Field
-          label="Semanas de duración"
-          type="number"
-          min="1"
-          max={modo === "ia" ? 16 : 52}
-          value={weeks}
-          onChange={(e) => setWeeks(Number(e.target.value) || 1)}
-        />
+        <div>
+          <span className="mb-1.5 block text-sm font-medium text-muted">Semanas de duración</span>
+          <Stepper value={weeks} onChange={setWeeks} min={1} max={modo === "ia" ? 16 : 52} />
+        </div>
 
         <div>
           <span className="mb-1.5 block text-sm font-medium text-muted">Días de entrenamiento por semana</span>
           <WeekdayPicker value={days} onChange={setDays} />
         </div>
+
+        {modo === "ia" && (
+          <>
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-muted">
+                Duración objetivo por sesión (min) — 0 = sin restricción
+              </span>
+              <Stepper value={sessionMinutes} onChange={setSessionMinutes} step={5} min={0} max={180} />
+            </div>
+
+            {days.length > 0 && (
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-muted">Qué prescribir cada día (opcional)</span>
+                <div className="space-y-3">
+                  {days.map((day) => (
+                    <label key={day} className="block">
+                      <span className="mb-1.5 block text-sm font-medium text-muted">{WEEKDAY_NAMES[day]}</span>
+                      <textarea
+                        value={dayFocus[day] ?? ""}
+                        onChange={(e) => setDayFocus((prev) => ({ ...prev, [day]: e.target.value }))}
+                        rows={2}
+                        maxLength={300}
+                        placeholder="Ej. Sentadilla y accesorios de pierna"
+                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
         <Button full loading={createPlan.isPending || generateAI.isPending} onClick={handleSubmit}>

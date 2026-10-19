@@ -400,6 +400,16 @@ export function useAssignPlanToGroup() {
   });
 }
 
+/** Asigna una plantilla a UN atleta (misma respuesta que la asignación a un grupo, con una sola fila). */
+export function useAssignPlanToAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ athleteId, ...body }: GroupPlanAssignPayload & { athleteId: string }) =>
+      apiFetch<GroupPlanAssignResponse>(`/users/${athleteId}/assign-plan`, { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycles"] }),
+  });
+}
+
 /** Edita nombre/descripción/disciplina/nivel/precio de un plan — funciona igual esté
  *  publicado o en borrador. */
 export function useUpdatePlan(planId: string) {

@@ -209,6 +209,12 @@ class GroupPlanAssign(SanitizedModel):
     start_date: date
 
 
+class AthletePlanAssign(SanitizedModel):
+    """Asigna una plantilla (plan) del coach a un solo atleta."""
+    plan_id: UUID
+    start_date: date
+
+
 class GroupPlanAssignAthlete(BaseModel):
     user_id: UUID
     full_name: str
