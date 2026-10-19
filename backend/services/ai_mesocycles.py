@@ -1,46 +1,51 @@
 """Generación de entrenamientos con IA: arma lo que se le pide a Gemini y guarda lo que responde.
 
-Separado en pasos pequeños (contexto, fechas, guía por día, llamadas en paralelo, limpieza de
-cada ejercicio y guardado) para poder probar cada uno sin pasar por HTTP. La llamada real a
-Gemini está en backend/ai_agent.py y en las pruebas se sustituye.
+Separado en pasos pequeños (contexto, fechas, guía por día, llamadas en paralelo y guardado) para
+poder probar cada uno sin pasar por HTTP. La limpieza de lo que devuelve la IA (tipos, rangos, WOD,
+cargas, fechas) vive en backend/services/ai_salida.py; la llamada real a Gemini está en
+backend/ai_agent.py y en las pruebas se sustituye.
 """
+import logging
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import List
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend import models
-from backend.sanitize import clean_multiline, clean_text
 from backend.database import SessionLocal
-from backend.services.exercises import clean_ai_block
+from backend.services.ai_salida import (  # noqa: F401 — se reexportan: las pruebas y otros módulos los importan de aquí
+    EjercicioLimpio,
+    FORMATOS_CON_TIEMPO,
+    FORMATOS_DE_WOD,
+    SesionLimpia,
+    emparejar_fechas,
+    fecha_de_texto,
+    limpiar_ejercicio,
+    limpiar_sesion,
+    sesiones_de_respuesta,
+    wod_limpio,
+)
 from backend.services.plans import PLAN_EPOCH
-from backend.services.prs import get_athlete_prs, normalize_exercise_name, resolve_weight_from_percentage
+from backend.services.prs import get_athlete_prs
+
+logger = logging.getLogger(__name__)
 
 _NOMBRE_DIA_SEMANA = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
 
 # 3 semanas por chunk: un mesociclo corto (3-4 semanas, el caso más común) queda en UNA sola
 # llamada a Gemini sin acercarse al límite de tokens de salida del modelo.
 SEMANAS_POR_CHUNK = 3
-
-
-@dataclass
-class EjercicioLimpio:
-    """Un ejercicio de la respuesta de la IA, ya con tipos y valores validados."""
-    nombre: str
-    series: int
-    reps: int
-    rpe: int | None
-    peso: float | None
-    porcentaje: float | None
-    referencia: str | None
-    bloque: str | None
+# Veces que se pide una tanda: si la IA falla o se salta fechas se reintenta UNA vez antes de rendirse.
+INTENTOS_POR_CHUNK = 2
 
 
 def _ejercicio(db: Session, nombre: str, categoria: str) -> models.Exercise:
-    ejercicio = db.query(models.Exercise).filter(models.Exercise.name == nombre).first()
+    """El ejercicio del catálogo con ese nombre (sin distinguir mayúsculas: "back squat" y "Back
+    Squat" son el mismo) o uno nuevo."""
+    ejercicio = db.query(models.Exercise).filter(func.lower(models.Exercise.name) == nombre.lower()).first()
     if not ejercicio:
         ejercicio = models.Exercise(name=nombre, category=categoria)
         db.add(ejercicio)
@@ -48,56 +53,7 @@ def _ejercicio(db: Session, nombre: str, categoria: str) -> models.Exercise:
     return ejercicio
 
 
-def _a_float(valor) -> float | None:
-    if valor is None:
-        return None
-    try:
-        return float(valor)
-    except (ValueError, TypeError):
-        return None
-
-
-# ------------------------------------------------------------ el WOD de una sesión
-
-# Formatos que la IA puede devolver y cuáles llevan tiempo límite / duración (el temporizador del
-# atleta lo usa). Coinciden con backend/schemas/common.py:FormatoWod y web/src/lib/wod.ts.
-FORMATOS_DE_WOD = ("for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts")
-FORMATOS_CON_TIEMPO = ("for_time", "amrap", "amrap_reps", "emom", "calories", "distance", "watts")
-_MAX_NOTAS_WOD = 2000
-_MAX_MINUTOS_WOD = 180
-
-
-def wod_limpio(wod) -> dict | None:
-    """Valida el WOD que devolvió la IA y lo deja como lo guarda la plantilla de WOD de la app:
-    {"format", "time_cap_seconds", "notes"}. Devuelve None si no hay nada usable (la IA a veces
-    devuelve null, un texto o valores inventados: mejor sin WOD que uno mal configurado)."""
-    if not isinstance(wod, dict):
-        return None
-    formato = wod.get("format")
-    formato = formato.strip().lower() if isinstance(formato, str) else None
-    if formato not in FORMATOS_DE_WOD:
-        formato = None
-
-    segundos = None
-    if formato in FORMATOS_CON_TIEMPO:
-        minutos = _a_float(wod.get("time_cap_minutes"))
-        if minutos is not None and 0 < minutos <= _MAX_MINUTOS_WOD:
-            segundos = int(round(minutos * 60))
-
-    # El nombre va en una línea; la descripción conserva sus saltos de línea (un WOD de varias
-    # líneas se queda así). Ambos pasan por el mismo saneo que el texto que escribe un coach.
-    partes = [
-        limpio
-        for clave in ("name", "description")
-        if isinstance(wod.get(clave), str)
-        and (limpio := clean_multiline(wod.get(clave)) if clave == "description" else clean_text(wod.get(clave)))
-    ]
-    notas = "\n".join(partes)[:_MAX_NOTAS_WOD] or None
-
-    if formato is None and notas is None:
-        return None
-    return {"format": formato, "time_cap_seconds": segundos, "notes": notas}
-
+# ------------------------------------------------------------ guardar una sesión ya limpia
 
 def aplicar_wod(sesion: models.Session, wod) -> bool:
     """Configura en la sesión la plantilla de WOD (formato, tiempo límite, descripción) a partir de
@@ -111,31 +67,60 @@ def aplicar_wod(sesion: models.Session, wod) -> bool:
     return True
 
 
-# ------------------------------------------------------------ una sesión suelta
-
-def guardar_sesion_ia(db: Session, meso: models.Mesocycle, rutina_ai: dict) -> models.Session:
-    """Guarda como sesión de hoy la rutina que devolvió la IA (sin hacer commit)."""
+def _crear_sesion(
+    db: Session, meso: models.Mesocycle, limpia: SesionLimpia, duracion: int | None, categoria: str = "General"
+) -> models.Session:
+    """Crea la sesión y sus series en la base a partir de una sesión ya limpia (sin commit). Usa todo
+    lo que tiene una sesión armada a mano: calentamiento en texto, orden de bloques, WOD, nota por
+    ejercicio y series una por una (rampas)."""
     sesion = models.Session(
         mesocycle_id=meso.id,
-        scheduled_date=date.today(),
-        athlete_notes=rutina_ai.get("athlete_notes", ""),
+        scheduled_date=limpia.fecha,
+        athlete_notes=limpia.notas_atleta,
         status="pending",
+        duration_minutes=duracion,
+        warmup_notes=limpia.calentamiento,
+        block_order=limpia.orden_de_bloques,
     )
-    aplicar_wod(sesion, rutina_ai.get("wod"))
+    if limpia.wod:
+        sesion.wod_format = limpia.wod["format"]
+        sesion.wod_time_cap_seconds = limpia.wod["time_cap_seconds"]
+        sesion.wod_notes = limpia.wod["notes"]
     db.add(sesion)
     db.flush()
 
-    for orden, ex_data in enumerate(rutina_ai.get("exercises", []), start=1):
-        ejercicio = _ejercicio(db, ex_data["exercise_name"], "AI Generated")
-        db.add(models.Set(
-            session_id=sesion.id,
-            exercise_id=ejercicio.id,
-            set_order=orden,
-            prescribed_reps=ex_data["prescribed_reps"],
-            rpe=ex_data["rpe_target"],
-            block=clean_ai_block(ex_data.get("block")),
-        ))
+    orden = 1
+    for ej in limpia.ejercicios:
+        ejercicio = _ejercicio(db, ej.nombre, categoria)
+        for fila in ej.filas_a_guardar():
+            db.add(models.Set(
+                session_id=sesion.id,
+                exercise_id=ejercicio.id,
+                set_order=orden,
+                prescribed_reps=fila.reps,
+                rpe=ej.rpe,
+                prescribed_weight=fila.peso,
+                prescribed_percentage=fila.porcentaje,
+                reference_exercise=ej.referencia if fila.porcentaje is not None else None,
+                block=ej.bloque,
+                coach_note=ej.nota,
+            ))
+            orden += 1
     return sesion
+
+
+# ------------------------------------------------------------ una sesión suelta
+
+def guardar_sesion_ia(db: Session, meso: models.Mesocycle, rutina_ai: dict) -> models.Session:
+    """Guarda como sesión de hoy la rutina que devolvió la IA (sin hacer commit). Pasa por la misma
+    limpieza que un mesociclo: antes un ejercicio sin nombre rompía la petición y se ignoraban las
+    series de cada ejercicio."""
+    # Sin atleta (la programación de una clase) no hay marcas: los % se conservan como están
+    prs = get_athlete_prs(db, meso.user_id) if meso.user_id else None
+    limpia = limpiar_sesion(rutina_ai if isinstance(rutina_ai, dict) else {}, date.today(), prs)
+    if limpia.advertencias:
+        logger.info("Sesión suelta con IA: %s", "; ".join(limpia.advertencias))
+    return _crear_sesion(db, meso, limpia, None, "AI Generated")
 
 
 # ------------------------------------------------------------ mesociclo completo
@@ -184,81 +169,50 @@ def especificar_chunks(
     return specs
 
 
-def limpiar_ejercicio(ej_data: dict, prs: dict) -> EjercicioLimpio:
-    """Valida los tipos que devuelve la IA y resuelve la carga con las marcas ACTUALES del atleta."""
-    nombre = ej_data.get("exercise_name", "Ejercicio Desconocido")
-
-    rpe_raw = ej_data.get("rpe_target") or ej_data.get("rpe")
-    rpe = int(float(rpe_raw)) if rpe_raw is not None else None
-
-    peso = _a_float(
-        ej_data.get("prescribed_weight") or ej_data.get("weight_kg") or ej_data.get("weight") or ej_data.get("target_weight")
-    )
-    porcentaje = _a_float(ej_data.get("prescribed_percentage"))
-    referencia = ej_data.get("reference_exercise") or nombre
-
-    if porcentaje is not None:
-        # La IA sí dio un %: recalcula el kg a partir de la marca ACTUAL del atleta en vez de
-        # confiar en un número que ella misma haya calculado (así se mantiene "vivo").
-        peso = resolve_weight_from_percentage(porcentaje, peso, referencia, prs)
-    elif peso is not None:
-        # La IA ignoró la instrucción y dio un kg fijo (pasa seguido): si coincide con una marca
-        # de ESTE atleta para el mismo ejercicio, se deriva el % para que quede igual de "vivo".
-        pr_valor = prs.get(normalize_exercise_name(nombre))
-        if pr_valor:
-            porcentaje = round(peso / pr_valor * 100)
-            referencia = nombre
-
-    return EjercicioLimpio(
-        nombre=nombre,
-        series=ej_data.get("prescribed_sets", 1),
-        reps=ej_data.get("prescribed_reps", 1),
-        rpe=rpe,
-        peso=peso,
-        porcentaje=porcentaje,
-        referencia=referencia if porcentaje is not None else None,
-        bloque=clean_ai_block(ej_data.get("block")),
-    )
-
-
 def guardar_rutinas(
-    db: Session, meso: models.Mesocycle, rutinas: List[dict], start_date: date, duracion: int | None, prs: dict
-) -> None:
-    """Guarda las sesiones y series de todas las respuestas de la IA (sin commit). Secuencial a
-    propósito: una Session de SQLAlchemy no es segura para escribir desde varios hilos."""
-    for rutina_ai in rutinas:
-        for semana in rutina_ai.get("weeks", []):
-            for sesion_data in semana.get("sessions", []):
-                fecha_str = sesion_data.get("scheduled_date")
-                fecha_real = datetime.strptime(fecha_str, "%Y-%m-%d").date() if fecha_str else start_date
-                sesion = models.Session(
-                    mesocycle_id=meso.id,
-                    scheduled_date=fecha_real,
-                    athlete_notes=sesion_data.get("athlete_notes", ""),
-                    status="pending",
-                    duration_minutes=duracion,
-                )
-                aplicar_wod(sesion, sesion_data.get("wod"))
-                db.add(sesion)
-                db.flush()
+    db: Session, meso: models.Mesocycle, rutinas: List[dict], start_date: date, duracion: int | None, prs: dict | None
+) -> list[str]:
+    """Guarda las sesiones y series de todas las respuestas de la IA (sin commit) y devuelve los
+    avisos para el coach (cargas descartadas, ejercicios ilegibles...). Secuencial a propósito: una
+    Session de SQLAlchemy no es segura para escribir desde varios hilos.
 
-                orden = 1
-                for ej_data in sesion_data.get("exercises", []):
-                    ej = limpiar_ejercicio(ej_data, prs)
-                    ejercicio = _ejercicio(db, ej.nombre, "General")
-                    for _ in range(ej.series):
-                        db.add(models.Set(
-                            session_id=sesion.id,
-                            exercise_id=ejercicio.id,
-                            set_order=orden,
-                            prescribed_reps=ej.reps,
-                            rpe=ej.rpe,
-                            prescribed_weight=ej.peso,
-                            prescribed_percentage=ej.porcentaje,
-                            reference_exercise=ej.referencia,
-                            block=ej.bloque,
-                        ))
-                        orden += 1
+    `prs` son las marcas del atleta; `None` = no hay atleta (plantilla de plan o clase): los % se
+    conservan y no se acepta ningún kg fijo de un levantamiento de barra."""
+    por_texto: dict[str, list[date]] = {}   # aviso -> fechas en las que pasó (en orden de aparición)
+    for rutina_ai in rutinas:
+        sesiones = sesiones_de_respuesta(rutina_ai)
+        fechas_pedidas = rutina_ai.get("_fechas") if isinstance(rutina_ai, dict) else None
+        if fechas_pedidas:
+            # La IA no decide cuándo se entrena, lo decide el calendario del coach
+            pares = [(date.fromisoformat(f), s) for f, s in emparejar_fechas(sesiones, fechas_pedidas)[0]]
+        else:
+            pares = [(date.fromisoformat(fecha_de_texto(s.get("scheduled_date")) or start_date.isoformat()), s) for s in sesiones]
+
+        for fecha, sesion_data in pares:
+            limpia = limpiar_sesion(sesion_data, fecha, prs)
+            _crear_sesion(db, meso, limpia, duracion)
+            for aviso in limpia.advertencias:
+                por_texto.setdefault(aviso, []).append(fecha)
+
+    # El mismo problema en 12 sesiones es UN aviso para el coach, no 12
+    return [
+        f"{fechas[0]}: {texto}" if len(fechas) == 1 else f"{texto} (en {len(fechas)} sesiones)"
+        for texto, fechas in por_texto.items()
+    ]
+
+
+def _sumar_uso(rutinas: List[dict]) -> dict[str, int]:
+    """Los tokens que gastó la generación (lo que cobra Gemini), sumados por todas las tandas."""
+    total = {"llamadas": 0, "tokens_prompt": 0, "tokens_salida": 0, "tokens_pensamiento": 0}
+    for rutina in rutinas:
+        uso = rutina.get("_uso") if isinstance(rutina, dict) else None
+        if not isinstance(uso, dict):
+            continue
+        total["llamadas"] += 1
+        total["tokens_prompt"] += int(uso.get("tokens_prompt") or 0)
+        total["tokens_salida"] += int(uso.get("tokens_salida") or 0)
+        total["tokens_pensamiento"] += int(uso.get("tokens_pensamiento") or 0)
+    return total
 
 
 def pedir_rutinas(
@@ -272,7 +226,11 @@ def pedir_rutinas(
     day_focus: dict[int, str] | None,
 ) -> List[dict]:
     """Pide a Gemini las sesiones de todas las fechas, por tandas de SEMANAS_POR_CHUNK semanas y en
-    paralelo (cada tanda es una llamada HTTP independiente: tarda lo que la más lenta, no la suma)."""
+    paralelo (cada tanda es una llamada HTTP independiente: tarda lo que la más lenta, no la suma).
+
+    Cada tanda se valida: si la IA falla o no devuelve alguna de las fechas pedidas se reintenta UNA
+    vez, y si sigue mal se rechaza toda la generación. Antes una tanda fallida (`{"error": ...}`)
+    pasaba como vacía y se guardaba un mesociclo al que le faltaban semanas, sin avisar."""
     # Se importan aquí (y no arriba) para que las pruebas puedan sustituir la llamada a Gemini.
     from backend.ai_agent import generate_mesocycle_chunk
     from backend.knowledge_search import search_knowledge_base
@@ -283,17 +241,29 @@ def pedir_rutinas(
 
     def pedir_chunk(spec):
         start, end, fechas_del_chunk, guia = spec
-        return generate_mesocycle_chunk(
-            athlete_name=nombre,
-            discipline=discipline,
-            experience_notes=contexto,
-            start_week=start,
-            end_week=end,
-            session_dates=fechas_del_chunk,
-            session_duration_minutes=session_duration_minutes,
-            literatura_cientifica=literatura,
-            day_focus_text=guia,
-        )
+        problema = "la IA no respondió"
+        for _ in range(INTENTOS_POR_CHUNK):
+            respuesta = generate_mesocycle_chunk(
+                athlete_name=nombre,
+                discipline=discipline,
+                experience_notes=contexto,
+                start_week=start,
+                end_week=end,
+                session_dates=fechas_del_chunk,
+                session_duration_minutes=session_duration_minutes,
+                literatura_cientifica=literatura,
+                day_focus_text=guia,
+            )
+            if not isinstance(respuesta, dict) or respuesta.get("error"):
+                problema = (respuesta or {}).get("error") if isinstance(respuesta, dict) else None
+                problema = problema or "la IA devolvió una respuesta inválida"
+                continue
+            _, faltantes = emparejar_fechas(sesiones_de_respuesta(respuesta), fechas_del_chunk)
+            if faltantes:
+                problema = f"la IA no devolvió las sesiones de {', '.join(faltantes)}"
+                continue
+            return {**respuesta, "_fechas": fechas_del_chunk}
+        raise RuntimeError(f"Semanas {start}-{end}: {problema}")
 
     # executor.map conserva el orden, así que las semanas se guardan en orden.
     with ThreadPoolExecutor(max_workers=len(specs)) as executor:
@@ -314,25 +284,36 @@ def construir_mesociclo_inteligente(
     day_focus: dict[int, str] | None = None,
 ) -> dict:
     """Genera con IA un mesociclo completo para UN atleta. Hace commit propio; si algo falla hace
-    rollback y lanza RuntimeError (el llamador decide cómo responder)."""
-    meso = models.Mesocycle(user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date)
+    rollback y lanza RuntimeError (el llamador decide cómo responder). Devuelve el id, los avisos
+    para el coach y los tokens gastados."""
+    fechas = fechas_de_entrenamiento(start_date, weeks_count, training_days)
+    if not fechas:
+        raise RuntimeError("Selecciona al menos un día de entrenamiento.")
+
+    # Individual: queda en borrador para que el coach lo revise antes de que el atleta lo vea. La
+    # generación grupal sigue publicándose directo (pasará a plantilla + asignar, que ya es revisable).
+    meso = models.Mesocycle(
+        user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date,
+        is_draft=group_id is None,
+    )
     db.add(meso)
     db.flush()
 
     contexto = contexto_del_atleta(db, atleta, context)
     # Para resolver los porcentajes que devuelva la IA a kg reales con las marcas de hoy.
     prs = get_athlete_prs(db, atleta.id)
-    fechas = fechas_de_entrenamiento(start_date, weeks_count, training_days)
 
     try:
         rutinas = pedir_rutinas(
             atleta.full_name, discipline, contexto, fechas, weeks_count, len(training_days),
             session_duration_minutes, day_focus,
         )
-        guardar_rutinas(db, meso, rutinas, start_date, session_duration_minutes, prs)
+        avisos = guardar_rutinas(db, meso, rutinas, start_date, session_duration_minutes, prs)
         meso.end_date = datetime.strptime(fechas[-1], "%Y-%m-%d").date()
         db.commit()
-        return {"mesocycle_id": str(meso.id)}
+        uso = _sumar_uso(rutinas)
+        logger.info("Mesociclo con IA %s: %s; avisos=%d", meso.id, uso, len(avisos))
+        return {"mesocycle_id": str(meso.id), "advertencias": avisos, "uso": uso}
 
     except Exception as e:
         db.rollback()
@@ -424,7 +405,8 @@ def construir_plantilla_con_ia(
             "el grupo", discipline, _CONTEXTO_PLANTILLA + context, fechas, weeks_count, len(training_days),
             session_duration_minutes, day_focus,
         )
-        guardar_rutinas(db, plan, rutinas, PLAN_EPOCH, session_duration_minutes, {})
+        # prs=None: una plantilla no tiene atleta, así que no hay marcas con qué respaldar un kg fijo
+        avisos = guardar_rutinas(db, plan, rutinas, PLAN_EPOCH, session_duration_minutes, None)
         db.flush()
 
         base = (datetime.strptime(fechas[0], "%Y-%m-%d").date() - PLAN_EPOCH).days
@@ -436,6 +418,7 @@ def construir_plantilla_con_ia(
         plan.end_date = PLAN_EPOCH + timedelta(days=max((s.day_offset for s in sesiones), default=0))
         db.commit()
         db.refresh(plan)
+        logger.info("Plantilla con IA %s: %s; avisos=%d", plan.id, _sumar_uso(rutinas), len(avisos))
         return plan
     except Exception as e:
         db.rollback()

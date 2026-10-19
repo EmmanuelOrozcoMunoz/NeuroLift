@@ -4,8 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { IconTrash } from "@/components/icons";
 import { SessionCard } from "@/components/SessionCard";
-import { Badge, EmptyState, ErrorState, LoadingList, SectionTitle, Toast } from "@/components/ui";
-import { useDeleteMesocycle } from "@/lib/coachQueries";
+import { Badge, Button, EmptyState, ErrorState, LoadingList, SectionTitle, Toast } from "@/components/ui";
+import { useDeleteMesocycle, usePublishMesocycle } from "@/lib/coachQueries";
 import { daysFromToday, parseApiDate } from "@/lib/dates";
 import { useMesocycle } from "@/lib/queries";
 import { sortSessions } from "@/lib/sessions";
@@ -25,6 +25,7 @@ export default function CoachMesocycleEditor() {
   const navigate = useNavigate();
   const { data, isPending, error, refetch } = useMesocycle(mesocycleId);
   const deleteMesocycle = useDeleteMesocycle();
+  const publish = usePublishMesocycle();
   const [toast, setToast] = useState<string | null>(null);
 
   function handleDelete() {
@@ -37,6 +38,14 @@ export default function CoachMesocycleEditor() {
     deleteMesocycle.mutate(mesocycleId, {
       onSuccess: () => navigate(data?.user_id ? `/coach/atletas/${data.user_id}` : "/coach/atletas"),
       onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo eliminar el mesociclo."),
+    });
+  }
+
+  function handlePublish() {
+    if (!mesocycleId) return;
+    publish.mutate(mesocycleId, {
+      onSuccess: (r) => setToast(r.message),
+      onError: (err) => setToast(err instanceof Error ? err.message : "No se pudo publicar el mesociclo."),
     });
   }
 
@@ -86,6 +95,18 @@ export default function CoachMesocycleEditor() {
           )
         }
       />
+
+      {data?.is_draft && (
+        <div className="mb-4 rounded-2xl border border-brand/30 bg-brand-soft/30 p-4">
+          <p className="font-semibold">Borrador: tu atleta todavía no lo ve</p>
+          <p className="mt-1 text-sm text-muted">
+            Revisa y ajusta las sesiones (ejercicios, cargas, orden). Cuando esté listo, publícalo.
+          </p>
+          <Button className="mt-3" full loading={publish.isPending} onClick={handlePublish}>
+            Publicar para el atleta
+          </Button>
+        </div>
+      )}
 
       {isPending && <LoadingList rows={4} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}

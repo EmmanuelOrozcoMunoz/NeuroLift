@@ -45,6 +45,8 @@ class MesocycleSummaryResponse(BaseModel):
     description: Optional[str] = None
     level: Optional[str] = None
     is_self_managed: bool = False
+    # Armado por la IA y aún sin publicar: el atleta no lo ve (solo el coach)
+    is_draft: bool = False
     # Registro de clases del atleta ("Clases del box") y programación de una clase
     is_class_log: bool = False
     class_id: Optional[UUID] = None
@@ -67,6 +69,8 @@ class MesocycleFullResponse(BaseModel):
     has_cover_image: bool = False  # true -> el cliente puede pedir GET /plans/{id}/cover
     is_preview: bool = False  # ver PlanPreviewResponse: esta es SIEMPRE la versión completa
     is_self_managed: bool = False
+    # Armado por la IA y aún sin publicar: el atleta no lo ve (solo el coach)
+    is_draft: bool = False
     # Registro de clases del atleta ("Clases del box") y programación de una clase
     is_class_log: bool = False
     class_id: Optional[UUID] = None

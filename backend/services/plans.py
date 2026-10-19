@@ -96,16 +96,43 @@ def obtener_plan_propio(db: Session, plan_id: UUID, coach: models.User) -> model
     return plan
 
 
+def _validar_plan_asignable(plan: models.Mesocycle) -> None:
+    if not plan.sessions:
+        raise SolicitudInvalida("Este plan no tiene días de entrenamiento.")
+    if not any(sesion.sets for sesion in plan.sessions):
+        raise SolicitudInvalida("Este plan todavía no tiene ejercicios: agrégalos antes de asignarlo.")
+
+
+def asignar_plan_a_atleta(db: Session, plan: models.Mesocycle, atleta: models.User, start_date: date) -> dict:
+    """Copia el plan a UN atleta (fuera de cualquier grupo): fechas reales desde `start_date` y las
+    cargas en % resueltas con SUS marcas. Sin commit. Si ya recibió este mismo plan en esa fecha
+    se omite, para que un doble clic no lo duplique."""
+    _validar_plan_asignable(plan)
+    ya_lo_tiene = (
+        db.query(models.Mesocycle.id)
+        .filter(
+            models.Mesocycle.user_id == atleta.id,
+            models.Mesocycle.group_id.is_(None),
+            models.Mesocycle.source_plan_id == plan.id,
+            models.Mesocycle.start_date == start_date,
+        )
+        .first()
+    )
+    if ya_lo_tiene:
+        return {"user_id": atleta.id, "full_name": atleta.full_name, "status": "skipped",
+                "mesocycle_id": None, "missing_prs": []}
+    resultado = adquirir_plan(db, plan, atleta, start_date)
+    return {"user_id": atleta.id, "full_name": atleta.full_name, "status": "assigned",
+            "mesocycle_id": resultado.mesocycle_id, "missing_prs": resultado.missing_prs}
+
+
 def asignar_plan_a_grupo(
     db: Session, plan: models.Mesocycle, grupo: models.Group, start_date: date
 ) -> list[dict]:
     """Copia el plan a cada miembro del grupo: fechas reales desde `start_date` y las cargas en %
     resueltas con las marcas de CADA atleta. Sin commit. Quien ya recibió este mismo plan en esa
     misma fecha se omite, así volver a asignarlo solo alcanza a los miembros nuevos."""
-    if not plan.sessions:
-        raise SolicitudInvalida("Este plan no tiene días de entrenamiento.")
-    if not any(sesion.sets for sesion in plan.sessions):
-        raise SolicitudInvalida("Este plan todavía no tiene ejercicios: agrégalos antes de asignarlo.")
+    _validar_plan_asignable(plan)
 
     miembros = list(grupo.members)
     ya_asignados = {

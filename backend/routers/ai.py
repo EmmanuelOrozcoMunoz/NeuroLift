@@ -95,11 +95,17 @@ def generate_and_save_smart_mesocycle(
     ensure_has_personal_coach([atleta])
 
     try:
-        construir_mesociclo_inteligente(
+        resultado = construir_mesociclo_inteligente(
             db, atleta, req.name, req.discipline, req.start_date, req.weeks_count, req.training_days, req.context,
             session_duration_minutes=req.session_duration_minutes, day_focus=req.day_focus,
         )
-        return {"message": "Mesociclo Inteligente generado y guardado exitosamente."}
+        # `advertencias`: lo que la IA hizo mal y se corrigió o descartó (un kg sin marca, un
+        # ejercicio ilegible...) para que el coach lo revise; `uso`: los tokens que se gastaron.
+        return {
+            "message": "Mesociclo Inteligente generado y guardado exitosamente.",
+            "advertencias": resultado["advertencias"],
+            "uso": resultado["uso"],
+        }
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=f"Error interno generando la rutina: {str(e)}")
 

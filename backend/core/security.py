@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend import models
 from backend.core.config import ALGORITHM, SECRET_KEY
-from backend.core.errors import NoAutenticado, Prohibido, SolicitudInvalida
+from backend.core.errors import NoAutenticado, NoEncontrado, Prohibido, SolicitudInvalida
 from backend.database import get_db
 
 # Le decimos a FastAPI dónde está la ruta de login
@@ -210,6 +210,15 @@ def ensure_can_view_mesocycle(db: Session, mesocycle: models.Mesocycle, current_
             raise Prohibido("La programación de las clases es solo para los entrenadores del box")
         return
     ensure_owner_or_coach(db, mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(mesocycle, current_user)
+
+
+def ocultar_borrador_al_atleta(mesocycle: models.Mesocycle, current_user: models.User) -> None:
+    """Un mesociclo en borrador no existe para el atleta dueño: ni verlo ni registrarle nada hasta
+    que el coach lo publique. Responde "no encontrado" (no "prohibido") para no delatar que hay
+    algo en preparación. Su coach y el admin lo ven y lo editan con normalidad."""
+    if mesocycle.is_draft and mesocycle.user_id is not None and current_user.id == mesocycle.user_id:
+        raise NoEncontrado("Mesociclo no encontrado")
 
 
 def ensure_has_personal_coach(atletas: list[models.User]) -> None:

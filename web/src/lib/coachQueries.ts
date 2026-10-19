@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import type {
+  AIGenerateResponse,
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
   AthleteActivity,
@@ -27,6 +28,8 @@ import type {
   MessageResponse,
   PlanCreatePayload,
   PlanGenerateAIPayload,
+  PlanImportConfirmPayload,
+  PlanImportPreviewResponse,
   PlanExerciseUpdatePayload,
   PlanSetCreatePayload,
   PlanSummary,
@@ -288,7 +291,7 @@ export function useGenerateAIMesocycle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: AIGenerateSmartPayload) =>
-      apiFetch<MessageResponse>("/ai/generate-smart-mesocycle/", { method: "POST", body }),
+      apiFetch<AIGenerateResponse>("/ai/generate-smart-mesocycle/", { method: "POST", body }),
     onSuccess: (_data, vars) =>
       void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(vars.user_id) }),
   });
@@ -300,6 +303,19 @@ export function useGenerateAIMesocycleForGroup(groupId: string) {
     mutationFn: (body: AIGenerateSmartGroupPayload) =>
       apiFetch<BulkResponse>("/ai/generate-smart-mesocycle/group", { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(groupId) }),
+  });
+}
+
+/** Publica un mesociclo en borrador: desde ahí el atleta lo ve y puede registrar en él. */
+export function usePublishMesocycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mesocycleId: string) =>
+      apiFetch<MessageResponse>(`/mesocycles/${mesocycleId}/publish`, { method: "POST" }),
+    onSuccess: (_data, mesocycleId) => {
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) });
+    },
   });
 }
 
@@ -375,6 +391,22 @@ export function useCreatePlan() {
   });
 }
 
+/** Lee un PDF, Word o Excel con un plan y devuelve cómo quedaría. No guarda nada (usa IA: puede tardar). */
+export function usePreviewPlanImport() {
+  return useMutation({
+    mutationFn: (file: File) => apiUpload<PlanImportPreviewResponse>("/plan-import/preview", file),
+  });
+}
+
+/** Crea el plan (en borrador) con lo que devolvió la vista previa. */
+export function useConfirmPlanImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PlanImportConfirmPayload) => apiFetch<PlanSummary>("/plan-import/confirm", { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
+  });
+}
+
 /** Genera con IA una plantilla (plan en borrador) con las cargas en % de 1RM: una sola generación,
  *  sin atleta. Después se asigna a uno o varios grupos. */
 export function useGeneratePlanWithAI() {
@@ -396,6 +428,16 @@ export function useAssignPlanToGroup() {
       void queryClient.invalidateQueries({ queryKey: coachKeys.groupMesocycles(vars.groupId) });
       void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
     },
+  });
+}
+
+/** Asigna una plantilla a UN atleta (misma respuesta que la asignación a un grupo, con una sola fila). */
+export function useAssignPlanToAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ athleteId, ...body }: GroupPlanAssignPayload & { athleteId: string }) =>
+      apiFetch<GroupPlanAssignResponse>(`/users/${athleteId}/assign-plan`, { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycles"] }),
   });
 }
 

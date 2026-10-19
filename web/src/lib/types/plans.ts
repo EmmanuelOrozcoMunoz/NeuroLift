@@ -99,6 +99,53 @@ export interface PlanExerciseUpdatePayload extends PlanSetCreatePayload {
   set_ids: string[];
 }
 
+/** POST /plan-import/preview — cómo quedaría el plan importado de un PDF/Word/Excel (nada guardado aún). */
+export interface PlanImportExercise {
+  name: string;
+  block: string | null;
+  sets: number;
+  reps: number;
+  /** Lo prescrito en una línea: "3 x 5 @ 80 % · RPE 8" */
+  summary: string;
+  note: string | null;
+}
+
+export interface PlanImportDay {
+  week: number;
+  /** 0 = lunes */
+  weekday: number;
+  label: string | null;
+  warmup: string | null;
+  block_order: string | null;
+  wod: { format: string; time_cap_seconds: number | null; description: string | null } | null;
+  exercises: PlanImportExercise[];
+}
+
+export interface PlanImportPreview {
+  name: string | null;
+  description: string | null;
+  discipline: string | null;
+  level: PlanLevel | null;
+  weeks_count: number;
+  sessions_count: number;
+  warnings: string[];
+  days: PlanImportDay[];
+}
+
+export interface PlanImportPreviewResponse {
+  preview: PlanImportPreview;
+  /** El documento interpretado: se devuelve tal cual al confirmar (el servidor lo limpia otra vez). */
+  document: Record<string, unknown>;
+}
+
+export interface PlanImportConfirmPayload {
+  name: string;
+  description: string;
+  discipline: string;
+  level: PlanLevel;
+  document: Record<string, unknown>;
+}
+
 export interface PlanGenerateAIPayload {
   name: string;
   description: string;
@@ -108,6 +155,7 @@ export interface PlanGenerateAIPayload {
   training_days: Weekday[];
   context: string;
   session_duration_minutes: number | null;
+  day_focus?: Partial<Record<Weekday, string>>;
 }
 
 /** POST /groups/{id}/assign-plan — copia la plantilla a cada miembro del grupo. */

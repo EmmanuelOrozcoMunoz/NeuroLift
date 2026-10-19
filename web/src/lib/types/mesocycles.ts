@@ -17,6 +17,8 @@ export interface MesocycleSummary {
   level: string | null;
   /** true = lo creó el propio atleta a mano (sin coach), para su registro personal. */
   is_self_managed: boolean;
+  /** true = lo armó la IA y el coach aún no lo publica: el atleta no lo ve. */
+  is_draft: boolean;
   /** Mesociclo "Clases del box" del atleta: junta sus registros de clases */
   is_class_log: boolean;
   /** Programación de una clase del box (sin atleta) */
@@ -43,6 +45,8 @@ export interface MesocycleFull {
   is_preview?: false;
   /** true = el propio atleta lo creó a mano (sin coach), para su registro personal. */
   is_self_managed: boolean;
+  /** true = lo armó la IA y el coach aún no lo publica: el atleta no lo ve. */
+  is_draft: boolean;
   /** Mesociclo "Clases del box" del atleta: junta sus registros de clases */
   is_class_log: boolean;
   /** Programación de una clase del box (sin atleta) */
@@ -66,6 +70,14 @@ export interface ManualMesocycleGroupPayload {
   start_date: string;
   weeks_count: number;
   training_days: Weekday[];
+}
+
+/** Respuesta de POST /ai/generate-smart-mesocycle/. `advertencias`: lo que la IA hizo mal y el servidor
+ *  corrigió o descartó (p. ej. un kg sin marca de 1RM) para que el coach lo revise; `uso`: tokens gastados. */
+export interface AIGenerateResponse {
+  message: string;
+  advertencias: string[];
+  uso: { llamadas: number; tokens_prompt: number; tokens_salida: number; tokens_pensamiento: number };
 }
 
 export interface AIGenerateSmartPayload {

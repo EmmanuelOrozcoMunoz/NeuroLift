@@ -5,7 +5,8 @@ import { Link, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
+import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
@@ -50,6 +51,7 @@ export default function AthleteDetail() {
   const [exercise, setExercise] = useState<string>(COMMON_PR_EXERCISES[0]);
   const [weight, setWeight] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function handleDeletePr(id: string, exerciseName: string) {
@@ -225,7 +227,14 @@ export default function AthleteDetail() {
       <div className="mb-2 flex items-baseline justify-between">
         <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>
         {/* Los mesociclos son exclusivos de atletas con coach personal (sin coach = clases) */}
-        {!myGroup && athlete?.coach_id && <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>}
+        {!myGroup && athlete?.coach_id && (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+              Asignar plan
+            </Button>
+            <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>
+          </div>
+        )}
       </div>
 
       {myGroup ? (
@@ -264,7 +273,14 @@ export default function AthleteDetail() {
                   className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
                 >
                   <div className="min-w-0 grow">
-                    <p className="truncate font-bold">{meso.name ?? "Rutina"}</p>
+                    <p className="truncate font-bold">
+                      {meso.name ?? "Rutina"}
+                      {meso.is_draft && (
+                        <span className="ml-2 align-middle">
+                          <Badge tone="brand">Borrador</Badge>
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-muted">
                       {meso.discipline} · desde {shortDate(meso.start_date)}
                     </p>
@@ -275,6 +291,12 @@ export default function AthleteDetail() {
           </div>
         </>
       )}
+
+      <AssignPlanSheet
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        athlete={{ id: athleteId!, name: athlete?.full_name ?? "" }}
+      />
 
       <CreateMesocycleSheet
         open={sheetOpen}

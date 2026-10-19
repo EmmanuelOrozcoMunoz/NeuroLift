@@ -178,3 +178,46 @@ def test_no_se_puede_asignar_un_plan_ajeno_ni_a_un_grupo_ajeno(client, coach, gr
 def test_un_atleta_no_puede_asignar_planes(grupo, plantilla):
     g, ana, _ = grupo
     assert ana.post(f"/groups/{g['id']}/assign-plan", json={"plan_id": plantilla["id"], "start_date": str(SALIDA)}).status_code == 403
+
+
+# ------------------------------------------------------------------ a un solo atleta
+
+def _asignar_a_atleta(coach, atleta, plan, fecha=SALIDA):
+    return coach.post(f"/users/{atleta.id}/assign-plan", json={"plan_id": plan["id"], "start_date": str(fecha)})
+
+
+def test_un_atleta_suelto_recibe_el_plan_con_sus_kg_y_sin_grupo(coach, atleta_de_coach, plantilla):
+    _marca(atleta_de_coach, "Back Squat", 100)
+    r = _asignar_a_atleta(coach, atleta_de_coach, plantilla)
+    assert r.status_code == 200, r.text
+    assert [x["status"] for x in r.json()["results"]] == ["assigned"]
+
+    resumen = _mesociclo(atleta_de_coach)
+    assert resumen["group_id"] is None
+    meso = atleta_de_coach.get(f"/mesocycles/{resumen['id']}").json()
+    series = [s for ses in meso["sessions"] for s in ses["sets"]]
+    assert {(s["prescribed_weight"], s["prescribed_percentage"]) for s in series} == {(80, 80)}
+    assert meso["sessions"][0]["scheduled_date"] == str(SALIDA)
+
+
+def test_asignar_al_atleta_otra_vez_en_la_misma_fecha_no_lo_duplica(coach, atleta_de_coach, plantilla):
+    assert _asignar_a_atleta(coach, atleta_de_coach, plantilla).status_code == 200
+    r = _asignar_a_atleta(coach, atleta_de_coach, plantilla)
+    assert r.status_code == 200 and r.json()["results"][0]["status"] == "skipped"
+    assert len([m for m in atleta_de_coach.get(f"/users/{atleta_de_coach.id}/mesocycles/").json() if m["name"] == "Fuerza base"]) == 1
+
+
+def test_al_atleta_sin_marca_se_le_avisa(coach, atleta_de_coach, plantilla):
+    r = _asignar_a_atleta(coach, atleta_de_coach, plantilla)
+    assert r.json()["results"][0]["missing_prs"] == ["Back Squat"]
+
+
+def test_el_plan_vacio_el_atleta_ajeno_y_el_plan_ajeno_se_rechazan(coach, atleta_de_coach, plantilla, dueno_de_box):
+    vacio = coach.post("/plans/", json={"name": "Vacío", "discipline": "CrossFit", "weeks_count": 1, "training_days": [0]}).json()
+    assert _asignar_a_atleta(coach, atleta_de_coach, vacio).status_code == 400
+    # otro coach no puede asignar a un atleta que no es suyo, ni usar un plan que no es suyo
+    assert _asignar_a_atleta(dueno_de_box, atleta_de_coach, plantilla).status_code in (403, 404)
+
+
+def test_un_atleta_no_puede_asignarse_planes_a_si_mismo(atleta_de_coach, plantilla):
+    assert _asignar_a_atleta(atleta_de_coach, atleta_de_coach, plantilla).status_code == 403

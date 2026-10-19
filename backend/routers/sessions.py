@@ -10,6 +10,7 @@ from backend.core.security import (
     ensure_can_manage_mesocycle,
     ensure_owner_or_coach,
     ensure_owner_or_coach_editable,
+    ocultar_borrador_al_atleta,
     get_current_user,
     limiter,
     require_coach,
@@ -142,6 +143,7 @@ def log_sets_in_bulk(
     if not sesion:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
     ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(sesion.mesocycle, current_user)
 
     ids = {entrada.set_id for entrada in req.sets}
     series = {
@@ -179,6 +181,7 @@ def complete_session(
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
     ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(sesion.mesocycle, current_user)
 
     # Lo prescrito queda con las marcas de HOY: una vez completada ya no se recalcula.
     if sesion.mesocycle.user_id:
@@ -229,6 +232,7 @@ def uncomplete_session(
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
     ensure_owner_or_coach(db, sesion.mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(sesion.mesocycle, current_user)
 
     sesion.status = "pending"
     sesion.completed_date = None
@@ -269,6 +273,7 @@ def adapt_session_to_available_time(
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
 
     ensure_owner_or_coach(db, original.mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(original.mesocycle, current_user)
 
     if original.parent_session_id is not None:
         raise HTTPException(

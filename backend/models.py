@@ -207,6 +207,9 @@ class Mesocycle(Base):
     # el dueño puede agregar/editar/borrar series de un mesociclo así -- uno prescrito por un
     # coach sigue siendo editable solo por el coach (ver ensure_owner_or_coach_editable).
     is_self_managed = Column(Boolean, default=False, nullable=False, server_default="false")
+    # true = borrador: lo armó la IA y el coach todavía lo está revisando. El atleta dueño NO lo ve
+    # ni puede registrar nada en él hasta que el coach lo publique (ver ensure_can_view_mesocycle).
+    is_draft = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # --- CLASES DEL BOX (ver BoxClass) ---
     # Programación de una clase: user_id=None y class_id=la clase. Sus sesiones son el contenido

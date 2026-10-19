@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models, schemas
-from backend.core.security import ensure_owner_or_coach, ensure_owner_or_coach_editable, get_current_user
+from backend.core.security import (
+    ensure_owner_or_coach,
+    ensure_owner_or_coach_editable,
+    get_current_user,
+    ocultar_borrador_al_atleta,
+)
 from backend.database import get_db
 from backend.services.exercises import clean_coach_note
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
@@ -155,6 +160,7 @@ def log_set_performance(
         raise HTTPException(status_code=404, detail="Serie no encontrada")
 
     ensure_owner_or_coach(db, db_set.session.mesocycle.user_id, current_user)
+    ocultar_borrador_al_atleta(db_set.session.mesocycle, current_user)
 
     db_set.actual_reps = log.actual_reps
     db_set.actual_weight = log.actual_weight
