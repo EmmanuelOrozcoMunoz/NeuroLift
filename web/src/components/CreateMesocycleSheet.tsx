@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Button, Field, Segmented, Sheet, Stepper } from "@/components/ui";
+import { mensajeConAvisos } from "@/lib/ia";
 import { WEEKDAY_NAMES, WeekdayPicker } from "@/components/WeekdayPicker";
 import {
   useCreateManualMesocycle,
@@ -99,12 +100,21 @@ export function CreateMesocycleSheet({
       if (target.type === "athlete") {
         generateAI.mutate(
           { ...aiBase, user_id: target.id },
-          { onSuccess: () => onOk("¡Mesociclo generado con IA!"), onError: onErr },
+          { onSuccess: (r) => onOk(mensajeConAvisos("¡Mesociclo generado con IA!", r.advertencias)), onError: onErr },
         );
       } else {
         generateAIGroup.mutate(
           { ...aiBase, group_id: target.id },
-          { onSuccess: (r) => onOk(r.message), onError: onErr },
+          {
+            onSuccess: (r) =>
+              onOk(
+                mensajeConAvisos(
+                  r.message,
+                  r.results.flatMap((x) => (x.advertencias ?? []).map((aviso) => `${x.full_name}: ${aviso}`)),
+                ),
+              ),
+            onError: onErr,
+          },
         );
       }
     }

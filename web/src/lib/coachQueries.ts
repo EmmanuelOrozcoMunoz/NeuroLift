@@ -4,6 +4,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import type {
+  AIGenerateResponse,
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
   AthleteActivity,
@@ -288,7 +289,7 @@ export function useGenerateAIMesocycle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: AIGenerateSmartPayload) =>
-      apiFetch<MessageResponse>("/ai/generate-smart-mesocycle/", { method: "POST", body }),
+      apiFetch<AIGenerateResponse>("/ai/generate-smart-mesocycle/", { method: "POST", body }),
     onSuccess: (_data, vars) =>
       void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycles(vars.user_id) }),
   });

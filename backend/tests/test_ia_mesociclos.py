@@ -19,6 +19,7 @@ def gemini(monkeypatch):
     falso.llamadas = []
     falso.error = None
     falso.wod = None   # el WOD que devuelve la IA en cada sesión (None = sin WOD)
+    falso.extra_sesion = {}   # campos extra de cada sesión: warmup_notes, block_order...
     falso.ejercicios = [
         {"exercise_name": "Back Squat", "prescribed_sets": 3, "prescribed_reps": 5, "rpe_target": 8,
          "prescribed_percentage": 80, "block": "strength"}
@@ -29,7 +30,8 @@ def gemini(monkeypatch):
         if falso.error:
             raise RuntimeError(falso.error)
         return {"weeks": [{"sessions": [
-            {"scheduled_date": f, "athlete_notes": "IA", "wod": falso.wod, "exercises": [dict(e) for e in falso.ejercicios]}
+            {"scheduled_date": f, "athlete_notes": "IA", "wod": falso.wod, "exercises": [dict(e) for e in falso.ejercicios],
+             **falso.extra_sesion}
             for f in kw["session_dates"]
         ]}]}
 
