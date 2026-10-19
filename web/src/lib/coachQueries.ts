@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import type {
   AIGenerateResponse,
@@ -28,6 +28,8 @@ import type {
   MessageResponse,
   PlanCreatePayload,
   PlanGenerateAIPayload,
+  PlanImportConfirmPayload,
+  PlanImportPreviewResponse,
   PlanExerciseUpdatePayload,
   PlanSetCreatePayload,
   PlanSummary,
@@ -385,6 +387,22 @@ export function useCreatePlan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: PlanCreatePayload) => apiFetch<PlanSummary>("/plans/", { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
+  });
+}
+
+/** Lee un PDF, Word o Excel con un plan y devuelve cómo quedaría. No guarda nada (usa IA: puede tardar). */
+export function usePreviewPlanImport() {
+  return useMutation({
+    mutationFn: (file: File) => apiUpload<PlanImportPreviewResponse>("/plan-import/preview", file),
+  });
+}
+
+/** Crea el plan (en borrador) con lo que devolvió la vista previa. */
+export function useConfirmPlanImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PlanImportConfirmPayload) => apiFetch<PlanSummary>("/plan-import/confirm", { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: coachKeys.myPlans }),
   });
 }
