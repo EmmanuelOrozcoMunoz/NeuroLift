@@ -100,7 +100,7 @@ export function CreateMesocycleSheet({
       if (target.type === "athlete") {
         generateAI.mutate(
           { ...aiBase, user_id: target.id },
-          { onSuccess: (r) => onOk(mensajeConAvisos("¡Mesociclo generado con IA!", r.advertencias)), onError: onErr },
+          { onSuccess: (r) => onOk(mensajeConAvisos("¡Mesociclo generado en borrador! Revísalo y publícalo para que tu atleta lo vea.", r.advertencias)), onError: onErr },
         );
       } else {
         generateAIGroup.mutate(

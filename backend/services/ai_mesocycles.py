@@ -290,7 +290,12 @@ def construir_mesociclo_inteligente(
     if not fechas:
         raise RuntimeError("Selecciona al menos un día de entrenamiento.")
 
-    meso = models.Mesocycle(user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date)
+    # Individual: queda en borrador para que el coach lo revise antes de que el atleta lo vea. La
+    # generación grupal sigue publicándose directo (pasará a plantilla + asignar, que ya es revisable).
+    meso = models.Mesocycle(
+        user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date,
+        is_draft=group_id is None,
+    )
     db.add(meso)
     db.flush()
 

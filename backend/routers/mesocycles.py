@@ -138,6 +138,23 @@ def _build_manual_mesocycle(
     return {"mesocycle_id": str(nuevo_meso.id), "total_sessions": sesiones_creadas}
 
 
+@router.post("/{mesocycle_id}/publish", response_model=schemas.MessageResponse)
+def publish_mesocycle(
+    mesocycle_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Publica un mesociclo en borrador: desde ese momento el atleta lo ve y puede registrar en él.
+    Es idempotente: publicar uno que ya estaba publicado no cambia nada."""
+    meso = db.query(models.Mesocycle).filter(
+        models.Mesocycle.id == mesocycle_id, models.Mesocycle.is_template == False  # noqa: E712
+    ).first()
+    if not meso:
+        raise HTTPException(status_code=404, detail="Mesociclo no encontrado")
+    ensure_can_manage_mesocycle(db, meso, current_user)
+    meso.is_draft = False
+    db.commit()
+    return {"message": "Mesociclo publicado: tu atleta ya lo ve."}
+
+
 @router.delete("/{mesocycle_id}")
 def delete_mesocycle(
     mesocycle_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
