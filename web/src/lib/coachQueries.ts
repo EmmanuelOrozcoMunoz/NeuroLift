@@ -16,6 +16,7 @@ import type {
   GroupBulkUpdatePayload,
   GroupBulkWodFormatPayload,
   GroupBulkBlockNotesPayload,
+  GroupDayResponse,
   GroupBulkWodNotesPayload,
   GroupDetail,
   GroupMesocycleProgram,
@@ -170,6 +171,21 @@ export function useGroupMesocycles(groupId: string | undefined): UseQueryResult<
     queryKey: coachKeys.groupMesocycles(groupId ?? "none"),
     queryFn: () => apiFetch<GroupMesocycleProgram[]>(`/groups/${groupId}/mesocycles`),
     enabled: Boolean(groupId),
+  });
+}
+
+/** Programa UN día para todo el grupo desde el calendario (sin armar un mesociclo). Devuelve el programa
+ *  donde quedó el día; espera a que la lista de programas se actualice para poder abrirlo enseguida. */
+export function useCreateGroupDay(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (date: string) =>
+      apiFetch<GroupDayResponse>(`/groups/${groupId}/days`, { method: "POST", body: { date } }),
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: coachKeys.groupMesocycles(groupId) });
+      void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
+    },
   });
 }
 

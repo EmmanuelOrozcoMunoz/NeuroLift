@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { ExerciseFormFields, PesosWodFields, useExerciseDraft } from "@/components/ExerciseFormFields";
@@ -326,10 +326,23 @@ function BulkAddForm({
   );
 }
 
-function DateAccordion({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function DateAccordion({
+  label,
+  children,
+  defaultOpen = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** Viene abierta (y a la vista) cuando se llegó aquí tocando esa fecha en el calendario. */
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (defaultOpen) ref.current?.scrollIntoView({ block: "start" });
+  }, [defaultOpen]);
   return (
-    <div className="rounded-2xl border border-line bg-surface">
+    <div ref={ref} className="rounded-2xl border border-line bg-surface">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -351,12 +364,14 @@ function GroupDateSection({
   programName,
   programStartDate,
   session,
+  abierta,
   onFeedback,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   session: TrainingSession;
+  abierta?: boolean;
   onFeedback: (message: string) => void;
 }) {
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
@@ -373,7 +388,7 @@ function GroupDateSection({
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
 
   return (
-    <DateAccordion label={shortDate(session.scheduled_date)}>
+    <DateAccordion label={shortDate(session.scheduled_date)} defaultOpen={abierta}>
       {session.sets.length === 0 && !tieneMetcon && bloquesDeTexto.length === 0 && (
         <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>
       )}
@@ -463,12 +478,14 @@ function GroupWideTab({
   programName,
   programStartDate,
   referenceMesocycleId,
+  fechaAbierta,
   onFeedback,
 }: {
   groupId: string;
   programName: string;
   programStartDate: string;
   referenceMesocycleId: string;
+  fechaAbierta: string | null;
   onFeedback: (message: string) => void;
 }) {
   const { data, isPending, error, refetch } = useMesocycle(referenceMesocycleId);
@@ -492,6 +509,7 @@ function GroupWideTab({
           programName={programName}
           programStartDate={programStartDate}
           session={session}
+          abierta={session.scheduled_date === fechaAbierta}
           onFeedback={onFeedback}
         />
       ))}
@@ -543,6 +561,8 @@ export default function GroupProgramDetail() {
     startDate: string;
   }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fechaAbierta = searchParams.get("fecha");
   const decodedName = decodeURIComponent(programName ?? "");
   const programs = useGroupMesocycles(groupId);
   const deleteProgram = useDeleteGroupProgram(groupId!);
@@ -664,6 +684,7 @@ export default function GroupProgramDetail() {
           programName={program.name}
           programStartDate={program.start_date}
           referenceMesocycleId={referenceId}
+          fechaAbierta={fechaAbierta}
           onFeedback={setToast}
         />
       )}
