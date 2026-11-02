@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bloquesConTexto,
   cargaDelGrupo,
   coincideConLoProgramado,
   entradasComoProgramado,
@@ -10,9 +11,10 @@ import {
   groupSummary,
   gruposEnOrden,
   resumenRegistrado,
+  tieneContenido,
 } from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
-import type { SetItem } from "@/lib/types";
+import type { SetItem, TrainingSession } from "@/lib/types";
 
 function serie(reps: number, extra: Partial<SetItem> = {}): SetItem {
   return {
@@ -228,5 +230,54 @@ describe("al reordenar los bloques cada ejercicio conserva su propia prescripci�
       ["Power clean", "1 x 2 @ 97.5 kg (78%)"],
       ["Back Squat", "1 x 2 @ 100 kg (80%)"],
     ]);
+  });
+});
+
+function sesion(extra: Partial<TrainingSession> = {}): TrainingSession {
+  return {
+    id: "ses-1",
+    scheduled_date: "2031-01-06",
+    status: "pending",
+    sets: [],
+    block_order: null,
+    warmup_notes: null,
+    wod_notes: null,
+    wod_format: null,
+    block_notes: null,
+    ...extra,
+  } as unknown as TrainingSession;
+}
+
+describe("texto libre por bloque", () => {
+  it("una sesión vacía no tiene contenido", () => {
+    expect(tieneContenido(sesion())).toBe(false);
+    expect(bloquesConTexto(sesion())).toEqual([]);
+  });
+
+  it("una sesión solo con texto sí tiene contenido (el atleta la puede terminar)", () => {
+    expect(tieneContenido(sesion({ block_notes: { strength: "Sentadilla 5x5" } }))).toBe(true);
+    expect(tieneContenido(sesion({ warmup_notes: "Movilidad" }))).toBe(true);
+    expect(tieneContenido(sesion({ wod_notes: "21-15-9" }))).toBe(true);
+    expect(tieneContenido(sesion({ block_notes: { strength: "" } }))).toBe(false);
+  });
+
+  it("los bloques con texto salen en el orden del día y con su nombre", () => {
+    const s = sesion({
+      warmup_notes: "Movilidad",
+      wod_notes: "21-15-9",
+      block_notes: { accessory: "Remo 3x10", strength: "Sentadilla 5x5" },
+    });
+    expect(bloquesConTexto(s)).toEqual(["Calentamiento", "Fuerza", "Metabólico", "Accesorios"]);
+    expect(bloquesConTexto({ ...s, block_order: "strength,metcon,warmup,accessory" })).toEqual([
+      "Fuerza",
+      "Metabólico",
+      "Calentamiento",
+      "Accesorios",
+    ]);
+  });
+
+  it("un bloque con texto aparece en groupByBlock aunque no tenga ejercicios", () => {
+    const bloques = groupByBlock([], null, ["strength", "accessory"]);
+    expect(bloques.map((b) => b.key)).toEqual(["strength", "accessory"]);
   });
 });

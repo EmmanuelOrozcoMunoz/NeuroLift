@@ -20,7 +20,7 @@ FormatoWod = Literal["for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm",
 # una descripción): conservan sus saltos de línea. Todo lo demás es de una sola línea (nombres,
 # correos, títulos) y se colapsa a una línea. Se identifican por el nombre del campo, igual que
 # la contraseña, para que cada esquema nuevo con uno de estos nombres quede bien sin acordarse.
-CAMPOS_DE_TEXTO_LARGO = frozenset({"wod_notes", "warmup_notes", "coach_note", "athlete_notes", "description"})
+CAMPOS_DE_TEXTO_LARGO = frozenset({"wod_notes", "warmup_notes", "coach_note", "athlete_notes", "description", "block_text"})
 
 
 class SanitizedModel(BaseModel):

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, Time, ForeignKey, Text, Table, UniqueConstraint, Index
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Date, Time, ForeignKey, JSON, Text, Table, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -292,6 +292,11 @@ class Session(Base):
     # (Set: nombre + reps/peso fijos) no alcanza para capturar cómodamente un WOD de CrossFit.
     # No reemplaza a los Sets: coexiste con ellos, el atleta/coach usa el que le sirva.
     wod_notes = Column(Text, nullable=True)
+    # Texto libre de los DEMÁS bloques del día, uno por bloque ({"strength": "...", "accessory": "..."}):
+    # el coach programa cada bloque como un bloc de notas, sin estructurarlo en ejercicios y series. El
+    # calentamiento y el WOD usan warmup_notes y wod_notes. Ver services/block_notes.py. Convive con los
+    # Sets del mismo bloque: el atleta ve el texto y debajo los ejercicios.
+    block_notes = Column(JSON, nullable=True)
 
     # --- RESULTADO DEL WOD/METCON (formatos estándar de CrossFit) ---
     # El coach prescribe el formato (y opcionalmente un time cap/duración) al programar la
