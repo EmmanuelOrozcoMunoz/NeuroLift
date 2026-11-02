@@ -96,3 +96,16 @@ class MesocycleManualGroupCreate(SanitizedModel):
     start_date: date
     weeks_count: int = Field(..., ge=1, le=52)
     training_days: List[Dia]
+
+
+class AthleteDayCreate(SanitizedModel):
+    """Programar UN día de un atleta desde el calendario."""
+    date: date
+
+
+class AthleteDayResponse(BaseModel):
+    """La sesión creada (o la que ya existía) y el mesociclo donde vive, para abrirla en su editor."""
+    mesocycle_id: UUID
+    session_id: UUID
+    scheduled_date: date
+    created: bool  # false = ese día ya estaba programado

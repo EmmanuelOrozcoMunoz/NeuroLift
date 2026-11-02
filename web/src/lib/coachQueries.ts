@@ -5,6 +5,7 @@ import { apiFetch, apiUpload } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import type {
   AIGenerateResponse,
+  AthleteDayResponse,
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
   AthleteActivity,
@@ -172,6 +173,20 @@ export function useGroupMesocycles(groupId: string | undefined): UseQueryResult<
     queryKey: coachKeys.groupMesocycles(groupId ?? "none"),
     queryFn: () => apiFetch<GroupMesocycleProgram[]>(`/groups/${groupId}/mesocycles`),
     enabled: Boolean(groupId),
+  });
+}
+
+/** Programa UN día de un atleta desde el calendario (sin armar un mesociclo). Devuelve la sesión para abrirla
+ *  en su editor; invalida el detalle del mesociclo para que el editor ya la encuentre. */
+export function useCreateAthleteDay(athleteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (date: string) =>
+      apiFetch<AthleteDayResponse>(`/users/${athleteId}/days`, { method: "POST", body: { date } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
+      await queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
+    },
   });
 }
 

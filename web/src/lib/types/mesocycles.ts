@@ -72,6 +72,15 @@ export interface ManualMesocycleGroupPayload {
   training_days: Weekday[];
 }
 
+/** Respuesta de POST /users/{id}/days: la sesión creada (o la que ya existía) y el mesociclo donde vive. */
+export interface AthleteDayResponse {
+  mesocycle_id: string;
+  session_id: string;
+  scheduled_date: string;
+  /** false = ese día ya estaba programado */
+  created: boolean;
+}
+
 /** Respuesta de POST /ai/generate-smart-mesocycle/. `advertencias`: lo que la IA hizo mal y el servidor
  *  corrigió o descartó (p. ej. un kg sin marca de 1RM) para que el coach lo revise; `uso`: tokens gastados. */
 export interface AIGenerateResponse {
