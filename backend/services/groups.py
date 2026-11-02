@@ -1,13 +1,14 @@
 """Programas de grupo: clonar lo programado a un miembro nuevo y aplicar a TODOS los atletas de
 un programa un cambio de ejercicio (añadir, actualizar, eliminar). Sin HTTP ni commit: los routers
 validan que el coach sea dueño del grupo, llaman aquí, hacen commit y arman el mensaje."""
-from datetime import date
+from datetime import date, timedelta
 from typing import List
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models
+from backend.core.errors import SolicitudInvalida
 from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.prs import get_athlete_prs, resolve_weight_from_percentage
 from backend.services.sets import FilaSerie, clonar_set, filas_de, reservar_orden
@@ -307,6 +308,14 @@ def retirar_miembro(db: Session, grupo: models.Group, user_id: UUID, accion: str
 PROGRAMA_DIARIO_DEL_GRUPO = "Programación diaria"
 
 
+def validar_fecha_programable(fecha: date) -> None:
+    """Programar un día desde el calendario no acepta fechas absurdas (un toque equivocado o una petición
+    manipulada): de hace poco más de un año a dos años hacia adelante."""
+    hoy = date.today()
+    if not (hoy - timedelta(days=400) <= fecha <= hoy + timedelta(days=800)):
+        raise SolicitudInvalida("Esa fecha está demasiado lejos. Elige una dentro de los próximos dos años.")
+
+
 def programar_dia_del_grupo(db: Session, grupo: models.Group, fecha: date) -> dict:
     """Crea (sin commit) la sesión de `fecha` para CADA miembro del grupo dentro de su programa diario.
 
@@ -357,3 +366,51 @@ def programar_dia_del_grupo(db: Session, grupo: models.Group, fecha: date) -> di
         "created": creadas > 0,
         "athletes": len(miembros),
     }
+
+
+def programar_dia_de_atleta(db: Session, atleta: models.User, fecha: date) -> dict:
+    """Crea (sin commit) la sesión de `fecha` de UN atleta dentro de su programa individual "Programación diaria".
+
+    Es el equivalente, para un atleta suelto, de `programar_dia_del_grupo`: el programa se crea la primera vez y
+    cada día nuevo cae ahí. Idempotente: si ese día ya existe se devuelve la misma sesión (`created: False`). A
+    diferencia del programa de grupo, aquí no hay una clave (nombre + inicio) que cuidar, así que la fecha de
+    inicio sí se adelanta si se programa un día anterior (el atleta ve sus semanas contadas desde el primer día)."""
+    meso = (
+        db.query(models.Mesocycle)
+        .filter(
+            models.Mesocycle.user_id == atleta.id,
+            models.Mesocycle.group_id.is_(None),
+            models.Mesocycle.name == PROGRAMA_DIARIO_DEL_GRUPO,
+            models.Mesocycle.is_template == False,  # noqa: E712
+            models.Mesocycle.is_self_managed == False,  # noqa: E712
+            models.Mesocycle.is_class_log == False,  # noqa: E712
+            models.Mesocycle.class_id.is_(None),
+        )
+        .order_by(models.Mesocycle.created_at)
+        .first()
+    )
+    if meso is None:
+        meso = models.Mesocycle(
+            user_id=atleta.id, name=PROGRAMA_DIARIO_DEL_GRUPO, discipline="General", start_date=fecha
+        )
+        db.add(meso)
+        db.flush()
+
+    sesion = (
+        db.query(models.Session)
+        .filter(
+            models.Session.mesocycle_id == meso.id,
+            models.Session.scheduled_date == fecha,
+            models.Session.parent_session_id.is_(None),
+        )
+        .first()
+    )
+    creada = sesion is None
+    if creada:
+        sesion = models.Session(mesocycle_id=meso.id, scheduled_date=fecha, status="pending", athlete_notes="")
+        db.add(sesion)
+        db.flush()
+    meso.start_date = min(meso.start_date, fecha)
+    meso.end_date = max(meso.end_date or fecha, fecha)
+
+    return {"mesocycle_id": meso.id, "session_id": sesion.id, "scheduled_date": fecha, "created": creada}

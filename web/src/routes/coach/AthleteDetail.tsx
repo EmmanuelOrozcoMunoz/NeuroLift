@@ -7,6 +7,7 @@ import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
+import { AthleteCalendar } from "@/components/AthleteCalendar";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
@@ -223,6 +224,17 @@ export default function AthleteDetail() {
           </div>
         )}
       </Card>
+
+      {/* Igual que los mesociclos, el calendario es solo de atletas con coach personal y fuera de un grupo
+          (los de un grupo se programan desde el calendario del grupo) */}
+      {!myGroup && athlete?.coach_id && (
+        <>
+          <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Calendario</p>
+          <div className="mb-5">
+            <AthleteCalendar athleteId={athleteId!} onError={setToast} />
+          </div>
+        </>
+      )}
 
       <div className="mb-2 flex items-baseline justify-between">
         <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>

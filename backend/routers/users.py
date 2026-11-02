@@ -20,6 +20,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
+from backend.services.groups import programar_dia_de_atleta, validar_fecha_programable
 from backend.services.plans import asignar_plan_a_atleta, obtener_plan_propio
 from backend.services.prs import find_personal_record, fit_level_lift_for
 from backend.wod_scoring import format_wod_summary
@@ -362,6 +363,28 @@ def asignar_plan_a_un_atleta(
     else:
         mensaje = f"{atleta.full_name} ya tenía el plan '{plan.name}' en esa fecha."
     return {"message": mensaje, "results": [resultado]}
+
+
+@router.post("/users/{user_id}/days", response_model=schemas.AthleteDayResponse)
+def programar_un_dia_del_atleta(
+    user_id: UUID,
+    req: schemas.AthleteDayCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Programa UN día de un atleta del coach desde el calendario, sin armar un mesociclo completo. La sesión
+    vacía cae en su programa "Programación diaria", que el coach llena en el editor de sesión de siempre.
+    Idempotente: pedir un día que ya existe devuelve la misma sesión (`created: false`)."""
+    ensure_owner_or_coach(db, user_id, current_user)
+    atleta = db.query(models.User).filter(models.User.id == user_id).first()
+    if not atleta:
+        raise HTTPException(status_code=404, detail="Atleta no encontrado")
+    ensure_has_personal_coach([atleta])
+    validar_fecha_programable(req.date)
+
+    resultado = programar_dia_de_atleta(db, atleta, req.date)
+    db.commit()
+    return resultado
 
 
 @router.post("/users/{user_id}/records/")
