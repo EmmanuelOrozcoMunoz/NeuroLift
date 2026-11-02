@@ -13,7 +13,15 @@ import { apiFetch } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth";
 import { daysFromToday, formatSeconds, longDate, parseApiDate, relativeDay, todayIso, toApiDate } from "@/lib/dates";
 import { queryKeys, useMesocycles } from "@/lib/queries";
-import { cargaDelGrupo, gruposEnOrden, isSetLogged, sessionProgress, splitSessions } from "@/lib/sessions";
+import {
+  bloquesConTexto,
+  cargaDelGrupo,
+  gruposEnOrden,
+  isSetLogged,
+  sessionProgress,
+  splitSessions,
+  tieneContenido,
+} from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
@@ -83,7 +91,7 @@ export default function Today() {
       (item) =>
         daysFromToday(item.session.scheduled_date) < 0 &&
         item.session.status !== "completed" &&
-        item.session.sets.length > 0,
+        tieneContenido(item.session),
     )
     .slice(-2);
 
@@ -249,7 +257,9 @@ function TodayHero({ item }: { item: SessionRef }) {
         <div className="min-w-0">
           <p className="truncate text-sm text-muted">{mesocycleName}</p>
           <p className="mt-0.5 text-xl font-extrabold tracking-tight">
-            {grupos.length > 0 ? `${grupos.length} ${grupos.length === 1 ? "ejercicio" : "ejercicios"}` : "Sesión libre"}
+            {grupos.length > 0
+              ? `${grupos.length} ${grupos.length === 1 ? "ejercicio" : "ejercicios"}`
+              : bloquesConTexto(session).join(" · ") || "Sesión libre"}
           </p>
         </div>
         {completada && (

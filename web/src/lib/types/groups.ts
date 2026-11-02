@@ -40,6 +40,15 @@ export interface GroupBulkWodNotesPayload {
   wod_notes: string | null;
 }
 
+/** Body de POST /groups/{id}/sessions/bulk-set-block-notes. `block_text` vacío quita el texto del bloque. */
+export interface GroupBulkBlockNotesPayload {
+  program_name: string;
+  program_start_date: string;
+  scheduled_date: string;
+  block: string;
+  block_text: string;
+}
+
 export interface GroupMember {
   id: string;
   full_name: string;

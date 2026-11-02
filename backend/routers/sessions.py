@@ -16,6 +16,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
+from backend.services.block_notes import aplicar_block_notes
 from backend.services.exercises import clean_ai_block, get_or_create_exercise
 from backend.services.prs import actualizar_cargas_por_porcentaje, get_athlete_prs, normalize_exercise_name
 
@@ -94,6 +95,8 @@ def update_session_meta(
         sesion.warmup_notes = req.warmup_notes or None
     if req.wod_notes is not None:
         sesion.wod_notes = req.wod_notes or None
+    if req.block_notes is not None:
+        aplicar_block_notes(sesion, req.block_notes)
     db.commit()
     db.refresh(sesion)
     return sesion

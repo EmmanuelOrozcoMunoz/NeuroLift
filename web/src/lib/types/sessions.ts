@@ -59,6 +59,9 @@ export interface TrainingSession {
   /** Descripción libre del WOD en texto plano (ej. "21-15-9 thrusters 42kg, pull-ups") — para
    *  cuando el esquema de ejercicios/series (nombre + reps/peso fijos) no alcanza. */
   wod_notes: string | null;
+  /** Texto libre por bloque (fuerza, accesorios...): el coach programa cada bloque como un bloc de
+   *  notas. El calentamiento y el WOD usan warmup_notes y wod_notes. */
+  block_notes: Record<string, string> | null;
   /** El coach lo prescribe (PUT /sessions/{id}/wod-format); el atleta reporta el resultado al
    *  completar la sesión. null = esta sesión no tiene un WOD con formato de puntaje formal. */
   wod_format: WodFormat | null;

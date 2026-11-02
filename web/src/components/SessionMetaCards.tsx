@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Card } from "@/components/ui";
-import { blockLabel } from "@/lib/blocks";
+import { TEXT_BLOCK_KEYS, blockLabel } from "@/lib/blocks";
 import type { TrainingSession } from "@/lib/types";
 
 /**
@@ -133,5 +133,97 @@ export function BlockOrderEditor({
         ))}
       </div>
     </Envoltorio>
+  );
+}
+
+/** El texto libre de UN bloque (fuerza, accesorios...) como bloc de notas: vive DENTRO del bloque, igual
+ *  que el del calentamiento, así que sigue al bloque si se reordena y el atleta lo ve bajo su título.
+ *  Convive con los ejercicios estructurados que ya tenga el bloque. Guarda al perder el foco, sin botón
+ *  aparte. `guardar` dice CÓMO se guarda (una sesión, un día de plan o todo un grupo); un texto vacío
+ *  quita el bloque. */
+export function BlockNotesCard({
+  blockKey,
+  value,
+  guardar,
+  onSaved,
+  onRemoved,
+}: {
+  blockKey: string;
+  value: string | null | undefined;
+  guardar: (texto: string, alTerminar: () => void) => void;
+  onSaved: () => void;
+  /** Se llama al quitar el texto, para que el editor deje de forzar el bloque si no tiene ejercicios. */
+  onRemoved: () => void;
+}) {
+  const [texto, setTexto] = useState(value ?? "");
+  const etiqueta = blockLabel(blockKey);
+
+  function alPerderElFoco() {
+    if (texto === (value ?? "")) return;
+    guardar(texto.trim(), onSaved);
+  }
+
+  function quitar() {
+    if (texto.trim() && !window.confirm(`¿Borrar el texto de ${etiqueta}?`)) return;
+    setTexto("");
+    if (value) guardar("", () => {});
+    onRemoved();
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-muted">📝 Escribir {etiqueta} como texto</p>
+        <button
+          type="button"
+          onClick={quitar}
+          className="rounded-lg p-1.5 text-danger active:bg-danger/10"
+          aria-label={`Borrar el texto de ${etiqueta}`}
+        >
+          <IconTrash className="h-4 w-4" />
+        </button>
+      </div>
+      <textarea
+        rows={5}
+        maxLength={2000}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={alPerderElFoco}
+        placeholder="Escríbelo como te resulte cómodo. Ej. Back Squat 5x5 @80%, Press de banca 4x6..."
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+      />
+    </Card>
+  );
+}
+
+/** Botones para añadir el texto de un bloque que todavía no está en el día. */
+export function AddTextBlockButtons({
+  presentes,
+  onAdd,
+  bloques = TEXT_BLOCK_KEYS,
+}: {
+  presentes: readonly string[];
+  onAdd: (blockKey: string) => void;
+  /** Los bloques que se pueden añadir (por defecto, los que usan block_notes). */
+  bloques?: readonly string[];
+}) {
+  const faltantes = bloques.filter((key) => !presentes.includes(key));
+  if (faltantes.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Añadir un bloque de texto</p>
+      <div className="flex flex-wrap gap-2">
+        {faltantes.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onAdd(key)}
+            className="rounded-xl border border-dashed border-line bg-surface px-3 py-2 text-sm font-bold active:bg-surface-2"
+          >
+            + {blockLabel(key)}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

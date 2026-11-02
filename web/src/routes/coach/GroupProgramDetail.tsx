@@ -4,12 +4,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { ExerciseFormFields, PesosWodFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
+import { AddTextBlockButtons, BlockNotesCard } from "@/components/SessionMetaCards";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
 import {
   useDeleteGroupProgram,
   useGroupBulkAdd,
+  useGroupBulkSetBlockNotes,
   useGroupBulkDelete,
   useGroupBulkSetWodFormat,
   useGroupBulkSetWodNotes,
@@ -17,6 +19,7 @@ import {
   useGroupMesocycles,
   useRemoveAthleteFromProgram,
 } from "@/lib/coachQueries";
+import { TEXT_BLOCK_KEYS } from "@/lib/blocks";
 import { shortDate } from "@/lib/dates";
 import {
   camposComunes,
@@ -357,18 +360,52 @@ function GroupDateSection({
   onFeedback: (message: string) => void;
 }) {
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
-  const bloques = groupByBlock(session.sets, session.block_order, forzarMetcon);
+  // Bloques con texto libre (calentamiento, fuerza, accesorios...), los que ya tienen texto y los recién añadidos
+  const [bloquesDeTexto, setBloquesDeTexto] = useState<string[]>([
+    ...(session.warmup_notes ? ["warmup"] : []),
+    ...Object.keys(session.block_notes ?? {}),
+  ]);
+  const bulkSetBlockNotes = useGroupBulkSetBlockNotes(groupId);
+  const bloques = groupByBlock(session.sets, session.block_order, [
+    ...(forzarMetcon ? ["metcon"] : []),
+    ...bloquesDeTexto,
+  ]);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
 
   return (
     <DateAccordion label={shortDate(session.scheduled_date)}>
-      {session.sets.length === 0 && !tieneMetcon && (
+      {session.sets.length === 0 && !tieneMetcon && bloquesDeTexto.length === 0 && (
         <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>
       )}
       {bloques.map((bloque, indiceBloque) => (
         <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
           {bloque.label && (
             <p className="text-xs font-semibold tracking-wide text-muted uppercase">{bloque.label}</p>
+          )}
+          {bloque.key !== null && bloquesDeTexto.includes(bloque.key) && (
+            <BlockNotesCard
+              blockKey={bloque.key}
+              value={bloque.key === "warmup" ? session.warmup_notes : session.block_notes?.[bloque.key]}
+              guardar={(texto, alTerminar) =>
+                bulkSetBlockNotes.mutate(
+                  {
+                    program_name: programName,
+                    program_start_date: programStartDate,
+                    scheduled_date: session.scheduled_date,
+                    block: bloque.key as string,
+                    block_text: texto,
+                  },
+                  {
+                    onSuccess: (r) => {
+                      onFeedback(r.message);
+                      alTerminar();
+                    },
+                  },
+                )
+              }
+              onSaved={() => undefined}
+              onRemoved={() => setBloquesDeTexto((previos) => previos.filter((k) => k !== bloque.key))}
+            />
           )}
           {bloque.key === "metcon" && (
             <BulkWodBlockCard
@@ -412,6 +449,11 @@ function GroupDateSection({
           🔥 Añadir WOD a todo el grupo
         </button>
       )}
+      <AddTextBlockButtons
+        presentes={bloquesDeTexto}
+        bloques={["warmup", ...TEXT_BLOCK_KEYS]}
+        onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])}
+      />
     </DateAccordion>
   );
 }

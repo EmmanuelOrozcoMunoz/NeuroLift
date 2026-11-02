@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, get_current_user, limiter, require_coach
 from backend.database import get_db
+from backend.services.block_notes import aplicar_block_notes
 from backend.services.exercises import clean_coach_note, get_or_create_exercise
 from backend.services.plans import PLAN_EPOCH, actualizar_ejercicio_del_plan, adquirir_plan
 from backend.services.sets import filas_de, reservar_orden
@@ -423,6 +424,8 @@ def update_plan_session_meta(
         sesion.warmup_notes = req.warmup_notes or None
     if req.wod_notes is not None:
         sesion.wod_notes = req.wod_notes or None
+    if req.block_notes is not None:
+        aplicar_block_notes(sesion, req.block_notes)
     db.commit()
     db.refresh(sesion)
     return sesion

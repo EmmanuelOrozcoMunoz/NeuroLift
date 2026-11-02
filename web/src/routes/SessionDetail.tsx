@@ -21,7 +21,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { formatSeconds, longDate, relativeDay } from "@/lib/dates";
 import { useLeaveClass } from "@/lib/classQueries";
 import { useAdaptSession, useCompleteSession, useDeleteSession, useMesocycle, useUncompleteSession } from "@/lib/queries";
-import { groupByBlock, sessionProgress } from "@/lib/sessions";
+import { groupByBlock, sessionProgress, tieneContenido } from "@/lib/sessions";
 import { useWeightUnit } from "@/lib/units";
 import { WOD_FORMAT_LABELS, formatWodResult } from "@/lib/wod";
 import type { SessionCompletePayload } from "@/lib/types";
@@ -104,9 +104,11 @@ export default function SessionDetail() {
   const tieneWod = Boolean(activa.wod_notes) || activa.wod_format != null;
   // El texto del calentamiento vive en su bloque (como el del WOD): se fuerza el bloque para que
   // se vea aunque el coach no haya agregado ejercicios de calentamiento
+  const textoPorBloque = activa.block_notes ?? {};
   const bloques = groupByBlock(activa.sets, activa.block_order, [
     ...(tieneWod ? ["metcon"] : []),
     ...(activa.warmup_notes ? ["warmup"] : []),
+    ...Object.keys(textoPorBloque).filter((clave) => textoPorBloque[clave]),
   ]);
 
   function completarConResultado(wodResult?: SessionCompletePayload) {
@@ -263,7 +265,7 @@ export default function SessionDetail() {
         </div>
       )}
 
-      {activa.sets.length === 0 && !tieneWod && !activa.warmup_notes ? (
+      {!tieneContenido(activa) ? (
         <EmptyState title="Sin ejercicios asignados">
           {data?.is_self_managed
             ? "Todavía no has agregado ejercicios a esta sesión."
@@ -281,6 +283,11 @@ export default function SessionDetail() {
               {bloque.key === "warmup" && activa.warmup_notes && (
                 <Card className="mb-3">
                   <p className="text-sm leading-relaxed whitespace-pre-line">{activa.warmup_notes}</p>
+                </Card>
+              )}
+              {bloque.key !== null && bloque.key !== "warmup" && bloque.key !== "metcon" && textoPorBloque[bloque.key] && (
+                <Card className="mb-3">
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{textoPorBloque[bloque.key]}</p>
                 </Card>
               )}
               {bloque.key === "metcon" && wodCard}
@@ -320,7 +327,7 @@ export default function SessionDetail() {
         </Button>
       )}
 
-      {activa.sets.length > 0 && (
+      {tieneContenido(activa) && (
         <Button
           variant={completada ? "secondary" : "done"}
           full

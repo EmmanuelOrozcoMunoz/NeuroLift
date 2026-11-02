@@ -22,6 +22,10 @@ export const BLOCK_LABELS: Record<BlockKey, string> = {
   main: "Principal",
 };
 
+/** Los bloques cuyo texto libre vive en `Session.block_notes`. El calentamiento y el WOD usan sus
+ *  propios campos (warmup_notes y wod_notes, este último con su formato y temporizador). */
+export const TEXT_BLOCK_KEYS = ["strength", "weightlifting", "skills", "accessory", "main"] as const;
+
 /** Etiqueta legible de un bloque. Si es un valor desconocido (dato viejo o externo) lo muestra
  *  tal cual en vez de ocultarlo. */
 export function blockLabel(key: string | null | undefined): string {

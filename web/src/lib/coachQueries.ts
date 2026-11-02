@@ -15,6 +15,7 @@ import type {
   GroupBulkDeletePayload,
   GroupBulkUpdatePayload,
   GroupBulkWodFormatPayload,
+  GroupBulkBlockNotesPayload,
   GroupBulkWodNotesPayload,
   GroupDetail,
   GroupMesocycleProgram,
@@ -237,6 +238,17 @@ export function useGroupBulkSetWodNotes(groupId: string) {
   });
 }
 
+/** Escribe (o borra) el texto de UN bloque (fuerza, accesorios...) para TODO el grupo a la vez, en una
+ *  fecha dada: hermano de useGroupBulkSetWodNotes. */
+export function useGroupBulkSetBlockNotes(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupBulkBlockNotesPayload) =>
+      apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-block-notes`, { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
+  });
+}
+
 /** Fechas del grupo con un WOD prescrito — para elegir cuál ver en la tabla de posiciones. */
 export function useGroupWodDays(groupId: string | undefined): UseQueryResult<WodDaySummary[]> {
   return useQuery({
@@ -363,7 +375,12 @@ export function useUpdateSessionMeta(mesocycleId: string) {
       body,
     }: {
       sessionId: string;
-      body: { block_order?: string | null; warmup_notes?: string | null; wod_notes?: string | null };
+      body: {
+        block_order?: string | null;
+        warmup_notes?: string | null;
+        wod_notes?: string | null;
+        block_notes?: Record<string, string>;
+      };
     }) => apiFetch<TrainingSession>(`/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.mesocycle(mesocycleId) }),
   });
@@ -523,7 +540,12 @@ export function useUpdatePlanSessionMeta(planId: string) {
       body,
     }: {
       sessionId: string;
-      body: { block_order?: string | null; warmup_notes?: string | null; wod_notes?: string | null };
+      body: {
+        block_order?: string | null;
+        warmup_notes?: string | null;
+        wod_notes?: string | null;
+        block_notes?: Record<string, string>;
+      };
     }) => apiFetch<TrainingSession>(`/plans/${planId}/sessions/${sessionId}/meta`, { method: "PUT", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.plan(planId) }),
   });
