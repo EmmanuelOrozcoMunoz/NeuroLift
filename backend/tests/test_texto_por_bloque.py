@@ -211,3 +211,43 @@ def test_el_atleta_escribe_el_texto_de_sus_propios_entrenos_y_los_termina(atleta
     assert atleta_de_coach.post(f"/sessions/{sesion['id']}/complete").status_code == 200
     visto = atleta_de_coach.get(f"/mesocycles/{sesion['mesocycle_id']}").json()["sessions"][0]
     assert visto["status"] == "completed" and visto["block_notes"]["strength"] == "Sentadilla 5x5"
+
+
+# ------------------------------------------------------------------ orden de los bloques de un grupo
+
+def _orden_para_el_grupo(coach, g, orden, fecha=SALIDA):
+    return coach.post(f"/groups/{g['id']}/sessions/bulk-set-block-order", json={
+        "program_name": "Fuerza base", "program_start_date": str(SALIDA), "scheduled_date": str(fecha), "block_order": orden,
+    })
+
+
+def test_el_coach_ordena_los_bloques_de_un_dia_para_todo_el_grupo(coach, grupo, plantilla):
+    g, ana, beto = grupo
+    assert _asignar(coach, g, plantilla).status_code == 200
+    r = _orden_para_el_grupo(coach, g, "metcon, strength ,warmup,strength")
+    assert r.status_code == 200, r.text
+    assert [x["status"] for x in r.json()["results"]] == ["actualizado", "actualizado"]
+    for atleta in (ana, beto):
+        meso = atleta.get(f"/mesocycles/{_mesociclo(atleta)['id']}").json()
+        sesion = next(s for s in meso["sessions"] if s["scheduled_date"] == str(SALIDA))
+        assert sesion["block_order"] == "metcon,strength,warmup"       # sin espacios y sin repetidos
+    # un orden vacío vuelve al canónico
+    assert _orden_para_el_grupo(coach, g, "").status_code == 200
+    meso = ana.get(f"/mesocycles/{_mesociclo(ana)['id']}").json()
+    assert next(s for s in meso["sessions"] if s["scheduled_date"] == str(SALIDA))["block_order"] is None
+
+
+def test_un_orden_con_un_bloque_inexistente_se_rechaza_y_no_cambia_nada(coach, grupo, plantilla):
+    g, ana, _ = grupo
+    assert _asignar(coach, g, plantilla).status_code == 200
+    assert _orden_para_el_grupo(coach, g, "strength,inventado").status_code == 400
+    meso = ana.get(f"/mesocycles/{_mesociclo(ana)['id']}").json()
+    assert all(s["block_order"] in (None, "metcon,strength") for s in meso["sessions"])  # el de la plantilla, intacto
+
+
+def test_el_orden_del_grupo_respeta_fechas_sin_sesion_y_permisos(coach, grupo, plantilla, dueno_de_box):
+    g, *_ = grupo
+    assert _asignar(coach, g, plantilla).status_code == 200
+    r = _orden_para_el_grupo(coach, g, "strength,metcon", fecha=date(2031, 1, 1))
+    assert r.status_code == 200 and {x["status"] for x in r.json()["results"]} == {"sin sesión en esa fecha"}
+    assert _orden_para_el_grupo(dueno_de_box, g, "strength").status_code in (403, 404)

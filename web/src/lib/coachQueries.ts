@@ -16,6 +16,7 @@ import type {
   GroupBulkUpdatePayload,
   GroupBulkWodFormatPayload,
   GroupBulkBlockNotesPayload,
+  GroupBulkBlockOrderPayload,
   GroupDayResponse,
   GroupBulkWodNotesPayload,
   GroupDetail,
@@ -261,6 +262,16 @@ export function useGroupBulkSetBlockNotes(groupId: string) {
   return useMutation({
     mutationFn: (body: GroupBulkBlockNotesPayload) =>
       apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-block-notes`, { method: "POST", body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
+  });
+}
+
+/** Elige el orden de los bloques de una fecha para TODO el grupo a la vez. */
+export function useGroupBulkSetBlockOrder(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupBulkBlockOrderPayload) =>
+      apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-block-order`, { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
   });
 }

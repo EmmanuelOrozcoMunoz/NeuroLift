@@ -5,10 +5,10 @@ import { IconCamera } from "@/components/icons";
 import { Button, Field, SectionTitle } from "@/components/ui";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { IMAGE_ACCEPT, IMAGE_FORMAT_ERROR, isAcceptedImage } from "@/lib/images";
 import type { BoxRegisterPayload, MessageResponse } from "@/lib/types";
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 /**
  * Alta pública de un box. Crea el box (pendiente de aprobación) y la cuenta del dueño; luego
@@ -53,7 +53,7 @@ export default function RegisterBox() {
     event.target.value = "";
     if (!file) return;
     if (file.size > MAX_BYTES) return setError("La foto no puede pesar más de 5 MB.");
-    if (!ACCEPTED_TYPES.includes(file.type)) return setError("Formato no permitido. Usa JPG, PNG o WEBP.");
+    if (!isAcceptedImage(file)) return setError(IMAGE_FORMAT_ERROR);
     setError(null);
     setPhoto(file);
   }
@@ -125,13 +125,18 @@ export default function RegisterBox() {
             className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line bg-surface-2 text-muted active:bg-line"
             aria-label="Elegir foto del box"
           >
-            {preview ? <img src={preview} alt="" className="h-full w-full object-cover" /> : <IconCamera className="h-7 w-7" />}
+            {preview ? (
+              // Un HEIC no se puede mostrar en la mayoría de los navegadores: si falla, queda el ícono
+              <img src={preview} alt="" className="h-full w-full object-cover" onError={() => setPreview(null)} />
+            ) : (
+              <IconCamera className="h-7 w-7" />
+            )}
           </button>
           <div className="text-sm">
             <p className="font-semibold">Foto o logo del box</p>
-            <p className="text-muted">Opcional. JPG, PNG o WEBP, hasta 5 MB.</p>
+            <p className="text-muted">Opcional. JPG, PNG, WEBP o HEIC, hasta 5 MB.</p>
           </div>
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} />
+          <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={handlePhoto} />
         </div>
 
         <Field label="Nombre del box" required maxLength={100} value={form.box_name} onChange={set("box_name")} />

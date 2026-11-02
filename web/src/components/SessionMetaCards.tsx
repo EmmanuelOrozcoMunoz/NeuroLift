@@ -201,17 +201,23 @@ export function AddTextBlockButtons({
   presentes,
   onAdd,
   bloques = TEXT_BLOCK_KEYS,
+  titulo = "Añadir un bloque de texto",
+  extra,
 }: {
   presentes: readonly string[];
   onAdd: (blockKey: string) => void;
+  /** Título de la fila de botones. */
+  titulo?: string;
+  /** Botones propios de la pantalla (p. ej. el WOD o el ejercicio), con el mismo aspecto que los de bloque. */
+  extra?: ReactNode;
   /** Los bloques que se pueden añadir (por defecto, los que usan block_notes). */
   bloques?: readonly string[];
 }) {
   const faltantes = bloques.filter((key) => !presentes.includes(key));
-  if (faltantes.length === 0) return null;
+  if (faltantes.length === 0 && !extra) return null;
   return (
     <div>
-      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Añadir un bloque de texto</p>
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{titulo}</p>
       <div className="flex flex-wrap gap-2">
         {faltantes.map((key) => (
           <button
@@ -223,7 +229,12 @@ export function AddTextBlockButtons({
             + {blockLabel(key)}
           </button>
         ))}
+        {extra}
       </div>
     </div>
   );
 }
+
+/** El aspecto de un botón "añadir" de la fila de AddTextBlockButtons, para los botones extra. */
+export const CHIP_ANADIR =
+  "rounded-xl border border-dashed border-line bg-surface px-3 py-2 text-sm font-bold active:bg-surface-2";
