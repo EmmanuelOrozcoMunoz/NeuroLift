@@ -299,3 +299,61 @@ def retirar_miembro(db: Session, grupo: models.Group, user_id: UUID, accion: str
     ).all()
     aplicar_accion_a_programas(db, mesos, accion)
     return len(mesos)
+
+
+# El programa donde caen los días que el coach programa uno por uno desde el calendario del grupo. Es un
+# programa de grupo más (mismo nombre + fecha de inicio para todos los miembros), así que se edita con los
+# mismos editores y los atletas que se unen después lo reciben igual que cualquier otro.
+PROGRAMA_DIARIO_DEL_GRUPO = "Programación diaria"
+
+
+def programar_dia_del_grupo(db: Session, grupo: models.Group, fecha: date) -> dict:
+    """Crea (sin commit) la sesión de `fecha` para CADA miembro del grupo dentro de su programa diario.
+
+    Idempotente: si un miembro ya tiene sesión ese día no se le duplica, y el programa de cada miembro
+    se crea solo la primera vez. La fecha de inicio del programa NO se mueve cuando se programa un día
+    anterior: junto con el nombre es lo que identifica al programa, y debe seguir igual para todos."""
+    miembros = list(grupo.members)
+    existentes = (
+        db.query(models.Mesocycle)
+        .filter(models.Mesocycle.group_id == grupo.id, models.Mesocycle.name == PROGRAMA_DIARIO_DEL_GRUPO)
+        .order_by(models.Mesocycle.created_at)
+        .all()
+    )
+    por_atleta = {m.user_id: m for m in existentes}
+    inicio = existentes[0].start_date if existentes else fecha
+
+    creadas = 0
+    for atleta in miembros:
+        meso = por_atleta.get(atleta.id)
+        if meso is None:
+            meso = models.Mesocycle(
+                user_id=atleta.id,
+                group_id=grupo.id,
+                name=PROGRAMA_DIARIO_DEL_GRUPO,
+                discipline="General",
+                start_date=inicio,
+            )
+            db.add(meso)
+            db.flush()
+        ya_programado = (
+            db.query(models.Session.id)
+            .filter(
+                models.Session.mesocycle_id == meso.id,
+                models.Session.scheduled_date == fecha,
+                models.Session.parent_session_id.is_(None),
+            )
+            .first()
+        )
+        if not ya_programado:
+            db.add(models.Session(mesocycle_id=meso.id, scheduled_date=fecha, status="pending", athlete_notes=""))
+            creadas += 1
+        meso.end_date = max(meso.end_date or fecha, fecha)
+
+    return {
+        "program_name": PROGRAMA_DIARIO_DEL_GRUPO,
+        "program_start_date": inicio,
+        "scheduled_date": fecha,
+        "created": creadas > 0,
+        "athletes": len(miembros),
+    }

@@ -6,6 +6,9 @@ import { cx } from "@/components/ui";
 import { monthGrid, monthLabel, todayIso } from "@/lib/dates";
 import type { TrainingSession } from "@/lib/types";
 
+/** Lo único que el calendario necesita de una sesión (así también sirve para mostrar un grupo). */
+export type CalendarSession = Pick<TrainingSession, "id" | "mesocycle_id" | "scheduled_date" | "status">;
+
 const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 
 /**
@@ -17,8 +20,11 @@ const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 export function TrainingCalendar({
   sessions,
   onEmptyDayTap,
+  onDayTap,
 }: {
-  sessions: TrainingSession[];
+  sessions: CalendarSession[];
+  /** Si se pasa, tocar CUALQUIER día del mes (con sesión o sin ella) llama aquí en vez de abrir la sesión. */
+  onDayTap?: (iso: string) => void;
   /** Si se pasa, un día del mes actual sin sesión también se puede tocar (para que el atleta
    *  agregue ahí su propia rutina manual) en vez de quedar inerte. */
   onEmptyDayTap?: (iso: string) => void;
@@ -29,7 +35,7 @@ export function TrainingCalendar({
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
 
   const byDate = useMemo(() => {
-    const map = new Map<string, TrainingSession[]>();
+    const map = new Map<string, CalendarSession[]>();
     for (const session of sessions) {
       const list = map.get(session.scheduled_date) ?? [];
       list.push(session);
@@ -47,7 +53,7 @@ export function TrainingCalendar({
     });
   }
 
-  function handleSelectDay(daySessions: TrainingSession[]) {
+  function handleSelectDay(daySessions: CalendarSession[]) {
     if (daySessions.length === 0) return;
     const session = daySessions[0];
     navigate(`/entrenos/${session.mesocycle_id}/sesion/${session.id}`);
@@ -88,13 +94,18 @@ export function TrainingCalendar({
           const hasCompleted = daySessions.some((s) => s.status === "completed");
           const hasSession = daySessions.length > 0;
           const canTapEmpty = !hasSession && inMonth && Boolean(onEmptyDayTap);
+          const tocable = onDayTap ? inMonth || hasSession : hasSession || canTapEmpty;
 
           return (
             <button
               key={iso}
               type="button"
-              disabled={!hasSession && !canTapEmpty}
-              onClick={() => (hasSession ? handleSelectDay(daySessions) : onEmptyDayTap?.(iso))}
+              disabled={!tocable}
+              onClick={() => {
+                if (onDayTap) onDayTap(iso);
+                else if (hasSession) handleSelectDay(daySessions);
+                else onEmptyDayTap?.(iso);
+              }}
               className="flex flex-col items-center gap-1 py-0.5"
             >
               <span

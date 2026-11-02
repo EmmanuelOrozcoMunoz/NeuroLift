@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import List
 from uuid import UUID
 
@@ -18,6 +18,7 @@ from backend.services.groups import (
     agregar_ejercicio,
     aplicar_accion_a_programas,
     eliminar_ejercicio,
+    programar_dia_del_grupo,
     retirar_miembro,
     sesiones_por_mesociclo,
     sumar_miembros,
@@ -168,6 +169,30 @@ def delete_group(
     db.delete(grupo)
     db.commit()
     return {"message": "Grupo eliminado correctamente"}
+
+
+@router.post("/{group_id}/days", response_model=schemas.GroupDayResponse)
+def create_group_day(
+    group_id: UUID,
+    req: schemas.GroupDayCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Programa UN día para todo el grupo desde el calendario, sin armar un mesociclo completo. Cada
+    miembro recibe una sesión vacía ese día en el programa "Programación diaria" del grupo, que el coach
+    llena con los mismos editores de cualquier programa de grupo. Idempotente: pedir un día que ya
+    existe devuelve el mismo programa sin duplicar nada (`created: false`)."""
+    grupo = get_owned_group(db, group_id, current_user)
+    if not grupo.members:
+        raise SolicitudInvalida("El grupo no tiene atletas asignados")
+    ensure_has_personal_coach(grupo.members)
+    hoy = date.today()
+    if not (hoy - timedelta(days=400) <= req.date <= hoy + timedelta(days=800)):
+        raise SolicitudInvalida("Esa fecha está demasiado lejos. Elige una dentro de los próximos dos años.")
+
+    resultado = programar_dia_del_grupo(db, grupo, req.date)
+    db.commit()
+    return resultado
 
 
 @router.get("/{group_id}/mesocycles", response_model=List[schemas.GroupMesocycleProgram])
