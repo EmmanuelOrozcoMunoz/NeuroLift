@@ -49,6 +49,16 @@ export interface GroupBulkBlockNotesPayload {
   block_text: string;
 }
 
+/** Respuesta de POST /groups/{id}/days: el programa donde quedó el día, para abrirlo en su editor. */
+export interface GroupDayResponse {
+  program_name: string;
+  program_start_date: string;
+  scheduled_date: string;
+  /** false = ese día ya estaba programado para todo el grupo */
+  created: boolean;
+  athletes: number;
+}
+
 export interface GroupMember {
   id: string;
   full_name: string;

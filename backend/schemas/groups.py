@@ -174,6 +174,20 @@ class GroupSessionWodNotesUpdate(SanitizedModel):
     wod_notes: str | None = Field(None, max_length=2000)
 
 
+class GroupDayCreate(SanitizedModel):
+    """Programar UN día para todo el grupo desde el calendario."""
+    date: date
+
+
+class GroupDayResponse(BaseModel):
+    """El programa (nombre + fecha de inicio) donde quedó el día, para abrirlo en su editor."""
+    program_name: str
+    program_start_date: date
+    scheduled_date: date
+    created: bool  # false = ese día ya estaba programado para todo el grupo
+    athletes: int
+
+
 class GroupSessionBlockNotesUpdate(SanitizedModel):
     """El coach escribe el texto libre de UN bloque (fuerza, accesorios...) una sola vez para la sesión
     de una fecha dada, aplicado a TODOS los atletas del programa — igual que el texto del WOD."""

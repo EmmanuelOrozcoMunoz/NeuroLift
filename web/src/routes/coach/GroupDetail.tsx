@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
+import { GroupCalendar } from "@/components/GroupCalendar";
 import { CoverUploader } from "@/components/CoverImage";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
@@ -231,6 +232,15 @@ export default function GroupDetail() {
             </Card>
           ))}
         </div>
+      )}
+
+      {group.members.length > 0 && (
+        <>
+          <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Calendario</p>
+          <div className="mb-5">
+            <GroupCalendar groupId={groupId!} programs={programs.data ?? []} onError={setToast} />
+          </div>
+        </>
       )}
 
       <div className="mb-2 flex items-baseline justify-between gap-2">
