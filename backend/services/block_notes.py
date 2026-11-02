@@ -58,3 +58,19 @@ def aplicar_texto_de_bloque(sesion, bloque: str, texto: str) -> None:
         sesion.warmup_notes = clean_multiline(texto or "", MAX_CALENTAMIENTO) or None
     else:
         aplicar_block_notes(sesion, {bloque: texto})
+
+
+# Todos los bloques que puede tener un día, en su orden canónico (espejo de BLOCK_KEYS en el front).
+TODOS_LOS_BLOQUES = ("warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main")
+
+
+def limpiar_orden_de_bloques(texto: str | None) -> str | None:
+    """El orden de bloques que eligió el coach ("warmup,strength,metcon") listo para guardar: solo bloques
+    válidos y sin repetir. Un texto vacío quita el orden personalizado (vuelve el canónico). Un bloque que no
+    existe es un error del cliente, no algo que se descarta en silencio."""
+    piezas = [p.strip() for p in (texto or "").split(",") if p.strip()]
+    for pieza in piezas:
+        if pieza not in TODOS_LOS_BLOQUES:
+            raise SolicitudInvalida(f"El bloque '{pieza}' no existe.")
+    unicos = list(dict.fromkeys(piezas))
+    return ",".join(unicos) or None

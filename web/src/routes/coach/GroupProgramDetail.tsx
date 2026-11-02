@@ -4,7 +4,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { ExerciseFormFields, PesosWodFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
-import { AddTextBlockButtons, BlockNotesCard } from "@/components/SessionMetaCards";
+import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, CHIP_ANADIR } from "@/components/SessionMetaCards";
+import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
@@ -12,6 +13,7 @@ import {
   useDeleteGroupProgram,
   useGroupBulkAdd,
   useGroupBulkSetBlockNotes,
+  useGroupBulkSetBlockOrder,
   useGroupBulkDelete,
   useGroupBulkSetWodFormat,
   useGroupBulkSetWodNotes,
@@ -356,6 +358,24 @@ function DateAccordion({
   );
 }
 
+const CLAVE_FORM_EJERCICIO = "neurolift.grupo.formulario-de-ejercicio";
+
+function leerPreferencia(clave: string): string | null {
+  try {
+    return window.localStorage.getItem(clave);
+  } catch {
+    return null;
+  }
+}
+
+function guardarPreferencia(clave: string, valor: string): void {
+  try {
+    window.localStorage.setItem(clave, valor);
+  } catch {
+    // sin almacenamiento (modo privado, etc.): la pantalla funciona igual, solo no recuerda la elección
+  }
+}
+
 /** Una fecha del programa, para TODO el grupo -- lleva su propio estado de si el bloque
  *  Metabólico/WOD está "activado" para poder mostrarlo aunque todavía no tenga ejercicios
  *  estructurados ni descripción guardada (mismo criterio que SessionSetsEditor). */
@@ -381,16 +401,67 @@ function GroupDateSection({
     ...Object.keys(session.block_notes ?? {}),
   ]);
   const bulkSetBlockNotes = useGroupBulkSetBlockNotes(groupId);
+  const bulkSetBlockOrder = useGroupBulkSetBlockOrder(groupId);
+  // El formulario de ejercicio por ejercicio ocupa mucho: viene plegado, y lo que se elija se recuerda en este
+  // dispositivo (quien programa con ejercicios lo abre una vez y se queda así).
+  const [formAbierto, setFormAbierto] = useState(() => leerPreferencia(CLAVE_FORM_EJERCICIO) === "abierto");
+  const [ordenAbierto, setOrdenAbierto] = useState(false);
   const bloques = groupByBlock(session.sets, session.block_order, [
     ...(forzarMetcon ? ["metcon"] : []),
     ...bloquesDeTexto,
   ]);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
+  const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
+
+  const meta: MetaGuardado = {
+    guardar: (body, alTerminar) =>
+      bulkSetBlockOrder.mutate(
+        {
+          program_name: programName,
+          program_start_date: programStartDate,
+          scheduled_date: session.scheduled_date,
+          block_order: body.block_order ?? "",
+        },
+        {
+          onSuccess: (r) => {
+            onFeedback(r.message);
+            alTerminar();
+          },
+        },
+      ),
+    guardando: bulkSetBlockOrder.isPending,
+  };
+
+  function alternarFormulario() {
+    const siguiente = !formAbierto;
+    setFormAbierto(siguiente);
+    guardarPreferencia(CLAVE_FORM_EJERCICIO, siguiente ? "abierto" : "cerrado");
+  }
 
   return (
     <DateAccordion label={shortDate(session.scheduled_date)} defaultOpen={abierta}>
+      {blockKeys.length >= 2 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOrdenAbierto((v) => !v)}
+            className={CHIP_ANADIR}
+          >
+            🔀 {ordenAbierto ? "Cerrar el orden de los bloques" : "Ordenar los bloques"}
+          </button>
+          {ordenAbierto && (
+            <div className="mt-2">
+              <BlockOrderEditor
+                blockKeys={blockKeys}
+                meta={meta}
+                onSaved={() => onFeedback("¡Orden de bloques actualizado!")}
+              />
+            </div>
+          )}
+        </div>
+      )}
       {session.sets.length === 0 && !tieneMetcon && bloquesDeTexto.length === 0 && (
-        <p className="text-sm text-muted">Sin ejercicios en esta fecha.</p>
+        <p className="text-sm text-muted">Este día está vacío. Añade un bloque de texto, el WOD o un ejercicio.</p>
       )}
       {bloques.map((bloque, indiceBloque) => (
         <div key={bloque.key ?? `sin-bloque-${indiceBloque}`} className="space-y-3">
@@ -448,27 +519,33 @@ function GroupDateSection({
           ))}
         </div>
       ))}
-      <BulkAddForm
-        groupId={groupId}
-        programName={programName}
-        programStartDate={programStartDate}
-        scheduledDate={session.scheduled_date}
-        onFeedback={onFeedback}
-      />
-      {!tieneMetcon && (
-        <button
-          type="button"
-          onClick={() => setForzarMetcon(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-4 text-left font-bold active:bg-surface-2"
-        >
-          🔥 Añadir WOD a todo el grupo
-        </button>
-      )}
       <AddTextBlockButtons
+        titulo="Añadir a este día"
         presentes={bloquesDeTexto}
         bloques={["warmup", ...TEXT_BLOCK_KEYS]}
         onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])}
+        extra={
+          <>
+            {!tieneMetcon && (
+              <button type="button" onClick={() => setForzarMetcon(true)} className={CHIP_ANADIR}>
+                + WOD
+              </button>
+            )}
+            <button type="button" onClick={alternarFormulario} className={CHIP_ANADIR}>
+              {formAbierto ? "− Ocultar ejercicio" : "+ Ejercicio"}
+            </button>
+          </>
+        }
       />
+      {formAbierto && (
+        <BulkAddForm
+          groupId={groupId}
+          programName={programName}
+          programStartDate={programStartDate}
+          scheduledDate={session.scheduled_date}
+          onFeedback={onFeedback}
+        />
+      )}
     </DateAccordion>
   );
 }
@@ -497,11 +574,7 @@ function GroupWideTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted">
-        Vista de referencia. Los cambios aquí se aplican a todos los atletas del grupo que
-        tengan ese ejercicio en esa fecha — cada quien conserva su propio peso salvo que lo
-        cambies explícitamente aquí.
-      </p>
+      <p className="text-xs text-muted">Lo que cambies aquí se aplica a todo el grupo; cada quien conserva su peso.</p>
       {sessions.map((session) => (
         <GroupDateSection
           key={session.id}

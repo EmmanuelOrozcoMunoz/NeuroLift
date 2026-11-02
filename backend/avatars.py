@@ -16,12 +16,21 @@ imagen válida y esté limpia, sin importar dónde termine guardándose.
 """
 from io import BytesIO
 
+import pillow_heif
 from fastapi import UploadFile
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from backend.core.errors import SolicitudInvalida
 
+# Deja a Pillow abrir HEIC/HEIF (el formato por defecto de las fotos del iPhone). Solo se LEE: lo que se
+# guarda siempre es JPG, PNG o WEBP (un HEIC se convierte a JPG), así que ningún navegador necesita
+# entender HEIC para ver la imagen.
+pillow_heif.register_heif_opener()
+
 MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
+# Un archivo pequeño puede esconder una imagen gigantesca (un HEIC o PNG de un solo color ocupa casi nada):
+# se rechaza por resolución ANTES de decodificar los píxeles.
+MAX_PIXELES = 50_000_000
 
 # Firmas binarias reales de cada formato permitido (independientes del Content-Type que
 # declare el cliente, que no es de fiar). WEBP es un contenedor RIFF: los primeros 4 bytes
@@ -32,6 +41,10 @@ _MAGIC_NUMBERS: dict[str, tuple[bytes, ...]] = {
     "webp": (b"RIFF",),  # se confirma con la marca "WEBP" en el offset 8 (ver abajo)
 }
 
+# HEIC/HEIF es un contenedor ISO-BMFF: "ftyp" en los bytes 4-7 y la marca del formato en los bytes 8-11.
+# AVIF usa el mismo contenedor pero con otras marcas (avif, avis): NO está en la lista.
+_MARCAS_HEIC = frozenset({b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs", b"mif1", b"msf1"})
+
 # Formato Pillow -> extensión de archivo permitida (lista blanca; nunca se usa la extensión
 # que mandó el cliente).
 _ALLOWED_OUTPUT: dict[str, tuple[str, str]] = {
@@ -39,6 +52,7 @@ _ALLOWED_OUTPUT: dict[str, tuple[str, str]] = {
     "JPEG": (".jpg", "JPEG"),
     "PNG": (".png", "PNG"),
     "WEBP": (".webp", "WEBP"),
+    "HEIF": (".jpg", "JPEG"),  # una foto HEIC/HEIF se guarda como JPG
 }
 
 # Extensión ya validada aquí (ver _ALLOWED_OUTPUT) -> Content-Type para servirla — mismo saneo
@@ -48,13 +62,15 @@ AVATAR_CONTENT_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "ima
 
 def _sniff_magic_number(data: bytes) -> str | None:
     """Identifica el formato real por su firma binaria. Devuelve None si no coincide con
-    ninguno de los formatos de la lista blanca (jpg/png/webp)."""
+    ninguno de los formatos de la lista blanca (jpg/png/webp/heic)."""
     if data.startswith(_MAGIC_NUMBERS["jpeg"][0]):
         return "jpeg"
     if data.startswith(_MAGIC_NUMBERS["png"][0]):
         return "png"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "webp"
+    if data[4:8] == b"ftyp" and data[8:12] in _MARCAS_HEIC:
+        return "heic"
     return None
 
 
@@ -76,7 +92,7 @@ async def read_and_validate_upload(file: UploadFile) -> bytes:
 
     if _sniff_magic_number(data) is None:
         raise AvatarRejected(
-            "Formato no permitido. Solo se aceptan imágenes JPG, PNG o WEBP (se valida el "
+            "Formato no permitido. Solo se aceptan imágenes JPG, PNG, WEBP o HEIC (se valida el "
             "contenido real del archivo, no la extensión)."
         )
 
@@ -91,7 +107,11 @@ def rerender_and_strip_metadata(data: bytes) -> tuple[bytes, str]:
     original. Devuelve (bytes_listos_para_guardar, extension_de_archivo)."""
     try:
         with Image.open(BytesIO(data)) as probe:
+            if probe.size[0] * probe.size[1] > MAX_PIXELES:
+                raise AvatarRejected("La imagen es demasiado grande en resolución.")
             probe.verify()  # valida la integridad estructural; lanza si el archivo está corrupto
+    except AvatarRejected:
+        raise
     except (UnidentifiedImageError, OSError, ValueError):
         raise AvatarRejected("El archivo no es una imagen válida o está corrupto.")
     except Image.DecompressionBombError:
@@ -108,15 +128,19 @@ def rerender_and_strip_metadata(data: bytes) -> tuple[bytes, str]:
 
             extension, save_format = _ALLOWED_OUTPUT[pillow_format]
 
+            # Una foto de celular guarda su orientación en el EXIF (que se borra al reconstruirla): se aplica
+            # ANTES, para que no quede girada de lado.
+            imagen = ImageOps.exif_transpose(original)
+
             # JPEG no soporta transparencia: se aplana sobre fondo blanco. PNG/WEBP sí, así
             # que se preserva el canal alfa si lo había.
             if save_format == "JPEG":
-                base = Image.new("RGB", original.size, (255, 255, 255))
-                rgba = original.convert("RGBA")
+                base = Image.new("RGB", imagen.size, (255, 255, 255))
+                rgba = imagen.convert("RGBA")
                 base.paste(rgba, mask=rgba.split()[3])
                 clean = base
             else:
-                source = original.convert("RGBA") if "A" in original.getbands() else original.convert("RGB")
+                source = imagen.convert("RGBA") if "A" in imagen.getbands() else imagen.convert("RGB")
                 clean = Image.new(source.mode, source.size)
                 clean.putdata(list(source.getdata()))  # solo píxeles: cero metadatos heredados
 
