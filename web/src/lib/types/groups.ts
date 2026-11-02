@@ -49,6 +49,14 @@ export interface GroupBulkBlockNotesPayload {
   block_text: string;
 }
 
+/** Body de POST /groups/{id}/sessions/bulk-set-block-order. `block_order` vacío vuelve al orden de siempre. */
+export interface GroupBulkBlockOrderPayload {
+  program_name: string;
+  program_start_date: string;
+  scheduled_date: string;
+  block_order: string;
+}
+
 /** Respuesta de POST /groups/{id}/days: el programa donde quedó el día, para abrirlo en su editor. */
 export interface GroupDayResponse {
   program_name: string;

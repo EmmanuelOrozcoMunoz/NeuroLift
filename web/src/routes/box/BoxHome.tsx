@@ -10,11 +10,11 @@ import { Badge, Button, Card, ErrorState, Field, LoadingList, SectionTitle, Toas
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { accentPreviewVars, DEFAULT_ACCENT } from "@/lib/brand";
+import { IMAGE_ACCEPT, IMAGE_FORMAT_ERROR, isAcceptedImage } from "@/lib/images";
 import { useDeleteBoxLogo, useMyBox, useRotateInviteCode, useUpdateBox, useUploadBoxLogo } from "@/lib/boxQueries";
 import type { BoxDetail, BoxStatus } from "@/lib/types";
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 // Todos con contraste suficiente sobre el fondo carbón (ver applyAccent)
 const ACCENT_PRESETS = ["#ff4700", "#ef4444", "#f59e0b", "#facc15", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#e879f9"];
@@ -144,7 +144,7 @@ function LogoCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
     event.target.value = "";
     if (!file) return;
     if (file.size > MAX_BYTES) return onToast("La foto no puede pesar más de 5 MB.", "danger");
-    if (!ACCEPTED_TYPES.includes(file.type)) return onToast("Formato no permitido. Usa JPG, PNG o WEBP.", "danger");
+    if (!isAcceptedImage(file)) return onToast(IMAGE_FORMAT_ERROR, "danger");
     upload.mutate(file, {
       onSuccess: () => {
         setVersion((v) => v + 1);
@@ -198,7 +198,7 @@ function LogoCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
           </div>
         </div>
       </div>
-      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} />
+      <input ref={inputRef} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={handleFile} />
     </Card>
   );
 }

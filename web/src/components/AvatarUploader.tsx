@@ -5,13 +5,13 @@ import { Spinner, cx } from "@/components/ui";
 import { apiFetch, apiUpload, ApiError } from "@/lib/api";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { monthYear } from "@/lib/dates";
+import { IMAGE_ACCEPT, IMAGE_FORMAT_ERROR, isAcceptedImage } from "@/lib/images";
 import { useAvatarUrl } from "@/lib/useAvatarUrl";
 import type { MessageResponse, User } from "@/lib/types";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 // El backend valida el "magic number" real del archivo — esto es solo para dar feedback
 // rápido en el celular antes de gastar la subida; el enforcement de verdad es del servidor.
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export function AvatarUploader() {
   const user = useCurrentUser();
@@ -40,8 +40,8 @@ export function AvatarUploader() {
       setError("La imagen no puede pesar más de 5 MB.");
       return;
     }
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError("Formato no permitido. Usa JPG, PNG o WEBP.");
+    if (!isAcceptedImage(file)) {
+      setError(IMAGE_FORMAT_ERROR);
       return;
     }
 
@@ -114,7 +114,7 @@ export function AvatarUploader() {
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_ACCEPT}
           className="hidden"
           onChange={handleFileChange}
         />

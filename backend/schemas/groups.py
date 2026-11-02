@@ -188,6 +188,14 @@ class GroupDayResponse(BaseModel):
     athletes: int
 
 
+class GroupSessionBlockOrderUpdate(SanitizedModel):
+    """El coach elige el orden de los bloques de UNA fecha una sola vez para todo el grupo."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+    scheduled_date: date
+    block_order: str = Field("", max_length=200)
+
+
 class GroupSessionBlockNotesUpdate(SanitizedModel):
     """El coach escribe el texto libre de UN bloque (fuerza, accesorios...) una sola vez para la sesión
     de una fecha dada, aplicado a TODOS los atletas del programa — igual que el texto del WOD."""
