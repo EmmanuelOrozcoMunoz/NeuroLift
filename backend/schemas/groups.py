@@ -174,6 +174,16 @@ class GroupSessionWodNotesUpdate(SanitizedModel):
     wod_notes: str | None = Field(None, max_length=2000)
 
 
+class GroupSessionBlockNotesUpdate(SanitizedModel):
+    """El coach escribe el texto libre de UN bloque (fuerza, accesorios...) una sola vez para la sesión
+    de una fecha dada, aplicado a TODOS los atletas del programa — igual que el texto del WOD."""
+    program_name: str = Field(..., min_length=1, max_length=100)
+    program_start_date: date
+    scheduled_date: date
+    block: str = Field(..., min_length=1, max_length=20)
+    block_text: str = Field("", max_length=2000)
+
+
 # --- TABLA DE POSICIONES POR WOD (panel del coach) ---
 class WodDaySummary(BaseModel):
     """Una fecha del grupo en la que hay un WOD prescrito (wod_format) — para que el coach

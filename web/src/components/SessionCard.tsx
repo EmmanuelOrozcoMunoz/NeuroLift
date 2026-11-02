@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { IconCheck, IconChevronRight, IconClock } from "@/components/icons";
 import { cx } from "@/components/ui";
 import { parseApiDate, relativeDay } from "@/lib/dates";
-import { gruposEnOrden, sessionProgress } from "@/lib/sessions";
+import { bloquesConTexto, gruposEnOrden, sessionProgress } from "@/lib/sessions";
 import type { TrainingSession } from "@/lib/types";
 
 /**
@@ -30,6 +30,8 @@ export function SessionCard({
   const { logged, total } = sessionProgress(session);
   const started = logged > 0 && !completed;
   const nombres = gruposEnOrden(session.sets, session.block_order).map((group) => group.name);
+  // Sin ejercicios estructurados, el título son los bloques que el coach escribió como texto
+  const titulos = nombres.length > 0 ? nombres : bloquesConTexto(session);
   const date = parseApiDate(session.scheduled_date);
   const weekday = date.toLocaleDateString("es", { weekday: "short" }).replace(".", "");
 
@@ -48,7 +50,7 @@ export function SessionCard({
       </div>
 
       <div className="min-w-0 grow">
-        <p className="truncate font-semibold">{nombres.length ? nombres.join(" · ") : "Sin ejercicios asignados"}</p>
+        <p className="truncate font-semibold">{titulos.length ? titulos.join(" · ") : "Sin ejercicios asignados"}</p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted">
           <span>{relativeDay(session.scheduled_date)}</span>
           {completed && (

@@ -141,6 +141,23 @@ export function isSetLogged(set: SetItem): boolean {
   return set.actual_reps !== null && set.actual_reps !== undefined;
 }
 
+/** Los bloques de la sesión que el coach escribió como texto (calentamiento, WOD y los de block_notes), en el
+ *  orden del día. Sirven de título cuando la sesión no tiene ejercicios estructurados. */
+export function bloquesConTexto(session: TrainingSession): string[] {
+  const claves = new Set<string>(Object.entries(session.block_notes ?? {}).filter(([, t]) => t).map(([k]) => k));
+  if (session.warmup_notes) claves.add("warmup");
+  if (session.wod_notes || session.wod_format != null) claves.add("metcon");
+  const personalizado = (session.block_order ?? "").split(",").filter(Boolean);
+  const orden = [...personalizado, ...BLOCK_KEYS.filter((k) => !personalizado.includes(k))];
+  return orden.filter((k) => claves.has(k)).map((k) => blockLabel(k));
+}
+
+/** ¿Tiene algo que hacer? Ejercicios, o algún bloque escrito como texto. Una sesión solo con texto
+ *  (el coach la programó como bloc de notas) también se puede terminar. */
+export function tieneContenido(session: TrainingSession): boolean {
+  return session.sets.length > 0 || bloquesConTexto(session).length > 0;
+}
+
 export function sessionProgress(session: TrainingSession): { logged: number; total: number } {
   return {
     logged: session.sets.filter(isSetLogged).length,

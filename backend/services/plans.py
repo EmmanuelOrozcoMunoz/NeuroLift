@@ -61,6 +61,7 @@ def adquirir_plan(
             duration_minutes=sesion_plan.duration_minutes,
             warmup_notes=sesion_plan.warmup_notes,
             wod_notes=sesion_plan.wod_notes,
+            block_notes=dict(sesion_plan.block_notes) if sesion_plan.block_notes else None,
             wod_format=sesion_plan.wod_format,
             wod_time_cap_seconds=sesion_plan.wod_time_cap_seconds,
             block_order=sesion_plan.block_order,

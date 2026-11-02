@@ -29,6 +29,7 @@ class SessionResponse(BaseModel):
     block_order: Optional[str] = None  # ej. "warmup,strength,metcon" — ver models.py:Session
     warmup_notes: Optional[str] = None
     wod_notes: Optional[str] = None
+    block_notes: Optional[dict[str, str]] = None  # texto libre por bloque, ver services/block_notes.py
     # --- resultado del WOD/metcon, ver models.py:Session ---
     wod_format: Optional[str] = None
     wod_time_cap_seconds: Optional[int] = None
@@ -83,3 +84,5 @@ class SessionMetaUpdate(SanitizedModel):
     block_order: str | None = Field(None, max_length=200)
     warmup_notes: str | None = Field(None, max_length=1000)
     wod_notes: str | None = Field(None, max_length=2000)
+    # Texto libre por bloque: solo los bloques que vengan se cambian ("" quita el de ese bloque)
+    block_notes: dict[str, str] | None = None

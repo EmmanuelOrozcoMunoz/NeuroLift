@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
-import { BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
 import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { Button, Card, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
@@ -310,15 +310,21 @@ export function SessionSetsEditor({
   const deleteSet = useDeleteSet(mesocycleId);
   const [forzarMetcon, setForzarMetcon] = useState(Boolean(session.wod_notes) || session.wod_format != null);
   const [forzarCalentamiento, setForzarCalentamiento] = useState(Boolean(session.warmup_notes));
+  // Los demás bloques con texto libre (fuerza, accesorios...), los que ya tienen texto y los que se acaban de añadir
+  const [bloquesDeTexto, setBloquesDeTexto] = useState<string[]>(Object.keys(session.block_notes ?? {}));
   // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
   const [editando, setEditando] = useState<string | null>(null);
   // Los bloques con texto libre (WOD y calentamiento) se muestran aunque aún no tengan ejercicios
-  const forzados = [...(forzarMetcon ? ["metcon"] : []), ...(forzarCalentamiento ? ["warmup"] : [])];
+  const forzados = [
+    ...(forzarMetcon ? ["metcon"] : []),
+    ...(forzarCalentamiento ? ["warmup"] : []),
+    ...bloquesDeTexto,
+  ];
   const bloques = groupByBlock(session.sets, session.block_order, forzados);
   const blockKeys = bloques.map((b) => b.key).filter((key): key is string => key !== null);
   const tieneMetcon = bloques.some((b) => b.key === "metcon");
   const tieneCalentamiento = bloques.some((b) => b.key === "warmup");
-  const vacia = session.sets.length === 0 && !tieneMetcon && !tieneCalentamiento;
+  const vacia = session.sets.length === 0 && !tieneMetcon && !tieneCalentamiento && bloquesDeTexto.length === 0;
 
   const meta: MetaGuardado = {
     guardar: (body, alTerminar) => updateMeta.mutate({ sessionId: session.id, body }, { onSuccess: alTerminar }),
@@ -346,6 +352,7 @@ export function SessionSetsEditor({
           🔥 Añadir WOD
         </button>
       )}
+      <AddTextBlockButtons presentes={bloquesDeTexto} onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])} />
     </div>
   );
 
@@ -369,6 +376,20 @@ export function SessionSetsEditor({
                     meta={meta}
                     onSaved={() => onFeedback("¡Pautas de calentamiento guardadas!")}
                     onRemoved={() => setForzarCalentamiento(false)}
+                  />
+                )}
+                {bloque.key !== null && bloquesDeTexto.includes(bloque.key) && (
+                  <BlockNotesCard
+                    blockKey={bloque.key}
+                    value={session.block_notes?.[bloque.key]}
+                    guardar={(texto, alTerminar) =>
+                      updateMeta.mutate(
+                        { sessionId: session.id, body: { block_notes: { [bloque.key as string]: texto } } },
+                        { onSuccess: alTerminar },
+                      )
+                    }
+                    onSaved={() => onFeedback("¡Texto guardado!")}
+                    onRemoved={() => setBloquesDeTexto((previos) => previos.filter((k) => k !== bloque.key))}
                   />
                 )}
                 {bloque.key === "metcon" && (

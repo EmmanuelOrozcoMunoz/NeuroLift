@@ -10,6 +10,7 @@ from backend import avatars, models, schemas, storage
 from backend.core.security import _ip_and_user_key, ensure_has_personal_coach, get_current_user, limiter, require_coach
 from backend.database import get_db
 from backend.core.errors import SolicitudInvalida
+from backend.services.block_notes import aplicar_texto_de_bloque, validar_bloque_de_grupo
 from backend.services.group_access import claim_athletes_for_group, ensure_athletes_addable, get_owned_group
 from backend.services.plans import asignar_plan_a_grupo, obtener_plan_propio
 from backend.services.groups import (
@@ -420,6 +421,39 @@ def set_group_session_wod_notes(
     exitosos = sum(1 for r in resultados if r["status"] == "actualizado")
     return {
         "message": f"Descripción del WOD actualizada para {exitosos}/{len(resultados)} atleta(s) del grupo",
+        "results": resultados,
+    }
+
+
+@router.post("/{group_id}/sessions/bulk-set-block-notes")
+def set_group_session_block_notes(
+    group_id: UUID,
+    req: schemas.GroupSessionBlockNotesUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """El coach escribe el texto de UN bloque (fuerza, accesorios...) una sola vez para la sesión de una
+    fecha dada, aplicado a TODOS los atletas del programa (hermano de bulk-set-wod-notes). Un texto
+    vacío quita ese bloque. Los demás bloques de cada atleta no se tocan."""
+    # Se valida el bloque ANTES de tocar nada: si no admite texto, no se guarda para nadie
+    validar_bloque_de_grupo(req.block)
+
+    mesos = _get_group_program_mesocycles(db, group_id, req.program_name, req.program_start_date, current_user)
+    sesiones_por_meso = sesiones_por_mesociclo(db, [m.id for m in mesos], req.scheduled_date)
+
+    resultados = []
+    for meso in mesos:
+        sesion = sesiones_por_meso.get(meso.id)
+        if not sesion:
+            resultados.append({"full_name": meso.user.full_name, "status": "sin sesión en esa fecha"})
+            continue
+        aplicar_texto_de_bloque(sesion, req.block, req.block_text)
+        resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
+
+    db.commit()
+    exitosos = sum(1 for r in resultados if r["status"] == "actualizado")
+    return {
+        "message": f"Texto del bloque actualizado para {exitosos}/{len(resultados)} atleta(s) del grupo",
         "results": resultados,
     }
 
