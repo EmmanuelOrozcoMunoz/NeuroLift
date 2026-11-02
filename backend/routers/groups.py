@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 from typing import List
 from uuid import UUID
 
@@ -22,6 +22,7 @@ from backend.services.groups import (
     retirar_miembro,
     sesiones_por_mesociclo,
     sumar_miembros,
+    validar_fecha_programable,
 )
 from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 
@@ -186,9 +187,7 @@ def create_group_day(
     if not grupo.members:
         raise SolicitudInvalida("El grupo no tiene atletas asignados")
     ensure_has_personal_coach(grupo.members)
-    hoy = date.today()
-    if not (hoy - timedelta(days=400) <= req.date <= hoy + timedelta(days=800)):
-        raise SolicitudInvalida("Esa fecha está demasiado lejos. Elige una dentro de los próximos dos años.")
+    validar_fecha_programable(req.date)
 
     resultado = programar_dia_del_grupo(db, grupo, req.date)
     db.commit()

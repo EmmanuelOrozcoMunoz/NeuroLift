@@ -58,6 +58,8 @@ from backend.schemas.sessions import (
     WodFormatUpdate,
 )
 from backend.schemas.mesocycles import (
+    AthleteDayCreate,
+    AthleteDayResponse,
     MesocycleCreate,
     MesocycleFullResponse,
     MesocycleManualCreate,
@@ -129,7 +131,7 @@ __all__ = [
     "GroupProgramAthleteRemove",
     "GroupProgramDelete",
     "GroupResponse", "GroupSessionExerciseAdd", "GroupSessionExerciseDelete", "GroupSessionExerciseUpdate",
-    "GroupDayCreate", "GroupDayResponse", "GroupSessionBlockOrderUpdate", "GroupSessionBlockNotesUpdate", "GroupSessionWodFormatUpdate", "GroupSessionWodNotesUpdate", "GroupSummaryResponse", "WodDaySummary", "WodLeaderboardRow",
+    "AthleteDayCreate", "AthleteDayResponse", "GroupDayCreate", "GroupDayResponse", "GroupSessionBlockOrderUpdate", "GroupSessionBlockNotesUpdate", "GroupSessionWodFormatUpdate", "GroupSessionWodNotesUpdate", "GroupSummaryResponse", "WodDaySummary", "WodLeaderboardRow",
     "AIGenerateRequest", "AIGenerateSmart", "AIGenerateSmartGroup", "AIGeneratePlanTemplate",
     "AthletePlanAssign", "GroupPlanAssign", "GroupPlanAssignAthlete", "GroupPlanAssignResponse",
     "AdminOverview", "AuditLogResponse", "UserRoleUpdate",
