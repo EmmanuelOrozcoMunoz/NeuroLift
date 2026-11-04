@@ -21,6 +21,7 @@ from backend.routers import (
     auth,
     boxes,
     classes,
+    coach_trainings,
     fitness,
     groups,
     mesocycles,
@@ -111,6 +112,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(boxes.router)
 app.include_router(classes.router)
+app.include_router(coach_trainings.router)
 app.include_router(users.router)
 app.include_router(fitness.router)
 app.include_router(groups.router)

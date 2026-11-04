@@ -6,6 +6,7 @@ import { queryKeys } from "@/lib/queries";
 import type {
   AIGenerateResponse,
   AthleteDayResponse,
+  CoachTrainingItem,
   AIGenerateSmartGroupPayload,
   AIGenerateSmartPayload,
   AthleteActivity,
@@ -58,6 +59,7 @@ export const coachKeys = {
   groupWodDays: (id: string) => ["group-wod-days", id] as const,
   groupWodLeaderboard: (id: string, date: string) => ["group-wod-leaderboard", id, date] as const,
   myPlans: ["plans", "mine"] as const,
+  trainings: (desde: string, hasta: string) => ["coach-trainings", desde, hasta] as const,
 };
 
 // ------------------------------------------------------------------- atletas
@@ -176,6 +178,18 @@ export function useGroupMesocycles(groupId: string | undefined): UseQueryResult<
   });
 }
 
+/** Los entrenos del coach entre dos fechas (inclusive): lo programado para sus grupos y para cada atleta
+ *  personalizado. Se pide de nuevo cada vez que se abre la pantalla: lo que se edita en otros editores (texto,
+ *  ejercicios, WOD) cambia el resumen de cada día. */
+export function useCoachTrainings(desde: string, hasta: string): UseQueryResult<CoachTrainingItem[]> {
+  return useQuery({
+    queryKey: coachKeys.trainings(desde, hasta),
+    queryFn: () => apiFetch<CoachTrainingItem[]>(`/coach/trainings?date_from=${desde}&date_to=${hasta}`),
+    refetchOnMount: "always",
+    placeholderData: (previo) => previo,
+  });
+}
+
 /** Programa UN día de un atleta desde el calendario (sin armar un mesociclo). Devuelve la sesión para abrirla
  *  en su editor; invalida el detalle del mesociclo para que el editor ya la encuentre. */
 export function useCreateAthleteDay(athleteId: string) {
@@ -186,6 +200,7 @@ export function useCreateAthleteDay(athleteId: string) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
       await queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
+      void queryClient.invalidateQueries({ queryKey: ["coach-trainings"] });
     },
   });
 }
@@ -199,6 +214,7 @@ export function useCreateGroupDay(groupId: string) {
       apiFetch<GroupDayResponse>(`/groups/${groupId}/days`, { method: "POST", body: { date } }),
     onSuccess: async () => {
       await queryClient.refetchQueries({ queryKey: coachKeys.groupMesocycles(groupId) });
+      void queryClient.invalidateQueries({ queryKey: ["coach-trainings"] });
       void queryClient.invalidateQueries({ queryKey: ["mesocycles"] });
       void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
     },

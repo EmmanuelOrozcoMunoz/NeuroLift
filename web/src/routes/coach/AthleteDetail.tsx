@@ -7,7 +7,6 @@ import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
-import { AthleteCalendar } from "@/components/AthleteCalendar";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
@@ -225,15 +224,19 @@ export default function AthleteDetail() {
         )}
       </Card>
 
-      {/* Igual que los mesociclos, el calendario es solo de atletas con coach personal y fuera de un grupo
-          (los de un grupo se programan desde el calendario del grupo) */}
+      {/* Igual que los mesociclos, programar un día es solo de atletas con coach personal y fuera de un grupo
+          (los de un grupo se programan con su grupo). El calendario vive en Entrenos. */}
       {!myGroup && athlete?.coach_id && (
-        <>
-          <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Calendario</p>
-          <div className="mb-5">
-            <AthleteCalendar athleteId={athleteId!} onError={setToast} />
-          </div>
-        </>
+        <Link
+          to={`/coach/entrenos?atleta=${athleteId}&vista=calendario`}
+          className="mb-5 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+        >
+          <span className="min-w-0">
+            <span className="block font-semibold">📅 Entrenos de este atleta</span>
+            <span className="block text-sm text-muted">Ver lo programado y programar un día nuevo</span>
+          </span>
+          <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />
+        </Link>
       )}
 
       <div className="mb-2 flex items-baseline justify-between">
