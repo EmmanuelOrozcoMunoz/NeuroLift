@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverThumbnail } from "@/components/CoverImage";
+import { EntrenosTabs } from "@/components/EntrenosTabs";
 import { ImportPlanSheet } from "@/components/ImportPlanSheet";
 import { WEEKDAY_NAMES, WeekdayPicker } from "@/components/WeekdayPicker";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Segmented, Sheet, Stepper, Toast } from "@/components/ui";
@@ -306,6 +307,7 @@ function PublishSheet({
 }
 
 export default function Plans() {
+  const navigate = useNavigate();
   const { data, isPending, error, refetch } = useMyPlans();
   const publish = usePublishPlan();
   const deletePlan = useDeletePlan();
@@ -339,6 +341,13 @@ export default function Plans() {
           </div>
         }
       />
+
+      <div className="mb-3">
+        <EntrenosTabs
+          activa="planes"
+          onElegir={(v) => v !== "planes" && navigate(v === "calendario" ? "/coach/entrenos?vista=calendario" : "/coach/entrenos")}
+        />
+      </div>
 
       {isPending && <LoadingList rows={3} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}

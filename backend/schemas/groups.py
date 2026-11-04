@@ -280,3 +280,29 @@ class CoachTrainingItem(BaseModel):
     is_draft: bool = False
     athletes_total: int = 0        # cuántos atletas lo reciben (1 si es personalizado)
     athletes_completed: int = 0
+
+
+class TrainingResultRow(BaseModel):
+    """Un miembro en los resultados de un entreno."""
+    user_id: UUID
+    full_name: str
+    has_avatar: bool = False
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    score_label: Optional[str] = None   # el resultado del WOD ("12:40", "5 + 8", ...)
+    rank: Optional[int] = None          # solo con un WOD que tiene resultado numérico
+    sets_logged: int = 0
+    sets_total: int = 0
+
+
+class TrainingResults(BaseModel):
+    """Cómo quedó un entreno entre sus miembros (el ranking de un WOD, o quién lo terminó)."""
+    date: date
+    kind: Literal["group", "athlete"]
+    title: str
+    wod_format: Optional[str] = None
+    wod_name: Optional[str] = None
+    time_cap_seconds: Optional[int] = None
+    total: int = 0
+    completed: int = 0
+    rows: List[TrainingResultRow] = []

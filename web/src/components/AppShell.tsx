@@ -51,8 +51,6 @@ const COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
   { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
   { to: "/clases", label: "Clases", icon: IconCalendar },
-  { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
-  { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
 
@@ -62,7 +60,6 @@ const OWNER_NAV: NavItem[] = [
   { to: "/clases", label: "Clases", icon: IconCalendar },
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
   { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
-  { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/box/ajustes", label: "Box", icon: IconHome },
 ];
 
@@ -70,8 +67,6 @@ const OWNER_NAV: NavItem[] = [
 const INDEPENDENT_COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
   { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
-  { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
-  { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/box", label: "Cuenta", icon: IconHome },
   { to: "/coach/perfil", label: "Perfil", icon: IconUser },
 ];
