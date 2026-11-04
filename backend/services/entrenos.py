@@ -4,12 +4,14 @@ Alimenta la pantalla "Entrenos" del coach (lista y calendario). Un día programa
 entreno (aunque cada miembro tenga su propia sesión), y uno personalizado es el de ese atleta.
 """
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend import models
-from backend.core.security import _coach_athlete_ids
+from backend.core.errors import NoEncontrado
+from backend.core.security import _coach_athlete_ids, ensure_owner_or_coach
+from backend.wod_scoring import format_wod_summary, rank_wod_sessions, wod_score_value
 from backend.services.block_notes import TODOS_LOS_BLOQUES
 
 MAX_DIAS_DEL_RANGO = 400
@@ -114,3 +116,98 @@ def entrenos_del_coach(db: Session, coach: models.User, desde: date, hasta: date
         entrenos.values(),
         key=lambda e: (e["date"], e["group_name"] or e["athlete_name"] or "", e["program_name"] or ""),
     )
+
+
+def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
+    """Cómo quedó un entreno entre sus miembros: quién lo terminó, cuándo y, si tiene un WOD con formato, el
+    ranking por su resultado (mejor primero). `session_id` es la sesión de referencia que trae cada entreno de
+    `entrenos_del_coach`: si es de un grupo, se juntan las de todos sus miembros ese día; si es de un atleta
+    personalizado, es solo la suya.
+
+    El orden de las filas: los que tienen resultado de WOD (por posición), después los que lo terminaron sin
+    resultado numérico (por hora), y al final los pendientes. Sin WOD no hay posiciones: nadie "gana" una
+    sesión de fuerza por terminarla antes."""
+    referencia = (
+        db.query(models.Session)
+        .options(joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user))
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    meso = referencia.mesocycle if referencia else None
+    if (
+        referencia is None
+        or meso.user_id is None
+        or meso.is_template
+        or meso.is_self_managed
+        or meso.is_class_log
+        or meso.class_id is not None
+    ):
+        raise NoEncontrado("Entreno no encontrado")
+    ensure_owner_or_coach(db, meso.user_id, coach)
+
+    opciones = (
+        joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user),
+        joinedload(models.Session.sets).joinedload(models.Set.exercise),
+    )
+    if meso.group_id is not None:
+        grupo = db.query(models.Group).filter(models.Group.id == meso.group_id).first()
+        sesiones = (
+            db.query(models.Session)
+            .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
+            .options(*opciones)
+            .filter(
+                models.Mesocycle.group_id == meso.group_id,
+                models.Mesocycle.name == meso.name,
+                models.Mesocycle.start_date == meso.start_date,
+                models.Session.scheduled_date == referencia.scheduled_date,
+                models.Session.parent_session_id.is_(None),
+            )
+            .all()
+        )
+        tipo, titulo = "group", (grupo.name if grupo else "Grupo")
+    else:
+        sesiones = db.query(models.Session).options(*opciones).filter(models.Session.id == referencia.id).all()
+        tipo, titulo = "athlete", meso.user.full_name
+
+    completadas = [s for s in sesiones if s.status == "completed"]
+    pendientes = sorted((s for s in sesiones if s.status != "completed"), key=lambda s: s.mesocycle.user.full_name.lower())
+    con_wod = bool(referencia.wod_format)
+
+    ordenadas = rank_wod_sessions(completadas) if con_wod else []
+    con_resultado = [s for s in ordenadas if wod_score_value(s) is not None]
+    sin_resultado = sorted(
+        (s for s in completadas if s not in con_resultado), key=lambda s: s.completed_date or datetime.min
+    )
+
+    def fila(sesion: models.Session, posicion: int | None) -> dict:
+        marcadas = sum(1 for serie in sesion.sets if serie.actual_reps is not None)
+        return {
+            "user_id": sesion.mesocycle.user_id,
+            "full_name": sesion.mesocycle.user.full_name,
+            "has_avatar": bool(sesion.mesocycle.user.has_avatar),
+            "completed": sesion.status == "completed",
+            "completed_at": sesion.completed_date,
+            "score_label": format_wod_summary(sesion) if con_wod and sesion.status == "completed" else None,
+            "rank": posicion,
+            "sets_logged": marcadas,
+            "sets_total": len(sesion.sets),
+        }
+
+    filas = [fila(s, i) for i, s in enumerate(con_resultado, start=1)]
+    filas += [fila(s, None) for s in sin_resultado]
+    filas += [fila(s, None) for s in pendientes]
+
+    nombre_del_wod = next(
+        (serie.exercise.name for s in sesiones for serie in s.sets if serie.block == "metcon" and serie.exercise), None
+    )
+    return {
+        "date": referencia.scheduled_date,
+        "kind": tipo,
+        "title": titulo,
+        "wod_format": referencia.wod_format,
+        "wod_name": nombre_del_wod if con_wod else None,
+        "time_cap_seconds": referencia.wod_time_cap_seconds if con_wod else None,
+        "total": len(sesiones),
+        "completed": len(completadas),
+        "rows": filas,
+    }

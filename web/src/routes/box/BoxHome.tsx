@@ -85,10 +85,10 @@ export default function BoxHome() {
               <NavRow to="/clases" icon={<IconCheck />} title="Clases y horarios" subtitle="Crea clases y asigna profesores" />
             )}
             <NavRow
-              to="/coach/actividad"
+              to="/coach/atletas"
               icon={<IconTrophy />}
-              title={isCoach ? "Actividad de tus atletas" : "Actividad del box"}
-              subtitle="Quién entrenó esta semana"
+              title={isCoach ? "Tus atletas" : "Atletas del box"}
+              subtitle="Quién entrenó esta semana y el ranking"
             />
           </div>
         </>

@@ -54,7 +54,7 @@ function SelectorDeGrupo({ valor, onChange }: { valor: string | null; onChange: 
 }
 
 /** El ranking del box entre atletas: marcas de Snatch y Clean & Jerk, y los WODs que anotaron.
- *  Lo usan el atleta (pantalla Ranking) y los entrenadores (pestaña de Actividad), que además
+ *  Lo usan el atleta (pantalla Ranking) y los entrenadores (pestaña Ranking de Atletas), que además
  *  pueden acotarlo a uno de sus grupos de asesorados. */
 export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
   const [vista, setVista] = useState<Vista>("marcas");

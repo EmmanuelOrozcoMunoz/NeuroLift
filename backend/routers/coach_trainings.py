@@ -1,6 +1,7 @@
 """Los entrenos del coach, todos juntos (pantalla "Entrenos"). Ver services/entrenos.py."""
 from datetime import date
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -9,7 +10,7 @@ from backend import models, schemas
 from backend.core.errors import SolicitudInvalida
 from backend.core.security import require_coach
 from backend.database import get_db
-from backend.services.entrenos import MAX_DIAS_DEL_RANGO, entrenos_del_coach
+from backend.services.entrenos import MAX_DIAS_DEL_RANGO, entrenos_del_coach, resultados_del_entreno
 
 router = APIRouter(prefix="/coach", tags=["coach"])
 
@@ -29,3 +30,12 @@ def listar_entrenos(
     if (date_to - date_from).days > MAX_DIAS_DEL_RANGO:
         raise SolicitudInvalida(f"Pide como máximo {MAX_DIAS_DEL_RANGO} días a la vez.")
     return entrenos_del_coach(db, current_user, date_from, date_to)
+
+
+@router.get("/trainings/{session_id}/results", response_model=schemas.TrainingResults)
+def resultados_de_un_entreno(
+    session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+):
+    """Cómo quedó un entreno entre sus miembros: quién lo terminó y, si tiene un WOD con formato, el ranking por su
+    resultado. `session_id` es el que trae cada entreno de GET /coach/trainings."""
+    return resultados_del_entreno(db, current_user, session_id)

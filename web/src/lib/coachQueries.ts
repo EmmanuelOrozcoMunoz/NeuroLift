@@ -18,6 +18,7 @@ import type {
   GroupBulkUpdatePayload,
   GroupBulkWodFormatPayload,
   GroupBulkBlockNotesPayload,
+  TrainingResults,
   GroupBulkBlockOrderPayload,
   GroupDayResponse,
   GroupBulkWodNotesPayload,
@@ -45,9 +46,7 @@ import type {
   SetUpdatePayload,
   TrainingSession,
   User,
-  WodDaySummary,
   WodFormatPayload,
-  WodLeaderboardRow,
 } from "@/lib/types";
 
 export const coachKeys = {
@@ -56,8 +55,6 @@ export const coachKeys = {
   groups: ["groups"] as const,
   group: (id: string) => ["group", id] as const,
   groupMesocycles: (id: string) => ["group-mesocycles", id] as const,
-  groupWodDays: (id: string) => ["group-wod-days", id] as const,
-  groupWodLeaderboard: (id: string, date: string) => ["group-wod-leaderboard", id, date] as const,
   myPlans: ["plans", "mine"] as const,
   trainings: (desde: string, hasta: string) => ["coach-trainings", desde, hasta] as const,
 };
@@ -190,6 +187,17 @@ export function useCoachTrainings(desde: string, hasta: string): UseQueryResult<
   });
 }
 
+/** Cómo quedó un entreno entre sus miembros (quién lo terminó y, con un WOD, el ranking). Se pide solo cuando se
+ *  abre la hoja de resultados. */
+export function useTrainingResults(sessionId: string | null): UseQueryResult<TrainingResults> {
+  return useQuery({
+    queryKey: ["coach-training-results", sessionId],
+    queryFn: () => apiFetch<TrainingResults>(`/coach/trainings/${sessionId}/results`),
+    enabled: sessionId !== null,
+    refetchOnMount: "always",
+  });
+}
+
 /** Programa UN día de un atleta desde el calendario (sin armar un mesociclo). Devuelve la sesión para abrirla
  *  en su editor; invalida el detalle del mesociclo para que el editor ya la encuentre. */
 export function useCreateAthleteDay(athleteId: string) {
@@ -268,10 +276,7 @@ export function useGroupBulkSetWodFormat(groupId: string) {
   return useMutation({
     mutationFn: (body: GroupBulkWodFormatPayload) =>
       apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-wod-format`, { method: "POST", body }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["mesocycle"] });
-      void queryClient.invalidateQueries({ queryKey: coachKeys.groupWodDays(groupId) });
-    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
   });
 }
 
@@ -304,30 +309,6 @@ export function useGroupBulkSetBlockOrder(groupId: string) {
     mutationFn: (body: GroupBulkBlockOrderPayload) =>
       apiFetch<BulkResponse>(`/groups/${groupId}/sessions/bulk-set-block-order`, { method: "POST", body }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mesocycle"] }),
-  });
-}
-
-/** Fechas del grupo con un WOD prescrito — para elegir cuál ver en la tabla de posiciones. */
-export function useGroupWodDays(groupId: string | undefined): UseQueryResult<WodDaySummary[]> {
-  return useQuery({
-    queryKey: coachKeys.groupWodDays(groupId ?? "none"),
-    queryFn: () => apiFetch<WodDaySummary[]>(`/groups/${groupId}/wod-days`),
-    enabled: Boolean(groupId),
-  });
-}
-
-/** Tabla de posiciones de UN WOD específico del grupo, ya ordenada por resultado real. */
-export function useGroupWodLeaderboard(
-  groupId: string | undefined,
-  scheduledDate: string | undefined,
-): UseQueryResult<WodLeaderboardRow[]> {
-  return useQuery({
-    queryKey: coachKeys.groupWodLeaderboard(groupId ?? "none", scheduledDate ?? "none"),
-    queryFn: () =>
-      apiFetch<WodLeaderboardRow[]>(
-        `/groups/${groupId}/wod-leaderboard?scheduled_date=${encodeURIComponent(scheduledDate!)}`,
-      ),
-    enabled: Boolean(groupId && scheduledDate),
   });
 }
 
