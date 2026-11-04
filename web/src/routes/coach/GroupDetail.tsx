@@ -4,7 +4,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { AssignPlanSheet } from "@/components/AssignPlanSheet";
-import { GroupCalendar } from "@/components/GroupCalendar";
 import { CoverUploader } from "@/components/CoverImage";
 import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
@@ -235,12 +234,16 @@ export default function GroupDetail() {
       )}
 
       {group.members.length > 0 && (
-        <>
-          <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Calendario</p>
-          <div className="mb-5">
-            <GroupCalendar groupId={groupId!} programs={programs.data ?? []} onError={setToast} />
-          </div>
-        </>
+        <Link
+          to={`/coach/entrenos?grupo=${groupId}&vista=calendario`}
+          className="mb-5 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 active:bg-surface-2"
+        >
+          <span className="min-w-0">
+            <span className="block font-semibold">📅 Entrenos de este grupo</span>
+            <span className="block text-sm text-muted">Ver lo programado y programar un día nuevo</span>
+          </span>
+          <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />
+        </Link>
       )}
 
       <div className="mb-2 flex items-baseline justify-between gap-2">

@@ -259,3 +259,24 @@ class GroupPlanAssignAthlete(BaseModel):
 class GroupPlanAssignResponse(BaseModel):
     message: str
     results: List[GroupPlanAssignAthlete]
+
+
+class CoachTrainingItem(BaseModel):
+    """Un entreno programado por el coach: el día de un GRUPO (uno solo, aunque cada miembro tenga su sesión) o
+    el de un atleta personalizado. Es lo que muestra la pantalla "Entrenos" en lista y en calendario."""
+    date: date
+    kind: Literal["group", "athlete"]
+    group_id: Optional[UUID] = None
+    group_name: Optional[str] = None
+    athlete_id: Optional[UUID] = None
+    athlete_name: Optional[str] = None
+    program_name: Optional[str] = None
+    program_start_date: date
+    mesocycle_id: UUID
+    session_id: UUID
+    blocks: List[str] = []         # los bloques con algo escrito o programado, en el orden del día
+    exercise_count: int = 0
+    is_empty: bool = True          # todavía no tiene nada
+    is_draft: bool = False
+    athletes_total: int = 0        # cuántos atletas lo reciben (1 si es personalizado)
+    athletes_completed: int = 0

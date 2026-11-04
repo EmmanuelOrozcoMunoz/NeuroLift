@@ -57,6 +57,29 @@ export interface GroupBulkBlockOrderPayload {
   block_order: string;
 }
 
+/** GET /coach/trainings: un entreno programado por el coach. El día de un GRUPO es uno solo (aunque cada
+ *  miembro tenga su sesión); el personalizado es el de ese atleta. */
+export interface CoachTrainingItem {
+  date: string;
+  kind: "group" | "athlete";
+  group_id: string | null;
+  group_name: string | null;
+  athlete_id: string | null;
+  athlete_name: string | null;
+  program_name: string | null;
+  program_start_date: string;
+  mesocycle_id: string;
+  session_id: string;
+  /** Los bloques con algo escrito o programado, en el orden del día */
+  blocks: string[];
+  exercise_count: number;
+  is_empty: boolean;
+  is_draft: boolean;
+  /** Cuántos atletas lo reciben (1 si es personalizado) y cuántos ya lo terminaron */
+  athletes_total: number;
+  athletes_completed: number;
+}
+
 /** Respuesta de POST /groups/{id}/days: el programa donde quedó el día, para abrirlo en su editor. */
 export interface GroupDayResponse {
   program_name: string;

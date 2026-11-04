@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { IconBack, IconChevronRight } from "@/components/icons";
@@ -21,6 +21,7 @@ export function TrainingCalendar({
   sessions,
   onEmptyDayTap,
   onDayTap,
+  onVisibleRangeChange,
 }: {
   sessions: CalendarSession[];
   /** Si se pasa, tocar CUALQUIER día del mes (con sesión o sin ella) llama aquí en vez de abrir la sesión. */
@@ -28,6 +29,9 @@ export function TrainingCalendar({
   /** Si se pasa, un día del mes actual sin sesión también se puede tocar (para que el atleta
    *  agregue ahí su propia rutina manual) en vez de quedar inerte. */
   onEmptyDayTap?: (iso: string) => void;
+  /** Se llama al montar y cada vez que cambia el mes visible, con el primer y el último día que se ven
+   *  (incluidos los de las semanas vecinas): sirve para pedir al servidor solo ese rango. */
+  onVisibleRangeChange?: (desde: string, hasta: string) => void;
 }) {
   const navigate = useNavigate();
   const today = todayIso();
@@ -45,6 +49,12 @@ export function TrainingCalendar({
   }, [sessions]);
 
   const cells = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
+
+  useEffect(() => {
+    if (cells.length > 0) onVisibleRangeChange?.(cells[0].iso, cells[cells.length - 1].iso);
+    // solo cuando cambia el mes: el callback puede cambiar de identidad en cada render sin que importe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cells]);
 
   function goToMonth(delta: number) {
     setCursor((prev) => {
