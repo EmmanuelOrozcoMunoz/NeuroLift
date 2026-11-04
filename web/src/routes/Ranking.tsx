@@ -77,6 +77,9 @@ function Avatar({ userId, tieneFoto, nombre, tamano }: { userId: string; tieneFo
  *  Arriba hay UNA sola fila de opciones (los levantamientos y "WODs"); el sexo y el grupo, que casi no se
  *  tocan, viven en una hoja de filtros. Los tres primeros van en un podio y el resto en lista. */
 export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
+  const user = useCurrentUser();
+  // Un coach independiente no tiene un box con varios atletas que compitan entre sí: sin pestaña de WODs.
+  const hayWods = esAtleta || user.box?.kind !== "coach";
   const grupos = useGroups();
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [sexo, setSexo] = useState<Sexo>("todos");
@@ -86,7 +89,7 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
 
   const lifts = useRankingLifts(filtros);
   const actual =
-    seleccion === WODS ? WODS : seleccion && lifts.data?.some((l) => l.key === seleccion) ? seleccion : (lifts.data?.[0]?.key ?? WODS);
+    seleccion === WODS && hayWods ? WODS : seleccion && lifts.data?.some((l) => l.key === seleccion) ? seleccion : (lifts.data?.[0]?.key ?? (hayWods ? WODS : ""));
 
   const grupo = grupos.data?.find((g) => g.id === grupoId);
   const filtrosActivos = grupoId !== null || sexo !== "todos";
@@ -119,9 +122,11 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
             {l.name}
           </Chip>
         ))}
-        <Chip activo={actual === WODS} onClick={() => setSeleccion(WODS)}>
-          WODs
-        </Chip>
+        {hayWods && (
+          <Chip activo={actual === WODS} onClick={() => setSeleccion(WODS)}>
+            WODs
+          </Chip>
+        )}
       </div>
 
       {lifts.error && <ErrorState error={lifts.error} onRetry={() => void lifts.refetch()} />}
@@ -130,7 +135,7 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
       {actual === WODS ? (
         <Wods filtros={filtros} esAtleta={esAtleta} />
       ) : (
-        !lifts.isPending && <Marcas lift={actual} nombre={lifts.data?.find((l) => l.key === actual)?.name} filtros={filtros} esAtleta={esAtleta} />
+        !lifts.isPending && actual !== "" && <Marcas lift={actual} nombre={lifts.data?.find((l) => l.key === actual)?.name} filtros={filtros} esAtleta={esAtleta} />
       )}
 
       <p className="mt-6 text-center text-xs text-muted">
