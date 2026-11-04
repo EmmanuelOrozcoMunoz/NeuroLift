@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { AtletasTabs } from "@/components/AtletasTabs";
 import { IconChevronRight, IconUser } from "@/components/icons";
-import { Button, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
+import { Badge, Button, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
-import { useAthletes, useRegisterAthlete } from "@/lib/coachQueries";
+import { useAthleteLeaderboard, useAthletes, useRegisterAthlete } from "@/lib/coachQueries";
+import { RankingDelBox } from "@/routes/Ranking";
 
 function RegisterAthleteSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const register = useRegisterAthlete();
@@ -119,6 +121,12 @@ function RegisterAthleteSheet({ open, onClose }: { open: boolean; onClose: () =>
 
 export default function Athletes() {
   const { data, isPending, error, refetch } = useAthletes();
+  // La actividad de cada atleta (cuántos entrenos completó esta semana y su último WOD) va en su propia fila: ya
+  // no hay una pantalla aparte de "Actividad"
+  const actividad = useAthleteLeaderboard();
+  const [params] = useSearchParams();
+  const verRanking = params.get("vista") === "ranking";
+  const actividadDe = new Map((actividad.data ?? []).map((a) => [a.user_id, a]));
   const me = useCurrentUser();
   const isOwner = me.role === "owner" && me.box?.kind === "box";
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -140,10 +148,16 @@ export default function Athletes() {
         }
       />
 
-      {isPending && <LoadingList rows={4} />}
-      {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
+      <div className="mb-3">
+        <AtletasTabs activa={verRanking ? "ranking" : "atletas"} />
+      </div>
 
-      {!isPending && !error && (data?.length ?? 0) === 0 && (
+      {verRanking && <RankingDelBox esAtleta={false} />}
+
+      {!verRanking && isPending && <LoadingList rows={4} />}
+      {!verRanking && !isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
+
+      {!verRanking && !isPending && !error && (data?.length ?? 0) === 0 && (
         <EmptyState
           icon={<IconUser className="h-10 w-10" />}
           title="Todavía no tienes atletas"
@@ -152,7 +166,7 @@ export default function Athletes() {
       )}
 
       <div className="space-y-3">
-        {data?.map((athlete) => (
+        {!verRanking && data?.map((athlete) => (
           <Link
             key={athlete.id}
             to={`/coach/atletas/${athlete.id}`}
@@ -164,7 +178,17 @@ export default function Athletes() {
             <div className="min-w-0 grow">
               <p className="truncate font-bold">{athlete.full_name}</p>
               <p className="truncate text-sm text-muted">{athlete.email}</p>
+              {actividadDe.get(athlete.id)?.last_wod_summary && (
+                <p className="truncate text-xs font-semibold text-brand">{actividadDe.get(athlete.id)?.last_wod_summary}</p>
+              )}
             </div>
+            {actividadDe.get(athlete.id) && (
+              <div className="shrink-0 whitespace-nowrap">
+                <Badge tone={(actividadDe.get(athlete.id)?.completed_this_week ?? 0) > 0 ? "done" : "neutral"}>
+                  {actividadDe.get(athlete.id)?.completed_this_week ?? 0} esta semana
+                </Badge>
+              </div>
+            )}
             <IconChevronRight className="h-5 w-5 shrink-0 text-muted" />
           </Link>
         ))}

@@ -16,12 +16,10 @@ import BoxDashboard from "@/routes/box/BoxDashboard";
 import BoxHome from "@/routes/box/BoxHome";
 import BoxTeam from "@/routes/box/BoxTeam";
 import Athletes from "@/routes/coach/Athletes";
-import Programming from "@/routes/coach/Programming";
 import Classes from "@/routes/Classes";
 import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
 import Groups from "@/routes/coach/Groups";
-import Leaderboard from "@/routes/coach/Leaderboard";
 import Landing from "@/routes/Landing";
 import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
 import CoachPlanEditor from "@/routes/coach/PlanEditor";
@@ -266,14 +264,8 @@ export default function App() {
             </RoleGate>
           }
         />
-        <Route
-          path="/coach/actividad"
-          element={
-            <RoleGate role={COACH_ROLES}>
-              <Leaderboard />
-            </RoleGate>
-          }
-        />
+        {/* "Actividad" se repartió: cada atleta muestra la suya en Atletas, y el ranking de un WOD vive en cada entreno */}
+        <Route path="/coach/actividad" element={<Navigate to="/coach/atletas" replace />} />
         <Route
           path="/coach/atletas/:athleteId"
           element={
@@ -364,14 +356,8 @@ export default function App() {
             </RoleGate>
           }
         />
-        <Route
-          path="/programacion"
-          element={
-            <RoleGate role={COACH_ROLES}>
-              <Programming />
-            </RoleGate>
-          }
-        />
+        {/* "Programar" se unió a Entrenos: es el único lugar para programar */}
+        <Route path="/programacion" element={<Navigate to="/coach/entrenos" replace />} />
 
         {/* ------------------------------------------------------ dueño del box */}
         <Route

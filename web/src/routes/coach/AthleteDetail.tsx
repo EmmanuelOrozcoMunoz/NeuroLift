@@ -6,8 +6,6 @@ import { PageHeader } from "@/components/AppShell";
 import { FitLevelCriteria } from "@/components/FitLevelCriteria";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
-import { AssignPlanSheet } from "@/components/AssignPlanSheet";
-import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { apiFetch } from "@/lib/api";
 import { useAthletes, useGroups } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
@@ -50,8 +48,6 @@ export default function AthleteDetail() {
 
   const [exercise, setExercise] = useState<string>(COMMON_PR_EXERCISES[0]);
   const [weight, setWeight] = useState("");
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function handleDeletePr(id: string, exerciseName: string) {
@@ -239,18 +235,7 @@ export default function AthleteDetail() {
         </Link>
       )}
 
-      <div className="mb-2 flex items-baseline justify-between">
-        <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>
-        {/* Los mesociclos son exclusivos de atletas con coach personal (sin coach = clases) */}
-        {!myGroup && athlete?.coach_id && (
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-              Asignar plan
-            </Button>
-            <Button onClick={() => setSheetOpen(true)}>+ Crear</Button>
-          </div>
-        )}
-      </div>
+      <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos</p>
 
       {myGroup ? (
         <Card className="border-brand/30 bg-brand-soft/30">
@@ -306,19 +291,6 @@ export default function AthleteDetail() {
           </div>
         </>
       )}
-
-      <AssignPlanSheet
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
-        athlete={{ id: athleteId!, name: athlete?.full_name ?? "" }}
-      />
-
-      <CreateMesocycleSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        target={{ type: "athlete", id: athleteId! }}
-        onCreated={(message) => setToast(message)}
-      />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

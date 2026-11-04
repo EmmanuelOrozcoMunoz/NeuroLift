@@ -1,18 +1,23 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { AssignPlanSheet } from "@/components/AssignPlanSheet";
+import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
+import { EntrenosTabs } from "@/components/EntrenosTabs";
+import type { VistaDeEntrenos } from "@/components/EntrenosTabs";
 import { IconChevronRight } from "@/components/icons";
 import { NewTrainingSheet, rutaDeDiaDeAtleta, rutaDeDiaDeGrupo } from "@/components/NewTrainingSheet";
+import type { DestinoDeEntreno } from "@/components/NewTrainingSheet";
 import { TrainingCalendar } from "@/components/TrainingCalendar";
 import type { CalendarSession } from "@/components/TrainingCalendar";
-import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented, Sheet } from "@/components/ui";
+import { TrainingResultsSheet } from "@/components/TrainingResultsSheet";
+import { Badge, Button, EmptyState, ErrorState, LoadingList, Sheet, Toast } from "@/components/ui";
 import { blockLabel } from "@/lib/blocks";
 import { useAthletes, useCoachTrainings, useGroups } from "@/lib/coachQueries";
 import { longDate, monthGrid, parseApiDate, relativeDay, toApiDate, todayIso } from "@/lib/dates";
 import type { CoachTrainingItem } from "@/lib/types";
-
-type Vista = "lista" | "calendario";
 
 const DIAS_ATRAS_LISTA = 14;
 const DIAS_ADELANTE_LISTA = 60;
@@ -28,7 +33,7 @@ function capitalizar(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-/** Adónde lleva tocar un entreno: el editor del día del grupo, o el de la sesión del atleta. */
+/** Adónde lleva editar un entreno: el editor del día del grupo, o el de la sesión del atleta. */
 function rutaDelEntreno(item: CoachTrainingItem): string {
   if (item.kind === "group" && item.group_id) {
     return rutaDeDiaDeGrupo(item.group_id, item.program_name ?? "", item.program_start_date, item.date);
@@ -61,7 +66,7 @@ function FilaDeEntreno({ item, onClick }: { item: CoachTrainingItem; onClick: ()
         <p className="mt-1 truncate text-sm text-muted">{resumenDe(item)}</p>
         {terminaron > 0 && (
           <p className="mt-0.5 text-xs font-semibold text-done">
-            {esGrupo ? `${terminaron} de ${item.athletes_total} lo terminaron` : "Lo terminó"}
+            🏆 {esGrupo ? `${terminaron} de ${item.athletes_total} lo terminaron` : "Lo terminó"} · ver resultados
           </p>
         )}
       </div>
@@ -70,16 +75,17 @@ function FilaDeEntreno({ item, onClick }: { item: CoachTrainingItem; onClick: ()
   );
 }
 
-/** "Entrenos": todo lo que el coach programó, para sus grupos y para cada atleta personalizado, en lista o en
- *  calendario. Es el único lugar desde donde se programa un día nuevo (el botón "+ Nuevo" pregunta para quién es),
- *  así no hay un calendario distinto en cada grupo y en cada atleta. */
+/** "Entrenos": el centro del coach. Todo lo que programó, para sus grupos y para cada atleta personalizado, en lista
+ *  o en calendario; el único lugar desde donde se programa ("+ Nuevo" pregunta qué y para quién); y, al tocar un
+ *  entreno que ya terminaron, cómo quedaron sus miembros (el ranking del WOD). Los planes son su tercera vista. */
 export default function Trainings() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const groups = useGroups();
   const athletes = useAthletes();
 
-  const vista: Vista = params.get("vista") === "calendario" ? "calendario" : "lista";
+  const vista: "lista" | "calendario" = params.get("vista") === "calendario" ? "calendario" : "lista";
   const grupoFiltro = params.get("grupo") ?? "";
   const atletaFiltro = params.get("atleta") ?? "";
   const valorFiltro = grupoFiltro ? `g:${grupoFiltro}` : atletaFiltro ? `a:${atletaFiltro}` : "";
@@ -103,6 +109,10 @@ export default function Trainings() {
 
   const [nuevo, setNuevo] = useState<{ fecha?: string } | null>(null);
   const [dia, setDia] = useState<string | null>(null);
+  const [resultados, setResultados] = useState<CoachTrainingItem | null>(null);
+  const [mesociclo, setMesociclo] = useState<DestinoDeEntreno | null>(null);
+  const [plan, setPlan] = useState<DestinoDeEntreno | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   function cambiarParametros(cambios: Record<string, string | null>) {
     const siguiente = new URLSearchParams(params);
@@ -111,6 +121,11 @@ export default function Trainings() {
       else siguiente.delete(clave);
     }
     setParams(siguiente, { replace: true });
+  }
+
+  function elegirVista(v: VistaDeEntrenos) {
+    if (v === "planes") return navigate("/coach/planes");
+    cambiarParametros({ vista: v === "calendario" ? "calendario" : null });
   }
 
   function elegirFiltro(valor: string) {
@@ -140,30 +155,31 @@ export default function Trainings() {
     status: (i.athletes_total > 0 && i.athletes_completed === i.athletes_total ? "completed" : "pending") as CalendarSession["status"],
   }));
 
+  /** Un entreno que ya alguien terminó muestra cómo quedó; uno sin terminar se abre directo para editarlo. */
+  function abrirEntreno(item: CoachTrainingItem) {
+    if (item.athletes_completed > 0) setResultados(item);
+    else navigate(rutaDelEntreno(item));
+  }
+
   function alTocarUnDia(iso: string) {
     if ((porFecha.get(iso) ?? []).length > 0) setDia(iso);
     else setNuevo({ fecha: iso });
+  }
+
+  // Lo que se crea desde las hojas de mesociclo y de plan cambia la lista
+  function alCrear(mensaje: string) {
+    setAviso(mensaje);
+    void queryClient.invalidateQueries({ queryKey: ["coach-trainings"] });
   }
 
   const itemsDelDia = dia ? (porFecha.get(dia) ?? []) : [];
 
   return (
     <>
-      <PageHeader
-        title="Entrenos"
-        subtitle="Tus grupos y atletas"
-        action={<Button onClick={() => setNuevo({})}>+ Nuevo</Button>}
-      />
+      <PageHeader title="Entrenos" subtitle="Tus grupos y atletas" action={<Button onClick={() => setNuevo({})}>+ Nuevo</Button>} />
 
       <div className="mb-3 space-y-3">
-        <Segmented<Vista>
-          value={vista}
-          onChange={(v) => cambiarParametros({ vista: v === "calendario" ? "calendario" : null })}
-          options={[
-            { value: "lista", label: "Lista" },
-            { value: "calendario", label: "Calendario" },
-          ]}
-        />
+        <EntrenosTabs activa={vista} onElegir={elegirVista} />
         <select
           value={valorFiltro}
           onChange={(e) => elegirFiltro(e.target.value)}
@@ -224,7 +240,7 @@ export default function Trainings() {
 
           {visibles.length === 0 ? (
             <EmptyState title="No hay entrenos en este periodo">
-              Programa uno con «+ Nuevo»: eliges el día y si es para un grupo o para un atleta.
+              Programa uno con «+ Nuevo»: eliges qué y si es para un grupo o para un atleta.
             </EmptyState>
           ) : (
             <div className="space-y-5">
@@ -235,11 +251,7 @@ export default function Trainings() {
                   </p>
                   <div className="space-y-2">
                     {delDia.map((item) => (
-                      <FilaDeEntreno
-                        key={`${item.kind}-${item.session_id}`}
-                        item={item}
-                        onClick={() => navigate(rutaDelEntreno(item))}
-                      />
+                      <FilaDeEntreno key={`${item.kind}-${item.session_id}`} item={item} onClick={() => abrirEntreno(item)} />
                     ))}
                   </div>
                 </section>
@@ -258,7 +270,7 @@ export default function Trainings() {
               item={item}
               onClick={() => {
                 setDia(null);
-                navigate(rutaDelEntreno(item));
+                abrirEntreno(item);
               }}
             />
           ))}
@@ -276,13 +288,47 @@ export default function Trainings() {
         </div>
       </Sheet>
 
+      <TrainingResultsSheet
+        sessionId={resultados?.session_id ?? null}
+        onClose={() => setResultados(null)}
+        onEdit={() => {
+          const item = resultados;
+          setResultados(null);
+          if (item) navigate(rutaDelEntreno(item));
+        }}
+      />
+
       <NewTrainingSheet
         open={nuevo !== null}
         onClose={() => setNuevo(null)}
         fechaInicial={nuevo?.fecha}
         grupoInicial={grupoFiltro || undefined}
         atletaInicial={atletaFiltro || undefined}
+        onMesociclo={setMesociclo}
+        onPlan={setPlan}
       />
+
+      {mesociclo && (
+        <CreateMesocycleSheet
+          open
+          onClose={() => setMesociclo(null)}
+          target={{ type: mesociclo.type, id: mesociclo.id }}
+          onCreated={alCrear}
+        />
+      )}
+      {plan && (
+        <AssignPlanSheet
+          open
+          onClose={() => {
+            setPlan(null);
+            void queryClient.invalidateQueries({ queryKey: ["coach-trainings"] });
+          }}
+          group={plan.type === "group" ? { id: plan.id, name: plan.name } : undefined}
+          athlete={plan.type === "athlete" ? { id: plan.id, name: plan.name } : undefined}
+        />
+      )}
+
+      {aviso && <Toast message={aviso} onDismiss={() => setAviso(null)} />}
     </>
   );
 }

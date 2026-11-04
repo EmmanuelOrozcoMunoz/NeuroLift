@@ -3,9 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
-import { AssignPlanSheet } from "@/components/AssignPlanSheet";
 import { CoverUploader } from "@/components/CoverImage";
-import { CreateMesocycleSheet } from "@/components/CreateMesocycleSheet";
 import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Toast } from "@/components/ui";
@@ -167,8 +165,6 @@ export default function GroupDetail() {
   const deleteGroup = useDeleteGroup();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [aRetirar, setARetirar] = useState<{ id: string; nombre: string } | null>(null);
 
@@ -246,22 +242,16 @@ export default function GroupDetail() {
         </Link>
       )}
 
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos del grupo</p>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-            Asignar plan
-          </Button>
-          <Button onClick={() => setCreateOpen(true)}>+ Crear</Button>
-        </div>
-      </div>
+      <p className="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">Mesociclos del grupo</p>
 
       {programs.isPending && <LoadingList rows={2} />}
       {!programs.isPending && programs.error && (
         <ErrorState error={programs.error} onRetry={() => void programs.refetch()} />
       )}
       {!programs.isPending && !programs.error && (programs.data?.length ?? 0) === 0 && (
-        <EmptyState title="Todavía no hay ningún mesociclo programado para este grupo" />
+        <EmptyState title="Todavía no hay ningún mesociclo programado para este grupo">
+          Se programa desde Entrenos, con «+ Nuevo».
+        </EmptyState>
       )}
 
       <div className="space-y-3">
@@ -307,19 +297,6 @@ export default function GroupDetail() {
         onClose={() => setAddOpen(false)}
         groupId={groupId!}
         currentIds={new Set(group.members.map((m) => m.id))}
-      />
-
-      <AssignPlanSheet
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
-        group={{ id: groupId!, name: group.name }}
-      />
-
-      <CreateMesocycleSheet
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        target={{ type: "group", id: groupId! }}
-        onCreated={(message) => setToast(message)}
       />
 
       <RetirarAtletaSheet

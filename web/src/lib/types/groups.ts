@@ -1,28 +1,6 @@
 // Grupos, programas de grupo y edición masiva.
 import type { SerieEnPeticion, WodFormat } from "./sessions";
 
-/** GET /groups/{id}/wod-days — una fecha del grupo con un WOD prescrito. `wod_name` no se
- *  guarda aparte: es el nombre del ejercicio del bloque metabólico de esa sesión. */
-export interface WodDaySummary {
-  scheduled_date: string;
-  wod_format: WodFormat;
-  wod_name: string | null;
-  time_cap_seconds: number | null;
-  participants_count: number;
-}
-
-/** GET /groups/{id}/wod-leaderboard — una fila por atleta, ya ordenadas por resultado. */
-export interface WodLeaderboardRow {
-  user_id: string;
-  full_name: string;
-  has_avatar: boolean;
-  wod_format: WodFormat;
-  wod_name: string | null;
-  score_label: string | null;
-  rank: number | null;
-  completed: boolean;
-}
-
 /** Body de POST /groups/{id}/sessions/bulk-set-wod-format. */
 export interface GroupBulkWodFormatPayload {
   program_name: string;
@@ -78,6 +56,34 @@ export interface CoachTrainingItem {
   /** Cuántos atletas lo reciben (1 si es personalizado) y cuántos ya lo terminaron */
   athletes_total: number;
   athletes_completed: number;
+}
+
+/** Un miembro en los resultados de un entreno. */
+export interface TrainingResultRow {
+  user_id: string;
+  full_name: string;
+  has_avatar: boolean;
+  completed: boolean;
+  completed_at: string | null;
+  /** El resultado del WOD ("12:40", "5 + 8"...), si el entreno tiene uno con formato */
+  score_label: string | null;
+  /** Solo con un WOD que tiene resultado numérico */
+  rank: number | null;
+  sets_logged: number;
+  sets_total: number;
+}
+
+/** GET /coach/trainings/{session_id}/results: cómo quedó un entreno entre sus miembros. */
+export interface TrainingResults {
+  date: string;
+  kind: "group" | "athlete";
+  title: string;
+  wod_format: WodFormat | null;
+  wod_name: string | null;
+  time_cap_seconds: number | null;
+  total: number;
+  completed: number;
+  rows: TrainingResultRow[];
 }
 
 /** Respuesta de POST /groups/{id}/days: el programa donde quedó el día, para abrirlo en su editor. */

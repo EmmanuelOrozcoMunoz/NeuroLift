@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
+import { AtletasTabs } from "@/components/AtletasTabs";
 import { CoverThumbnail } from "@/components/CoverImage";
 import { IconChevronRight } from "@/components/icons";
 import { Button, EmptyState, ErrorState, Field, LoadingList, Sheet } from "@/components/ui";
@@ -102,7 +103,7 @@ export default function Groups() {
             ? "Grupos de todos los coaches de la app"
             : isOwner
               ? "Tus grupos generales y los de tus coaches"
-              : "Programa mesociclos para varios atletas a la vez"
+              : "Tus grupos de atletas"
         }
         action={
           !isAdmin && (
@@ -116,6 +117,12 @@ export default function Groups() {
           )
         }
       />
+
+      {!isAdmin && (
+        <div className="mb-3">
+          <AtletasTabs activa="grupos" />
+        </div>
+      )}
 
       {isPending && <LoadingList rows={3} />}
       {!isPending && error && <ErrorState error={error} onRetry={() => void refetch()} />}
