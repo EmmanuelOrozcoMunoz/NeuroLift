@@ -49,6 +49,7 @@ const ATHLETE_NAV: NavItem[] = [
 // Coach de un box: sus atletas personales, las clases que dicta y su programación
 const COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
   { to: "/clases", label: "Clases", icon: IconCalendar },
   { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
   { to: "/programacion", label: "Programar", icon: IconDumbbell },
@@ -60,6 +61,7 @@ const OWNER_NAV: NavItem[] = [
   { to: "/box", label: "Inicio", icon: IconShield },
   { to: "/clases", label: "Clases", icon: IconCalendar },
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
   { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/box/ajustes", label: "Box", icon: IconHome },
 ];
@@ -67,6 +69,7 @@ const OWNER_NAV: NavItem[] = [
 // Coach independiente: la barra de un coach, con "Cuenta" (plan, link de invitación, marca)
 const INDEPENDENT_COACH_NAV: NavItem[] = [
   { to: "/coach/atletas", label: "Atletas", icon: IconUsers },
+  { to: "/coach/entrenos", label: "Entrenos", icon: IconToday },
   { to: "/coach/actividad", label: "Actividad", icon: IconTrophy },
   { to: "/programacion", label: "Programar", icon: IconDumbbell },
   { to: "/box", label: "Cuenta", icon: IconHome },

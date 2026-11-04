@@ -26,6 +26,7 @@ import Landing from "@/routes/Landing";
 import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
 import CoachPlanEditor from "@/routes/coach/PlanEditor";
 import CoachPlans from "@/routes/coach/Plans";
+import CoachTrainings from "@/routes/coach/Trainings";
 import CoachProfile from "@/routes/coach/Profile";
 import CoachSessionEditor from "@/routes/coach/SessionEditor";
 import Login from "@/routes/Login";
@@ -318,6 +319,14 @@ export default function App() {
           element={
             <RoleGate role={COACH_ROLES}>
               <CoachSessionEditor />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/coach/entrenos"
+          element={
+            <RoleGate role={COACH_ROLES}>
+              <CoachTrainings />
             </RoleGate>
           }
         />
