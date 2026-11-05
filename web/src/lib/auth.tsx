@@ -1,10 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { apiFetch, setUnauthorizedHandler, tokenStore } from "@/lib/api";
 import { setBoxAccent } from "@/lib/brand";
 import type { LoginResponse, User } from "@/lib/types";
+
+/** Cada cuánto, como mínimo, se renueva el token con la app abierta. */
+const RENOVAR_CADA_MS = 6 * 60 * 60 * 1000;
 
 interface AuthState {
   user: User | null;
@@ -53,6 +56,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnauthorizedHandler(() => reset("Tu sesión expiró o fue cerrada. Inicia sesión de nuevo."));
   }, [reset]);
 
+  // Sesión deslizante: el token dura 30 días y aquí se cambia por uno nuevo al abrir la app y, si se deja
+  // abierta (PWA), al volver a ella pasadas unas horas. Así solo vuelve a pedir login quien pasa 30 días sin
+  // usarla. Si falla (sin red), no pasa nada: el token actual sigue valiendo.
+  const ultimaRenovacion = useRef(0);
+  const renovarSesion = useCallback(async () => {
+    if (!tokenStore.get()) return;
+    ultimaRenovacion.current = Date.now();
+    try {
+      const { access_token } = await apiFetch<LoginResponse>("/auth/refresh", { method: "POST" });
+      tokenStore.set(access_token);
+    } catch {
+      /* un 401 ya cerró la sesión; cualquier otro fallo se reintenta la próxima vez */
+    }
+  }, []);
+
+  useEffect(() => {
+    function alVolver() {
+      if (document.visibilityState === "visible" && Date.now() - ultimaRenovacion.current > RENOVAR_CADA_MS) {
+        void renovarSesion();
+      }
+    }
+    document.addEventListener("visibilitychange", alVolver);
+    return () => document.removeEventListener("visibilitychange", alVolver);
+  }, [renovarSesion]);
+
   // Rehidratación al abrir la app: si hay token guardado, se le pregunta al backend quién es.
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const me = await apiFetch<User>("/auth/me");
         if (!cancelled) setUser(me);
+        void renovarSesion();
       } catch {
         // apiFetch ya limpió la sesión si fue 401; cualquier otro fallo (backend caído)
         // tampoco debe dejar la app colgada en el spinner.
@@ -78,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [renovarSesion]);
 
   const login = useCallback(
     async (email: string, password: string) => {

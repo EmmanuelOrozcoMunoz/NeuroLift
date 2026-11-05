@@ -15,7 +15,10 @@ if not SECRET_KEY:
         "y agrégala como JWT_SECRET_KEY=... en tu archivo .env."
     )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 día (antes eran 7 días sin revocación posible)
+# Sesión deslizante: el token dura 30 días y la app lo cambia por uno nuevo (POST /auth/refresh) cada vez
+# que se abre o pasa un rato, así que quien la usa no vuelve a iniciar sesión; solo quien pasa 30 días sin
+# abrirla. Es seguro porque el token sigue atado a token_version: cerrar sesión lo revoca al instante.
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30
 
 # En producción (.env: ENVIRONMENT=production) se ocultan /docs, /redoc y el schema OpenAPI:
 # expuestos sin autenticación, revelan toda la superficie de la API a cualquiera.
