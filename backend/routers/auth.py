@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from backend import models, schemas
 from backend.core import billing
 from backend.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
-from backend.core.invite import new_invite_code
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -18,7 +17,7 @@ from backend.core.security import (
     verify_password,
 )
 from backend.database import get_db
-from backend.services.boxes import find_active_box_by_code
+from backend.services.boxes import crear_cuenta_personal, find_active_box_by_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -78,15 +77,7 @@ def register_user(request: Request, user: schemas.UserRegister, db: Session = De
 
     if not db_user:
         if box is None:
-            box = models.Box(
-                name=user.full_name,
-                kind="athlete",
-                status="active",
-                approved_at=datetime.utcnow(),
-                invite_code=new_invite_code(db),
-            )
-            db.add(box)
-            db.flush()
+            box = crear_cuenta_personal(db, user.full_name)
         db.add(models.User(
             email=user.email,
             full_name=user.full_name,
