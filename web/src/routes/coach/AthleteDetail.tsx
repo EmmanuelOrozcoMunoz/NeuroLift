@@ -1,13 +1,14 @@
 import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/AppShell";
 import { FitLevelCriteria } from "@/components/FitLevelCriteria";
+import { RetirarAtletaSheet } from "@/components/RetirarAtletaSheet";
 import { IconChevronRight, IconTrash } from "@/components/icons";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingList, Toast } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
-import { useAthletes, useGroups } from "@/lib/coachQueries";
+import { useAthletes, useGroups, useReleaseAthlete } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
 import { COMMON_PR_EXERCISES } from "@/lib/exercises";
 import { formatWeight, kgTo, parseWeightInput, toKg, useWeightUnit } from "@/lib/units";
@@ -26,6 +27,9 @@ export default function AthleteDetail() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const athletes = useAthletes();
   const athlete = athletes.data?.find((a) => a.id === athleteId);
+  const navigate = useNavigate();
+  const release = useReleaseAthlete();
+  const [saliendo, setSaliendo] = useState(false);
 
   const groups = useGroups();
   const groupDetails = useQueries({
@@ -291,6 +295,34 @@ export default function AthleteDetail() {
           </div>
         </>
       )}
+
+      {athlete && (
+        <div className="mt-6 border-t border-line pt-4">
+          <Button variant="ghost" full onClick={() => setSaliendo(true)}>
+            Sacar de mi cuenta
+          </Button>
+          <p className="mt-1 px-1 text-xs text-muted">Para un cambio de entrenador: no se borra su cuenta ni su historial.</p>
+        </div>
+      )}
+
+      <RetirarAtletaSheet
+        nombre={saliendo && athlete ? athlete.full_name : null}
+        alcance="cuenta"
+        pendiente={release.isPending}
+        onClose={() => setSaliendo(false)}
+        onElegir={(accion) =>
+          release.mutate(
+            { athleteId: athleteId!, programas: accion },
+            {
+              onSuccess: () => navigate("/coach/atletas"),
+              onError: (err) => {
+                setSaliendo(false);
+                setToast(err instanceof Error ? err.message : "No se pudo sacar al atleta.");
+              },
+            },
+          )
+        }
+      />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>

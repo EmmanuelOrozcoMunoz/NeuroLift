@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,14 +14,17 @@ from backend.core.invite import new_invite_code
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
+    _coach_athlete_ids,
     _ip_and_user_key,
     get_current_user,
     get_password_hash,
     limiter,
+    require_coach,
     require_owner,
 )
+from backend.core.errors import NoEncontrado
 from backend.database import get_db
-from backend.services.boxes import find_active_box_by_code
+from backend.services.boxes import find_active_box_by_code, sacar_atleta_de_la_cuenta
 
 router = APIRouter(prefix="/boxes", tags=["boxes"])
 
@@ -329,6 +332,30 @@ def assign_athlete_coach(
         coach_name=coach.full_name if coach else None,
         created_at=atleta.created_at,
     )
+
+
+@router.post("/me/athletes/{athlete_id}/release", response_model=schemas.MessageResponse)
+def release_athlete(
+    athlete_id: UUID,
+    programas: schemas.AccionPrograma = Query("desvincular"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_coach),
+):
+    """Saca a un atleta de esta cuenta sin borrarlo (p. ej. un cambio de entrenador). El atleta
+    vuelve a una cuenta personal, conserva su cuenta, sus marcas y su historial, y puede unirse a
+    otro coach o box con su código. El dueño puede sacar a cualquiera de su box; un coach, a sus
+    atletas. `programas` decide qué pasa con lo que se le programó: se conserva como programas
+    individuales (por defecto) o se borra."""
+    atleta = db.query(models.User).filter(models.User.id == athlete_id, models.User.role == "athlete").first()
+    if atleta is None or atleta.id not in _coach_athlete_ids(db, current_user):
+        raise NoEncontrado("Atleta no encontrado")
+    nombre = atleta.full_name
+    cuenta = current_user.box.name if current_user.box else ""
+    total = sacar_atleta_de_la_cuenta(db, atleta, programas)
+    db.commit()
+    security_logger.info("%s sacó a %s de la cuenta '%s' (programas: %s)", current_user.email, atleta.email, cuenta, programas)
+    accion = "eliminados" if programas == "eliminar" else "conservados como individuales"
+    return {"message": f"{nombre} ya no está en tu cuenta. Sus {total} programa(s) quedaron {accion}."}
 
 
 # ------------------------------------------------------------- tablero
