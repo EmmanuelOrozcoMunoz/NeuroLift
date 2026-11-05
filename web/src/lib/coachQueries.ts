@@ -97,6 +97,21 @@ export function useRegisterAthlete() {
   });
 }
 
+/** Saca a un atleta de la cuenta del coach sin borrarlo (cambio de entrenador): vuelve a una cuenta personal. */
+export function useReleaseAthlete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ athleteId, programas }: { athleteId: string; programas: "desvincular" | "eliminar" }) =>
+      apiFetch<MessageResponse>(`/boxes/me/athletes/${athleteId}/release?programas=${programas}`, { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: coachKeys.athletes });
+      void queryClient.invalidateQueries({ queryKey: coachKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: ["group"] });
+      void queryClient.invalidateQueries({ queryKey: ["box"] });
+    },
+  });
+}
+
 // -------------------------------------------------------------------- grupos
 
 export function useGroups(): UseQueryResult<GroupSummary[]> {
