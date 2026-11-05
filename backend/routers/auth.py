@@ -123,6 +123,18 @@ def login_user(request: Request, credentials: schemas.UserLogin, db: Session = D
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+@router.post("/refresh")
+@limiter.limit("120/hour")
+def refresh_token(request: Request, current_user: models.User = Depends(get_current_user)):
+    """Cambia un token válido por uno nuevo de la misma duración: la sesión se alarga mientras se use.
+    Un token vencido o revocado (get_current_user lo rechaza) no se puede renovar: hay que iniciar sesión."""
+    access_token = create_access_token(
+        data={"sub": current_user.email, "role": current_user.role, "id": str(current_user.id), "tv": current_user.token_version},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 @router.get("/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
