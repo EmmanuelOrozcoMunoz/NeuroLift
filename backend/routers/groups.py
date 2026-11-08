@@ -409,6 +409,7 @@ def set_group_session_wod_format(
             continue
         sesion.wod_format = req.wod_format
         sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
+        sesion.wod_intervals = req.intervals if req.wod_format == "intervals" else None
         resultados.append({"full_name": meso.user.full_name, "status": "actualizado"})
 
     db.commit()

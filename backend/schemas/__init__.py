@@ -94,6 +94,7 @@ from backend.schemas.groups import (
     GroupSessionBlockNotesUpdate,
     GroupSessionWodNotesUpdate,
     GroupSummaryResponse,
+    MyGroupResponse,
     WodDaySummary,
     WodLeaderboardRow,
 )
@@ -134,7 +135,7 @@ __all__ = [
     "GroupProgramAthleteRemove",
     "GroupProgramDelete",
     "GroupResponse", "GroupSessionExerciseAdd", "GroupSessionExerciseDelete", "GroupSessionExerciseUpdate",
-    "AthleteDayCreate", "AthleteDayResponse", "CoachTrainingItem", "TrainingResultRow", "TrainingResults", "GroupDayCreate", "GroupDayResponse", "GroupSessionBlockOrderUpdate", "GroupSessionBlockNotesUpdate", "GroupSessionWodFormatUpdate", "GroupSessionWodNotesUpdate", "GroupSummaryResponse", "WodDaySummary", "WodLeaderboardRow",
+    "AthleteDayCreate", "AthleteDayResponse", "CoachTrainingItem", "TrainingResultRow", "TrainingResults", "GroupDayCreate", "GroupDayResponse", "GroupSessionBlockOrderUpdate", "GroupSessionBlockNotesUpdate", "GroupSessionWodFormatUpdate", "GroupSessionWodNotesUpdate", "GroupSummaryResponse", "MyGroupResponse", "WodDaySummary", "WodLeaderboardRow",
     "AIGenerateRequest", "AIGenerateSmart", "AIGenerateSmartGroup", "AIGeneratePlanTemplate",
     "AthletePlanAssign", "GroupPlanAssign", "GroupPlanAssignAthlete", "GroupPlanAssignResponse",
     "AdminOverview", "AuditLogResponse", "UserRoleUpdate",

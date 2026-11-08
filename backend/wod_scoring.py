@@ -4,7 +4,7 @@ por eso vive aparte en vez de dentro de cualquiera de los dos routers."""
 from backend import models
 
 # Formatos donde un número MENOR es mejor resultado (todos los demás: mayor es mejor).
-_WOD_LOWER_IS_BETTER = {"for_time"}
+_WOD_LOWER_IS_BETTER = {"for_time", "intervals"}
 
 
 def format_wod_summary(sesion: "models.Session | None") -> str | None:
@@ -15,6 +15,10 @@ def format_wod_summary(sesion: "models.Session | None") -> str | None:
     if sesion.wod_format == "for_time" and sesion.wod_time_seconds is not None:
         minutos, segundos = divmod(sesion.wod_time_seconds, 60)
         return f"Por tiempo: {minutos}:{segundos:02d}"
+    if sesion.wod_format == "intervals" and sesion.wod_time_seconds is not None:
+        minutos, segundos = divmod(sesion.wod_time_seconds, 60)
+        n = len(sesion.wod_interval_times or []) or sesion.wod_intervals
+        return f"Intervalos: {minutos}:{segundos:02d} total" + (f" ({n} intervalos)" if n else "")
     if sesion.wod_format == "amrap" and (sesion.wod_rounds is not None or sesion.wod_extra_reps is not None):
         rondas = sesion.wod_rounds or 0
         reps = sesion.wod_extra_reps or 0
@@ -42,7 +46,7 @@ def wod_score_value(sesion: "models.Session") -> float | None:
     """Valor numérico para ordenar el leaderboard de un WOD — None si el atleta no reportó
     (o no le aplica) resultado para el formato prescrito."""
     fmt = sesion.wod_format
-    if fmt == "for_time":
+    if fmt in ("for_time", "intervals"):
         return sesion.wod_time_seconds
     if fmt == "amrap":
         if sesion.wod_rounds is None and sesion.wod_extra_reps is None:

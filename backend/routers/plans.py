@@ -450,6 +450,7 @@ def set_plan_session_wod_format(
 
     sesion.wod_format = req.wod_format
     sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
+    sesion.wod_intervals = req.intervals if req.wod_format == "intervals" else None
     db.commit()
     return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
 

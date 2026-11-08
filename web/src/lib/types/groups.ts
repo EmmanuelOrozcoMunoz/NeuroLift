@@ -8,6 +8,8 @@ export interface GroupBulkWodFormatPayload {
   scheduled_date: string;
   wod_format: WodFormat | null;
   time_cap_seconds: number | null;
+  /** Solo "intervals": cuántos intervalos tiene el WOD */
+  intervals?: number | null;
 }
 
 /** Body de POST /groups/{id}/sessions/bulk-set-wod-notes. */

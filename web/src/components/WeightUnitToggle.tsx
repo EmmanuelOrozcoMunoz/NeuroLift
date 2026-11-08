@@ -1,5 +1,6 @@
 import { Segmented } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
+import { equipoDe } from "@/lib/equipo";
 import { useUpdateMyPreferences } from "@/lib/queries";
 import { useWeightUnit } from "@/lib/units";
 import type { WeightUnit } from "@/lib/types";
@@ -53,7 +54,7 @@ export function PlateAvailabilityToggle() {
   );
 }
 
-/** Si este atleta aparece en el ranking de su box (marcas y WODs). Por defecto sí. */
+/** Si este atleta aparece en el leaderboard de su box o de su coach (marcas y WODs). Por defecto sí. */
 export function RankingVisibilityToggle() {
   const user = useCurrentUser();
   const { refreshUser } = useAuth();
@@ -62,7 +63,7 @@ export function RankingVisibilityToggle() {
 
   return (
     <div>
-      <span className="mb-1.5 block text-sm font-medium text-muted">¿Aparecer en el ranking de tu box?</span>
+      <span className="mb-1.5 block text-sm font-medium text-muted">¿Aparecer en el leaderboard {equipoDe(user, true).tu}?</span>
       <Segmented<PlateAvailability>
         value={value}
         onChange={(next) => update.mutate({ show_in_ranking: next === "si" }, { onSuccess: () => void refreshUser() })}

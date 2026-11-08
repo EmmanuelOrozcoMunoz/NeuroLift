@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 
 import { BoxLogo } from "@/components/BoxLogo";
+import { GrupoChip } from "@/components/GrupoChip";
 import {
   IconBack,
   IconCalendar,
@@ -19,7 +20,7 @@ import {
   Logo,
 } from "@/components/icons";
 import { Spinner, cx } from "@/components/ui";
-import { useCurrentUser } from "@/lib/auth";
+import { useAuth, useCurrentUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 
 interface NavItem {
@@ -33,7 +34,7 @@ interface NavItem {
 const ATHLETE_RANKING_NAV: NavItem[] = [
   { to: "/", label: "Hoy", icon: IconToday },
   { to: "/entrenos", label: "Entrenos", icon: IconDumbbell },
-  { to: "/ranking", label: "Ranking", icon: IconTrophy },
+  { to: "/ranking", label: "Leaderboard", icon: IconTrophy },
   { to: "/planes", label: "Planes", icon: IconStore },
   { to: "/perfil", label: "Perfil", icon: IconUser },
 ];
@@ -136,6 +137,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     // Sin borde: el difuminado del fondo basta para separarlo del contenido que pasa debajo
@@ -155,6 +157,8 @@ export function PageHeader({
           <h1 className="truncate text-2xl leading-tight font-extrabold tracking-tight">{title}</h1>
           {subtitle && <p className="truncate text-sm text-muted">{subtitle}</p>}
         </div>
+        {/* El grupo del atleta, siempre arriba a la derecha (no en las pantallas de detalle, que ya llevan "volver") */}
+        {!back && user?.role === "athlete" && <GrupoChip />}
         {/* La acción nunca se encoge ni parte su texto: con un título largo, el que se corta
             (con "…") es el título. Antes "+ Nuevo" se partía en dos líneas. */}
         {action && <div className="shrink-0 whitespace-nowrap">{action}</div>}

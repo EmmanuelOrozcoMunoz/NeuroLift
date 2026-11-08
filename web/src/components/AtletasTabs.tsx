@@ -18,7 +18,7 @@ export function AtletasTabs({ activa }: { activa: VistaDeAtletas }) {
       options={[
         { value: "atletas", label: "Atletas" },
         { value: "grupos", label: "Grupos" },
-        { value: "ranking", label: "Ranking" },
+        { value: "ranking", label: "Leaderboard" },
       ]}
     />
   );
