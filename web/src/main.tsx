@@ -4,10 +4,12 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import App from "@/App";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { ApiError } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
 import { initAccent } from "@/lib/brand";
+import { initMonitoring } from "@/lib/monitoring";
 // Efecto secundario: registra el listener de beforeinstallprompt lo antes posible
 import "@/lib/pwa";
 import "@/index.css";
@@ -29,16 +31,19 @@ const queryClient = new QueryClient({
 
 // Antes de montar: el acento del box se aplica sin mostrar un instante el color por defecto
 initAccent();
+initMonitoring();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-          <UpdatePrompt />
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+            <UpdatePrompt />
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

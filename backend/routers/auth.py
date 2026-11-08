@@ -1,11 +1,12 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend import models, schemas
 from backend.core import billing
-from backend.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, RESET_TOKEN_MINUTES
+from backend.core.errors import SolicitudInvalida
 from backend.core.logging import security_logger
 from backend.core.security import (
     _client_ip,
@@ -17,6 +18,7 @@ from backend.core.security import (
     verify_password,
 )
 from backend.database import get_db
+from backend.services import correo, recuperacion
 from backend.services.boxes import crear_cuenta_personal, find_active_box_by_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -121,6 +123,44 @@ def login_user(request: Request, credentials: schemas.UserLogin, db: Session = D
         expires_delta=access_token_expires,
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+FORGOT_PASSWORD_MESSAGE = "Si ese correo tiene una cuenta, te enviamos un enlace para restablecer la contraseña."
+
+
+def _enviar_recuperacion(nombre: str, destino: str, enlace: str) -> None:
+    asunto, html, texto = correo.correo_de_recuperacion(nombre, enlace, RESET_TOKEN_MINUTES)
+    correo.enviar_correo(destino, asunto, html, texto)
+
+
+@router.post("/forgot-password", response_model=schemas.MessageResponse)
+@limiter.limit("5/hour")
+def forgot_password(
+    request: Request, req: schemas.ForgotPasswordRequest, tareas: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """Pide el enlace para restablecer la contraseña. Misma respuesta exista o no la cuenta (no sirve para
+    enumerar correos), y el correo sale en segundo plano para que tampoco lo delate el tiempo de respuesta."""
+    usuario = db.query(models.User).filter(models.User.email == req.email).first()
+    if usuario is not None:
+        enlace = recuperacion.enlace_de_recuperacion(usuario)
+        tareas.add_task(_enviar_recuperacion, usuario.full_name, usuario.email, enlace)
+        security_logger.info("Recuperación de contraseña pedida para %s desde %s", usuario.email, _client_ip(request))
+    return {"message": FORGOT_PASSWORD_MESSAGE}
+
+
+@router.post("/reset-password", response_model=schemas.MessageResponse)
+@limiter.limit("10/hour")
+def reset_password(request: Request, req: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Fija una contraseña nueva con el enlace del correo. El enlace sirve una sola vez. Además cierra todas
+    las sesiones abiertas de la cuenta: si alguien más tenía acceso, deja de tenerlo."""
+    usuario = recuperacion.usuario_del_token(db, req.token)
+    if usuario is None:
+        raise SolicitudInvalida("El enlace no es válido o ya venció. Pide uno nuevo.")
+    usuario.hashed_password = get_password_hash(req.password)
+    usuario.token_version += 1
+    db.commit()
+    security_logger.info("Contraseña restablecida para %s desde %s", usuario.email, _client_ip(request))
+    return {"message": "Listo, ya puedes iniciar sesión con tu contraseña nueva."}
 
 
 @router.post("/refresh")

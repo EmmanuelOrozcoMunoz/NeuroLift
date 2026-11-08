@@ -3,7 +3,7 @@
 # código sigue haciendo `schemas.NombreDeClase` sin cambios: este __init__ reexporta todo para
 # que ese acceso plano siga funcionando igual que cuando era un módulo único.
 from backend.schemas.common import Bloque, Dia, FormatoWod, MessageResponse, SanitizedModel
-from backend.schemas.auth import UserLogin, UserRegister
+from backend.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, UserLogin, UserRegister
 from backend.schemas.classes import (
     ClassCreate,
     ClassDayCreate,
@@ -120,7 +120,7 @@ __all__ = [
     "RankingWod",
     "RankingWodRow",
     "Bloque", "Dia", "FormatoWod", "MessageResponse", "SanitizedModel",
-    "UserLogin", "UserRegister",
+    "ForgotPasswordRequest", "ResetPasswordRequest", "UserLogin", "UserRegister",
     "AthleteActivityResponse", "PRCreate", "PRResponse", "RecentSessionExercise",
     "RecentSessionSummary", "UserPreferencesUpdate", "UserResponse", "AthleteLookupResponse",
     "FitnessBenchmarkUpdate", "FitnessLevelResponse",

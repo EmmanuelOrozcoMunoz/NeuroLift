@@ -32,6 +32,18 @@ CORS_ORIGINS = [
     if o.strip()
 ]
 
+# Correo (recuperar contraseña). Sin EMAIL_API_KEY no se envía nada: en desarrollo el enlace sale en el log;
+# en producción se avisa en el log de que falta configurarlo. Proveedor: Resend (https://resend.com).
+EMAIL_API_KEY = os.getenv("EMAIL_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "NeuroLift <no-reply@neurolift.app>")
+# URL pública del front, para los enlaces de los correos. Por defecto, el primer origen de CORS.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/") or (CORS_ORIGINS[0] if CORS_ORIGINS else "")
+# El enlace para restablecer la contraseña sirve una sola vez y vence a la hora.
+RESET_TOKEN_MINUTES = 60
+
+# Monitoreo de errores (Sentry). Sin SENTRY_DSN no se envía nada.
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
 # Cuántas peticiones HTTP procesa a la vez CADA proceso de la API; las demás esperan en cola (y
 # si esperan más de HTTP_QUEUE_TIMEOUT_SECONDS reciben 503). Se recorta al tamaño del pool de
 # conexiones. 0 lo desactiva. Ver core/concurrency.py.

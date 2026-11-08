@@ -180,6 +180,9 @@ Requisitos: Python 3.11 y Node 20+.
 | `GEMINI_API_KEY` | Generación con IA |
 | `CORS_ORIGINS` | Orígenes permitidos del frontend |
 | `ENVIRONMENT` | `production` apaga `/docs` |
+| `FRONTEND_URL` | URL pública del front, para los enlaces de los correos (por defecto, el primer `CORS_ORIGINS`) |
+| `EMAIL_API_KEY`, `EMAIL_FROM` | Envío de correos (recuperar contraseña) con [Resend](https://resend.com). Sin la clave no se envía nada; en desarrollo el enlace sale en el log |
+| `SENTRY_DSN` | (opcional) Errores 500 del backend a Sentry. El front usa `VITE_SENTRY_DSN` |
 | `MAX_CONCURRENT_REQUESTS` | (opcional, 20) Peticiones que procesa a la vez **cada proceso** de la API; las demás esperan en cola. 0 lo desactiva. Se recorta a las conexiones del pool (30) |
 | `HTTP_QUEUE_TIMEOUT_SECONDS` | (opcional, 15) Cuánto espera una petición en cola antes de recibir un 503 |
 | `DB_POOL_TIMEOUT` | (opcional, 10) Segundos que una petición espera una conexión libre a la base antes de fallar |
