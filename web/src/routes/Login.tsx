@@ -72,6 +72,11 @@ export default function Login() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
+        <p className="-mt-2 text-right text-sm">
+          <Link to="/recuperar" className="text-muted underline-offset-4 active:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </p>
 
         {error && <p className="text-sm font-medium text-danger">{error}</p>}
 

@@ -20,6 +20,15 @@ class UserRegister(SanitizedModel):
     invite_code: str | None = Field(None, max_length=16)
 
 
+class ForgotPasswordRequest(SanitizedModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(SanitizedModel):
+    token: str = Field(..., min_length=10, max_length=2000)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
 class UserLogin(SanitizedModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)
