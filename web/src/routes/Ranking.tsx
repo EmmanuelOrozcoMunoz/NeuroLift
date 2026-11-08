@@ -7,6 +7,7 @@ import { Badge, Button, EmptyState, ErrorState, LoadingList, Segmented, Sheet, c
 import { useCurrentUser } from "@/lib/auth";
 import { useGroups } from "@/lib/coachQueries";
 import { shortDate } from "@/lib/dates";
+import { equipoDe } from "@/lib/equipo";
 import { nombreCorto, soloElResultado } from "@/lib/rankingFormat";
 import { useRankingLift, useRankingLifts, useRankingWod, useRankingWods } from "@/lib/rankingQueries";
 import type { FiltrosRanking } from "@/lib/rankingQueries";
@@ -23,12 +24,12 @@ const WODS = "wods";
 const MEDALLAS = ["🥇", "🥈", "🥉"];
 const ETIQUETA_DE_SEXO: Record<Sexo, string> = { todos: "Todos", female: "Mujeres", male: "Hombres" };
 
-/** Pantalla del atleta: el ranking de su box. */
+/** Pantalla del atleta: el leaderboard de su box o de su coach. */
 export default function Ranking() {
   const user = useCurrentUser();
   return (
     <>
-      <PageHeader title="Ranking" subtitle={user.box?.name ?? "Tu box"} />
+      <PageHeader title="Leaderboard" subtitle={equipoDe(user, true).subtitulo} />
       <RankingDelBox esAtleta />
     </>
   );
@@ -80,6 +81,7 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
   const user = useCurrentUser();
   // Un coach independiente no tiene un box con varios atletas que compitan entre sí: sin pestaña de WODs.
   const hayWods = esAtleta || user.box?.kind !== "coach";
+  const equipo = equipoDe(user, esAtleta);
   const grupos = useGroups();
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [sexo, setSexo] = useState<Sexo>("todos");
@@ -99,12 +101,12 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
     <>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-xs font-semibold tracking-wide text-muted uppercase">
-          {grupo ? `Grupo ${grupo.name}` : "Todo el box"}
+          {grupo ? `Grupo ${grupo.name}` : equipo.todos}
         </p>
         <button
           type="button"
           onClick={() => setFiltrosAbiertos(true)}
-          aria-label="Filtros del ranking"
+          aria-label="Filtros del leaderboard"
           className={cx(
             "flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold active:opacity-80",
             filtrosActivos ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted",
@@ -139,11 +141,11 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
       )}
 
       <p className="mt-6 text-center text-xs text-muted">
-        Aparecen los atletas {grupoId ? "del grupo" : "del box"} que lo permiten.
+        Aparecen los atletas {grupoId ? "del grupo" : equipo.de} que lo permiten.
         {esAtleta && (
           <>
             {" "}
-            Puedes salir del ranking desde{" "}
+            Puedes salir del leaderboard desde{" "}
             <Link to="/perfil" className="font-semibold underline">
               tu perfil
             </Link>
@@ -203,9 +205,11 @@ function FiltrosDelRanking({
   onSexo: (sexo: Sexo) => void;
   grupos: { id: string; name: string }[];
 }) {
-  const opcionesDeGrupo = [{ id: null as string | null, name: "Todo el box" }, ...grupos];
+  const user = useCurrentUser();
+  const todos = equipoDe(user, esAtleta).todos;
+  const opcionesDeGrupo = [{ id: null as string | null, name: todos }, ...grupos];
   return (
-    <Sheet open={open} onClose={onClose} title="Filtros del ranking">
+    <Sheet open={open} onClose={onClose} title="Filtros del leaderboard">
       <div className="space-y-5 pb-4">
         <div>
           <span className="mb-1.5 block text-sm font-medium text-muted">Sexo</span>
@@ -370,7 +374,7 @@ function Marcas({
       <EmptyState icon={<IconTrophy className="h-10 w-10" />} title={`Sin marcas de ${nombre ?? "este levantamiento"}`}>
         {esAtleta
           ? "Nadie ha registrado su marca todavía. Registra tu 1RM en tu perfil y aparecerás aquí."
-          : "Los atletas del box todavía no tienen marca de este levantamiento."}
+          : "Los atletas todavía no tienen marca de este levantamiento."}
       </EmptyState>
     );
   }

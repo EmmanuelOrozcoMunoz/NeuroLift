@@ -65,6 +65,7 @@ def set_session_wod_format(
 
     sesion.wod_format = req.wod_format
     sesion.wod_time_cap_seconds = req.time_cap_seconds if req.wod_format else None
+    sesion.wod_intervals = req.intervals if req.wod_format == "intervals" else None
     db.commit()
     return {"message": "Formato de WOD actualizado" if req.wod_format else "Formato de WOD quitado"}
 
@@ -193,11 +194,19 @@ def complete_session(
             get_athlete_prs(db, sesion.mesocycle.user_id),
         )
 
+    # Intervalos: tienen que estar todos (el coach fijó cuántos) para que los resultados se puedan comparar
+    if req is not None and req.wod_interval_times is not None and sesion.wod_format == "intervals":
+        if sesion.wod_intervals and len(req.wod_interval_times) != sesion.wod_intervals:
+            raise HTTPException(status_code=400, detail=f"Anota el tiempo de los {sesion.wod_intervals} intervalos.")
+
     sesion.status = "completed"
     sesion.completed_date = datetime.utcnow()
     if req is not None:
-        if req.wod_time_seconds is not None:
-            sesion.wod_time_seconds = req.wod_time_seconds
+        if req.wod_interval_times is not None and sesion.wod_format == "intervals":
+            sesion.wod_interval_times = req.wod_interval_times
+            sesion.wod_time_seconds = sum(req.wod_interval_times)   # el total ordena el leaderboard
+        elif req.wod_time_seconds is not None and sesion.wod_format != "intervals":
+            sesion.wod_time_seconds = req.wod_time_seconds         # (en intervalos un total suelto no sirve)
         if req.wod_rounds is not None:
             sesion.wod_rounds = req.wod_rounds
         if req.wod_extra_reps is not None:
@@ -246,6 +255,7 @@ def uncomplete_session(
     sesion.wod_calories = None
     sesion.wod_distance_meters = None
     sesion.wod_watts = None
+    sesion.wod_interval_times = None
     db.commit()
     return {"message": "Se deshizo la sesión completada"}
 

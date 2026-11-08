@@ -88,7 +88,7 @@ export default function BoxHome() {
               to="/coach/atletas"
               icon={<IconTrophy />}
               title={isCoach ? "Tus atletas" : "Atletas del box"}
-              subtitle="Quién entrenó esta semana y el ranking"
+              subtitle="Quién entrenó esta semana y el leaderboard"
             />
           </div>
         </>

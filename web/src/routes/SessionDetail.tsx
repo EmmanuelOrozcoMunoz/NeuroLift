@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/AppShell";
 import { ExerciseNoteRow } from "@/components/ExerciseNoteRow";
 import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
+import { TiemposDeIntervalos } from "@/components/TiemposDeIntervalos";
 import { WodTimer } from "@/components/WodTimer";
 import {
   Badge,
@@ -51,6 +52,7 @@ export default function SessionDetail() {
   const [wodCalorias, setWodCalorias] = useState(0);
   const [wodDistancia, setWodDistancia] = useState(0);
   const [wodVatios, setWodVatios] = useState(0);
+  const [wodIntervalos, setWodIntervalos] = useState<number[]>([]);
 
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
@@ -173,6 +175,9 @@ export default function SessionDetail() {
     setWodCalorias(activa!.wod_calories ?? 0);
     setWodDistancia(activa!.wod_distance_meters ?? 0);
     setWodVatios(activa!.wod_watts ?? 0);
+    const n = activa!.wod_intervals ?? 3;
+    const previos = activa!.wod_interval_times;
+    setWodIntervalos(previos && previos.length === n ? previos : Array.from({ length: n }, () => 0));
     setWodSheetAbierta(true);
   }
 
@@ -496,6 +501,15 @@ export default function SessionDetail() {
           </>
         )}
 
+        {activa.wod_format === "intervals" && (
+          <>
+            <p className="mb-4 text-sm text-muted">
+              Anota cuánto tardaste en cada uno de los {activa.wod_intervals ?? wodIntervalos.length} intervalos. Gana el menor total.
+            </p>
+            <TiemposDeIntervalos valores={wodIntervalos} onChange={setWodIntervalos} />
+          </>
+        )}
+
         {completar.isError && (
           <p className="mt-3 text-sm font-medium text-danger">
             {completar.error instanceof Error ? completar.error.message : "No se pudo guardar. Intenta de nuevo."}
@@ -506,8 +520,11 @@ export default function SessionDetail() {
           full
           className="mt-4"
           loading={completar.isPending}
+          disabled={activa.wod_format === "intervals" && wodIntervalos.some((t) => t < 1)}
           onClick={() => {
-            if (activa.wod_format === "for_time") {
+            if (activa.wod_format === "intervals") {
+              completarConResultado({ wod_interval_times: wodIntervalos });
+            } else if (activa.wod_format === "for_time") {
               completarConResultado({ wod_time_seconds: wodMin * 60 + wodSeg });
             } else if (activa.wod_format === "amrap") {
               completarConResultado({ wod_rounds: wodRondas, wod_extra_reps: wodRepsExtra });

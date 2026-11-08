@@ -8,6 +8,7 @@ import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, CHIP_ANADIR } fr
 import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { SessionSetsEditor } from "@/components/SessionSetsEditor";
 import { IconChevronRight, IconTrash } from "@/components/icons";
+import { IntervalosCampo } from "@/components/IntervalosCampo";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Stepper, Toast, cx } from "@/components/ui";
 import {
   useDeleteGroupProgram,
@@ -50,6 +51,7 @@ function BulkWodBlockCard({
   currentNotes,
   currentFormat,
   currentTimeCapSeconds,
+  currentIntervals,
   onFeedback,
   onRemoved,
 }: {
@@ -60,6 +62,7 @@ function BulkWodBlockCard({
   currentNotes: string | null;
   currentFormat: WodFormat | null;
   currentTimeCapSeconds: number | null;
+  currentIntervals: number | null;
   onFeedback: (message: string) => void;
   onRemoved: () => void;
 }) {
@@ -68,6 +71,7 @@ function BulkWodBlockCard({
   const [texto, setTexto] = useState(currentNotes ?? "");
   const [seleccionado, setSeleccionado] = useState<WodFormat | "">(currentFormat ?? "");
   const [timerMin, setTimerMin] = useState(Math.round((currentTimeCapSeconds ?? 0) / 60));
+  const [intervalos, setIntervalos] = useState(currentIntervals ?? 3);
 
   const base = { program_name: programName, program_start_date: programStartDate, scheduled_date: scheduledDate };
 
@@ -76,12 +80,13 @@ function BulkWodBlockCard({
     bulkSetWodNotes.mutate({ ...base, wod_notes: texto.trim() || "" }, { onSuccess: (r) => onFeedback(r.message) });
   }
 
-  function guardarFormato(formato: WodFormat | "", minutos: number) {
+  function guardarFormato(formato: WodFormat | "", minutos: number, n = intervalos) {
     bulkSetWodFormat.mutate(
       {
         ...base,
         wod_format: formato || null,
         time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+        intervals: formato === "intervals" ? n : null,
       },
       { onSuccess: (r) => onFeedback(r.message) },
     );
@@ -166,6 +171,16 @@ function BulkWodBlockCard({
             </button>
           ))}
         </div>
+
+        {seleccionado === "intervals" && (
+          <IntervalosCampo
+            value={intervalos}
+            onChange={(v) => {
+              setIntervalos(v);
+              guardarFormato("intervals", timerMin, v);
+            }}
+          />
+        )}
 
         {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
           <div className="mt-3 border-t border-line pt-3">
@@ -502,6 +517,7 @@ function GroupDateSection({
               currentNotes={session.wod_notes}
               currentFormat={session.wod_format}
               currentTimeCapSeconds={session.wod_time_cap_seconds}
+              currentIntervals={session.wod_intervals}
               onFeedback={onFeedback}
               onRemoved={() => setForzarMetcon(false)}
             />

@@ -64,6 +64,7 @@ def adquirir_plan(
             block_notes=dict(sesion_plan.block_notes) if sesion_plan.block_notes else None,
             wod_format=sesion_plan.wod_format,
             wod_time_cap_seconds=sesion_plan.wod_time_cap_seconds,
+            wod_intervals=sesion_plan.wod_intervals,
             block_order=sesion_plan.block_order,
         )
         db.add(nueva_sesion)

@@ -9,6 +9,7 @@ import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
 import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
 import type { MetaGuardado } from "@/components/SessionMetaCards";
+import { IntervalosCampo } from "@/components/IntervalosCampo";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Stepper, Toast, cx } from "@/components/ui";
 import {
   coachKeys,
@@ -160,19 +161,21 @@ function PlanWodBlockCard({
   const [texto, setTexto] = useState(session.wod_notes ?? "");
   const [seleccionado, setSeleccionado] = useState<WodFormat | "">(session.wod_format ?? "");
   const [timerMin, setTimerMin] = useState(Math.round((session.wod_time_cap_seconds ?? 0) / 60));
+  const [intervalos, setIntervalos] = useState(session.wod_intervals ?? 3);
 
   function guardarTexto() {
     if (texto === (session.wod_notes ?? "")) return;
     updateMeta.mutate({ sessionId: session.id, body: { wod_notes: texto.trim() || "" } }, { onSuccess: onSaved });
   }
 
-  function guardarFormato(formato: WodFormat | "", minutos: number) {
+  function guardarFormato(formato: WodFormat | "", minutos: number, n = intervalos) {
     setWodFormat.mutate(
       {
         sessionId: session.id,
         body: {
           wod_format: formato || null,
           time_cap_seconds: formato && wodFormatUsesTimeCap(formato) && minutos > 0 ? minutos * 60 : null,
+          intervals: formato === "intervals" ? n : null,
         },
       },
       { onSuccess: onSaved },
@@ -258,6 +261,16 @@ function PlanWodBlockCard({
             </button>
           ))}
         </div>
+
+        {seleccionado === "intervals" && (
+          <IntervalosCampo
+            value={intervalos}
+            onChange={(v) => {
+              setIntervalos(v);
+              guardarFormato("intervals", timerMin, v);
+            }}
+          />
+        )}
 
         {seleccionado && wodFormatUsesTimeCap(seleccionado) && (
           <div className="mt-3 border-t border-line pt-3">

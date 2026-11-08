@@ -318,6 +318,10 @@ class Session(Base):
     wod_calories = Column(Float, nullable=True)
     wod_distance_meters = Column(Float, nullable=True)
     wod_watts = Column(Float, nullable=True)
+    # "intervals": cuántos intervalos prescribe el coach, y el tiempo (en segundos) de cada uno que reportó el
+    # atleta. El total de esos tiempos queda en wod_time_seconds, y gana el menor (como "for_time").
+    wod_intervals = Column(Integer, nullable=True)
+    wod_interval_times = Column(JSON, nullable=True)
     # Solo en el registro de clases de un atleta: la sesión de la clase (la del profesor) de la
     # que esta es su copia. Sirve para no duplicarla y para mostrar "ya registraste esta clase".
     class_session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)

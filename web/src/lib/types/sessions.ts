@@ -36,7 +36,8 @@ export type WodFormat =
   | "1rm"
   | "calories"
   | "distance"
-  | "watts";
+  | "watts"
+  | "intervals";
 
 export interface TrainingSession {
   id: string;
@@ -68,6 +69,9 @@ export interface TrainingSession {
   /** Timer que fijó el coach: cap duro para "for_time", duración de la ventana para
    *  amrap/amrap_reps/calories/distance/watts. null si no aplica o no se fijó. */
   wod_time_cap_seconds: number | null;
+  /** "intervals": cuántos intervalos prescribe el coach, y el tiempo de cada uno que reportó el atleta */
+  wod_intervals: number | null;
+  wod_interval_times: number[] | null;
   wod_time_seconds: number | null;
   wod_rounds: number | null;
   wod_extra_reps: number | null;
@@ -82,6 +86,8 @@ export interface TrainingSession {
 export interface WodFormatPayload {
   wod_format: WodFormat | null;
   time_cap_seconds?: number | null;
+  /** Solo "intervals": cuántos intervalos tiene el WOD */
+  intervals?: number | null;
 }
 
 /** Body opcional de POST /sessions/{id}/complete — solo aplica si la sesión tenía wod_format. */
@@ -93,6 +99,8 @@ export interface SessionCompletePayload {
   wod_calories?: number | null;
   wod_distance_meters?: number | null;
   wod_watts?: number | null;
+  /** "intervals": el tiempo (segundos) de cada intervalo, en orden */
+  wod_interval_times?: number[] | null;
 }
 
 /** GET /users/{id}/recent-activity — una sesión ya completada, con lo REALMENTE hecho. */

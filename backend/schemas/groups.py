@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.schemas.common import Bloque, FormatoWod, SanitizedModel, SerieDeEjercicio
 
@@ -43,6 +43,14 @@ class GroupSummaryResponse(BaseModel):
     created_at: datetime
     member_count: int
     coach_name: str | None = None  # solo relevante cuando lo consulta un admin
+    has_cover_image: bool = False
+
+
+class MyGroupResponse(BaseModel):
+    """Un grupo al que pertenece el atleta que consulta (lo que ve en su cuenta)."""
+    id: UUID
+    name: str
+    coach_name: str | None = None
     has_cover_image: bool = False
 
 
@@ -162,6 +170,13 @@ class GroupSessionWodFormatUpdate(SanitizedModel):
     scheduled_date: date
     wod_format: FormatoWod | None = None
     time_cap_seconds: int | None = Field(None, ge=1, le=36_000)
+    intervals: int | None = Field(None, ge=2, le=30)   # solo "intervals"
+
+    @model_validator(mode="after")
+    def _intervalos_obligatorios(self):
+        if self.wod_format == "intervals" and self.intervals is None:
+            raise ValueError("Indica cuántos intervalos tiene el WOD.")
+        return self
 
 
 class GroupSessionWodNotesUpdate(SanitizedModel):
