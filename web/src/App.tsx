@@ -7,45 +7,47 @@ import { Spinner } from "@/components/ui";
 import { useAuth, useCurrentUser } from "@/lib/auth";
 import { isStandalone } from "@/lib/pwa";
 import type { Role, User } from "@/lib/types";
-import AdminBoxes from "@/routes/admin/Boxes";
-import AdminLogs from "@/routes/admin/Logs";
-import AdminOverview from "@/routes/admin/Overview";
-import AdminUsers from "@/routes/admin/Users";
-import AthleteDetail from "@/routes/coach/AthleteDetail";
-import BoxDashboard from "@/routes/box/BoxDashboard";
-import BoxHome from "@/routes/box/BoxHome";
-import BoxTeam from "@/routes/box/BoxTeam";
-import Athletes from "@/routes/coach/Athletes";
-import Classes from "@/routes/Classes";
-import GroupDetail from "@/routes/coach/GroupDetail";
-import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
-import Groups from "@/routes/coach/Groups";
-import ForgotPassword from "@/routes/ForgotPassword";
-import Landing from "@/routes/Landing";
-import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
-import CoachPlanEditor from "@/routes/coach/PlanEditor";
-import CoachPlans from "@/routes/coach/Plans";
-import CoachTrainings from "@/routes/coach/Trainings";
-import CoachProfile from "@/routes/coach/Profile";
-import CoachSessionEditor from "@/routes/coach/SessionEditor";
 import Login from "@/routes/Login";
-import MesocycleDetail from "@/routes/MesocycleDetail";
-import Mesocycles from "@/routes/Mesocycles";
-import MyPersonalSessionEditor from "@/routes/MyPersonalSessionEditor";
-import PlanDetail from "@/routes/PlanDetail";
-import Plans from "@/routes/Plans";
-import Profile from "@/routes/Profile";
-import Ranking from "@/routes/Ranking";
-import Register from "@/routes/Register";
-import ResetPassword from "@/routes/ResetPassword";
-import RegisterBox from "@/routes/RegisterBox";
-import RegisterCoach from "@/routes/RegisterCoach";
-import SessionDetail from "@/routes/SessionDetail";
 import Today from "@/routes/Today";
 
-// La calculadora de Fit Level es la pantalla más pesada (14 campos + tablas de baremos) y
-// la que menos se abre: va en su propio chunk.
+// Cada pantalla va en su propio paquete: un atleta no descarga el código del coach, del dueño ni del
+// admin, y la app abre más rápido. Login y Today (el home del atleta) se quedan en el paquete principal
+// porque son lo primero que se ve. La calculadora de Fit Level es la pantalla más pesada.
+// Hay un <Suspense> en main.tsx (pantallas sueltas) y otro en AppShell (el menú se queda mientras carga).
 const FitLevel = lazy(() => import("@/routes/FitLevel"));
+const AdminBoxes = lazy(() => import("@/routes/admin/Boxes"));
+const AdminLogs = lazy(() => import("@/routes/admin/Logs"));
+const AdminOverview = lazy(() => import("@/routes/admin/Overview"));
+const AdminUsers = lazy(() => import("@/routes/admin/Users"));
+const AthleteDetail = lazy(() => import("@/routes/coach/AthleteDetail"));
+const BoxDashboard = lazy(() => import("@/routes/box/BoxDashboard"));
+const BoxHome = lazy(() => import("@/routes/box/BoxHome"));
+const BoxTeam = lazy(() => import("@/routes/box/BoxTeam"));
+const Athletes = lazy(() => import("@/routes/coach/Athletes"));
+const Classes = lazy(() => import("@/routes/Classes"));
+const GroupDetail = lazy(() => import("@/routes/coach/GroupDetail"));
+const GroupProgramDetail = lazy(() => import("@/routes/coach/GroupProgramDetail"));
+const Groups = lazy(() => import("@/routes/coach/Groups"));
+const ForgotPassword = lazy(() => import("@/routes/ForgotPassword"));
+const Landing = lazy(() => import("@/routes/Landing"));
+const CoachMesocycleEditor = lazy(() => import("@/routes/coach/MesocycleEditor"));
+const CoachPlanEditor = lazy(() => import("@/routes/coach/PlanEditor"));
+const CoachPlans = lazy(() => import("@/routes/coach/Plans"));
+const CoachTrainings = lazy(() => import("@/routes/coach/Trainings"));
+const CoachProfile = lazy(() => import("@/routes/coach/Profile"));
+const CoachSessionEditor = lazy(() => import("@/routes/coach/SessionEditor"));
+const MesocycleDetail = lazy(() => import("@/routes/MesocycleDetail"));
+const Mesocycles = lazy(() => import("@/routes/Mesocycles"));
+const MyPersonalSessionEditor = lazy(() => import("@/routes/MyPersonalSessionEditor"));
+const PlanDetail = lazy(() => import("@/routes/PlanDetail"));
+const Plans = lazy(() => import("@/routes/Plans"));
+const Profile = lazy(() => import("@/routes/Profile"));
+const Ranking = lazy(() => import("@/routes/Ranking"));
+const Register = lazy(() => import("@/routes/Register"));
+const ResetPassword = lazy(() => import("@/routes/ResetPassword"));
+const RegisterBox = lazy(() => import("@/routes/RegisterBox"));
+const RegisterCoach = lazy(() => import("@/routes/RegisterCoach"));
+const SessionDetail = lazy(() => import("@/routes/SessionDetail"));
 
 // Coach y dueño del box comparten todas las pantallas de programación
 const COACH_ROLES: Role[] = ["coach", "owner"];

@@ -106,10 +106,12 @@ def entrenos_del_coach(db: Session, coach: models.User, desde: date, hasta: date
                 "is_draft": bool(meso.is_draft),
                 "athletes_total": 0,
                 "athletes_completed": 0,
+                "completed_names": [],
             }
         item["athletes_total"] += 1
         if sesion.status == "completed":
             item["athletes_completed"] += 1
+            item["completed_names"].append(atleta.full_name)
         if meso.is_draft:
             item["is_draft"] = True
     return sorted(

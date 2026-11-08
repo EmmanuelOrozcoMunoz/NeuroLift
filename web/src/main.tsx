@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import App from "@/App";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Spinner } from "@/components/ui";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { ApiError } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
@@ -39,7 +40,16 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <App />
+            {/* Pantallas sueltas (login, registro...) que se cargan bajo demanda */}
+            <Suspense
+              fallback={
+                <div className="flex min-h-dvh items-center justify-center">
+                  <Spinner className="h-8 w-8 text-brand" />
+                </div>
+              }
+            >
+              <App />
+            </Suspense>
             <UpdatePrompt />
           </AuthProvider>
         </BrowserRouter>

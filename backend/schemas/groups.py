@@ -280,6 +280,7 @@ class CoachTrainingItem(BaseModel):
     is_draft: bool = False
     athletes_total: int = 0        # cuántos atletas lo reciben (1 si es personalizado)
     athletes_completed: int = 0
+    completed_names: List[str] = []  # quiénes lo terminaron (por nombre), para verlo sin abrir el entreno
 
 
 class TrainingResultRow(BaseModel):

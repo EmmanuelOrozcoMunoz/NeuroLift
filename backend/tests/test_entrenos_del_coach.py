@@ -68,6 +68,7 @@ def test_cuantos_del_grupo_ya_lo_terminaron(coach, grupo):
     assert ana.post(f"/sessions/{sesion_de_ana['id']}/complete").status_code == 200
     item = _entrenos(coach).json()[0]
     assert (item["athletes_total"], item["athletes_completed"]) == (2, 1)
+    assert item["completed_names"] == [ana.datos["full_name"]]     # y se sabe quién
     assert dia["created"] is True
 
 

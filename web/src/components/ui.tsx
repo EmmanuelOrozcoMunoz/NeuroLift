@@ -214,6 +214,10 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
+  // Con etiquetas cortas no se parte el texto (con 3 opciones en 320px, "% de 1RM" o "Sin carga" se
+  // partían en dos líneas). Con etiquetas largas ("No, prefiero no aparecer") sí hay que dejarlo partir,
+  // o el texto se sale del recuadro: las opciones siguen del mismo ancho y crecen a lo alto.
+  const hayLargas = options.some((option) => option.label.length > 12);
   return (
     <div className="flex gap-1 rounded-xl border border-line bg-surface-2 p-1">
       {options.map((option) => (
@@ -222,9 +226,8 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cx(
-            // Todas las opciones del mismo ancho (basis-0) y sin partir el texto: con 3 opciones
-            // en 320px, "% de 1RM" o "Sin carga" se partían en dos líneas
-            "min-h-10 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold whitespace-nowrap transition-colors",
+            "min-h-10 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold transition-colors",
+            hayLargas ? "py-1.5 leading-tight text-balance" : "whitespace-nowrap",
             option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
           )}
         >
