@@ -56,6 +56,8 @@ export interface CoachTrainingItem {
   /** Cuántos atletas lo reciben (1 si es personalizado) y cuántos ya lo terminaron */
   athletes_total: number;
   athletes_completed: number;
+  /** Quiénes lo terminaron, por nombre */
+  completed_names: string[];
 }
 
 /** Un miembro en los resultados de un entreno. */
