@@ -12,6 +12,7 @@ export const WOD_FORMAT_LABELS: Record<WodFormat, string> = {
   calories: "Calorías",
   distance: "Distancia (m)",
   watts: "Vatios (W)",
+  intervals: "Intervalos",
 };
 
 type WodFormatOption = { value: WodFormat; label: string; hint: string };
@@ -33,6 +34,7 @@ export const WOD_OTHER_SCORE_TYPES: WodFormatOption[] = [
   { value: "calories", label: "Calorías", hint: "Más calorías = mejor" },
   { value: "distance", label: "Distancia (m)", hint: "Mayor distancia = mejor" },
   { value: "watts", label: "Vatios (W)", hint: "Mayor potencia = mejor" },
+  { value: "intervals", label: "Intervalos", hint: "Tiempo de cada intervalo — menor total = mejor" },
 ];
 
 export const WOD_FORMAT_OPTIONS: WodFormatOption[] = [...WOD_TIMER_TEMPLATES, ...WOD_OTHER_SCORE_TYPES];
@@ -64,6 +66,8 @@ export interface WodResultFields {
   wod_calories: number | null;
   wod_distance_meters: number | null;
   wod_watts: number | null;
+  /** "intervals": el tiempo de cada intervalo (no viene en el resumen de actividad reciente) */
+  wod_interval_times?: number[] | null;
 }
 
 /** "Por tiempo: 12:34" / "AMRAP: 5 rondas + 12 reps" / "AMRAP: 42 reps" / "EMOM: cumplido ✓" /
@@ -79,6 +83,10 @@ export function formatWodResult(
 
   if (session.wod_format === "for_time" && session.wod_time_seconds != null) {
     return `Por tiempo: ${formatSeconds(session.wod_time_seconds)}`;
+  }
+  if (session.wod_format === "intervals" && session.wod_time_seconds != null) {
+    const n = session.wod_interval_times?.length;
+    return `Intervalos: ${formatSeconds(session.wod_time_seconds)} total${n ? ` (${n} intervalos)` : ""}`;
   }
   if (session.wod_format === "amrap" && (session.wod_rounds != null || session.wod_extra_reps != null)) {
     const rondas = session.wod_rounds ?? 0;

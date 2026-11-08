@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.schemas.common import FormatoWod, SanitizedModel
 from backend.schemas.sets import SetResponse
@@ -40,6 +40,8 @@ class SessionResponse(BaseModel):
     wod_calories: Optional[float] = None
     wod_distance_meters: Optional[float] = None
     wod_watts: Optional[float] = None
+    wod_intervals: Optional[int] = None
+    wod_interval_times: Optional[List[int]] = None
     sets: List[SetResponse] = []  # ¡Aquí anidamos los sets!
 
     class Config:
@@ -52,6 +54,14 @@ class WodFormatUpdate(SanitizedModel):
     amrap/amrap_reps/calories/distance/watts. No aplica a emom/1rm."""
     wod_format: FormatoWod | None = None
     time_cap_seconds: int | None = Field(None, ge=1, le=36_000)
+    # Solo "intervals": cuántos intervalos tiene el WOD (el atleta anota el tiempo de cada uno)
+    intervals: int | None = Field(None, ge=2, le=30)
+
+    @model_validator(mode="after")
+    def _intervalos_obligatorios(self):
+        if self.wod_format == "intervals" and self.intervals is None:
+            raise ValueError("Indica cuántos intervalos tiene el WOD.")
+        return self
 
 
 class SessionCompleteRequest(SanitizedModel):
@@ -64,6 +74,14 @@ class SessionCompleteRequest(SanitizedModel):
     wod_calories: float | None = Field(None, ge=0, le=5000)
     wod_distance_meters: float | None = Field(None, ge=0, le=200_000)
     wod_watts: float | None = Field(None, ge=0, le=3000)
+    # "intervals": el tiempo (segundos) de cada intervalo, en orden. El total sale de aquí.
+    wod_interval_times: list[int] | None = Field(None, min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def _tiempos_validos(self):
+        if self.wod_interval_times is not None and any(t < 1 or t > 36_000 for t in self.wod_interval_times):
+            raise ValueError("Cada intervalo debe durar entre 1 segundo y 10 horas.")
+        return self
 
 
 # --- ESQUEMA PARA ADAPTAR UNA SESIÓN AL TIEMPO DISPONIBLE ---

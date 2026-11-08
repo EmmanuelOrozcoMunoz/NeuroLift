@@ -208,6 +208,39 @@ def search_athlete_by_email(
     return usuario
 
 
+def _grupos_del_atleta(db: Session, user: models.User) -> list[models.Group]:
+    return (
+        db.query(models.Group)
+        .join(models.group_members, models.group_members.c.group_id == models.Group.id)
+        .filter(models.group_members.c.user_id == user.id)
+        .options(joinedload(models.Group.coach))
+        .order_by(models.Group.name)
+        .all()
+    )
+
+
+@router.get("/users/me/groups", response_model=List[schemas.MyGroupResponse])
+def get_my_groups(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Los grupos a los que pertenece quien consulta: la app los muestra en la cuenta del atleta."""
+    return [
+        schemas.MyGroupResponse(
+            id=g.id, name=g.name, coach_name=g.coach.full_name if g.coach else None, has_cover_image=g.has_cover_image
+        )
+        for g in _grupos_del_atleta(db, current_user)
+    ]
+
+
+@router.get("/users/me/groups/{group_id}/cover")
+def get_my_group_cover(
+    group_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """La portada de uno de MIS grupos (el endpoint de /groups es del coach). Un grupo ajeno es 404."""
+    grupo = next((g for g in _grupos_del_atleta(db, current_user) if g.id == group_id), None)
+    if grupo is None:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    return storage.redirect_to_image(storage.GROUP_COVER_BUCKET, grupo.cover_image_filename)
+
+
 @router.post("/users/me/avatar", response_model=schemas.UserResponse)
 @limiter.limit("10/hour", key_func=_ip_and_user_key)
 async def upload_my_avatar(

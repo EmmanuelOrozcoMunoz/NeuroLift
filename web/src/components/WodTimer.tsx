@@ -44,7 +44,8 @@ function pitar(frecuencia = 880, duracionMs = 150) {
 type Modo = ModoDelTimer;
 
 function resolverModo(formato: WodFormat, capSegundos: number | null): { modo: Modo; totalSegundos: number | null } {
-  if (formato === "for_time") return { modo: "stopwatch", totalSegundos: capSegundos };
+  // Intervalos: cronómetro hacia arriba; el atleta va anotando el tiempo de cada intervalo al terminar
+  if (formato === "for_time" || formato === "intervals") return { modo: "stopwatch", totalSegundos: capSegundos };
   if (formato === "tabata") return { modo: "tabata", totalSegundos: 240 }; // protocolo fijo: 8 rondas de 20s+10s
   if (formato === "emom") return capSegundos ? { modo: "emom", totalSegundos: capSegundos } : { modo: "none", totalSegundos: null };
   if (formato === "amrap" || formato === "amrap_reps" || formato === "calories" || formato === "distance" || formato === "watts") {

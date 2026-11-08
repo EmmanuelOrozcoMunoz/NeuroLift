@@ -89,7 +89,7 @@ export function TrainingResultsSheet({
 
             <p className="text-xs font-semibold tracking-wide text-muted uppercase">
               {conRanking
-                ? `🏆 Ranking · ${datos.wod_format ? WOD_FORMAT_LABELS[datos.wod_format] : ""}${datos.wod_name ? ` · ${datos.wod_name}` : ""}${datos.time_cap_seconds ? ` · cap ${formatSeconds(datos.time_cap_seconds)}` : ""}`
+                ? `🏆 Leaderboard · ${datos.wod_format ? WOD_FORMAT_LABELS[datos.wod_format] : ""}${datos.wod_name ? ` · ${datos.wod_name}` : ""}${datos.time_cap_seconds ? ` · cap ${formatSeconds(datos.time_cap_seconds)}` : ""}`
                 : datos.kind === "group"
                   ? "Quién lo terminó"
                   : "Resultado"}

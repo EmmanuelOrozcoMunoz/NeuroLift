@@ -13,7 +13,7 @@ Dia = Annotated[int, Field(ge=0, le=6)]  # 0 = Lunes ... 6 = Domingo
 Bloque = Literal["warmup", "strength", "weightlifting", "skills", "metcon", "accessory", "main"]
 
 # Formatos estándar de WOD de CrossFit que el coach puede prescribir para una sesión.
-FormatoWod = Literal["for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts"]
+FormatoWod = Literal["for_time", "amrap", "amrap_reps", "emom", "tabata", "1rm", "calories", "distance", "watts", "intervals"]
 
 
 # Campos donde alguien escribe TEXTO LARGO en varias líneas (un WOD, el calentamiento, una nota,

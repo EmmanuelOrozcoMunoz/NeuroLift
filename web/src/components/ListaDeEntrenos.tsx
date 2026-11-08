@@ -91,7 +91,7 @@ export function FilaDeEntreno({
           onClick={onRanking}
           className="flex min-h-11 w-full items-center justify-center gap-2 border-t border-line bg-done-soft/40 text-sm font-semibold text-done active:bg-done-soft"
         >
-          🏆 Ver ranking
+          🏆 Ver leaderboard
         </button>
       )}
     </div>
