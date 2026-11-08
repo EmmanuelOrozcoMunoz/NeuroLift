@@ -11,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.core.concurrency import LimitarConcurrencia
 from backend.core.config import CORS_ORIGINS, DOCS_ENABLED, HTTP_QUEUE_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS
 from backend.core.errors import ErrorDeDominio
+from backend.core import monitoreo
 from backend.core.logging import security_logger
 from backend.core.security import _client_ip, limiter
 from backend.database import MAX_OVERFLOW, POOL_SIZE, get_db
@@ -44,6 +45,8 @@ async def lifespan(_app: FastAPI):
     storage.ensure_buckets()
     yield
 
+
+monitoreo.iniciar()  # antes de crear la app, para que Sentry se enganche a FastAPI
 
 app = FastAPI(
     title="NeuroLift API",

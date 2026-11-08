@@ -20,6 +20,7 @@ import Classes from "@/routes/Classes";
 import GroupDetail from "@/routes/coach/GroupDetail";
 import GroupProgramDetail from "@/routes/coach/GroupProgramDetail";
 import Groups from "@/routes/coach/Groups";
+import ForgotPassword from "@/routes/ForgotPassword";
 import Landing from "@/routes/Landing";
 import CoachMesocycleEditor from "@/routes/coach/MesocycleEditor";
 import CoachPlanEditor from "@/routes/coach/PlanEditor";
@@ -36,6 +37,7 @@ import Plans from "@/routes/Plans";
 import Profile from "@/routes/Profile";
 import Ranking from "@/routes/Ranking";
 import Register from "@/routes/Register";
+import ResetPassword from "@/routes/ResetPassword";
 import RegisterBox from "@/routes/RegisterBox";
 import RegisterCoach from "@/routes/RegisterCoach";
 import SessionDetail from "@/routes/SessionDetail";
@@ -146,6 +148,15 @@ export default function App() {
           </RedirectIfLogged>
         }
       />
+      <Route
+        path="/recuperar"
+        element={
+          <RedirectIfLogged>
+            <ForgotPassword />
+          </RedirectIfLogged>
+        }
+      />
+      <Route path="/restablecer" element={<ResetPassword />} />
       <Route
         path="/registro"
         element={
