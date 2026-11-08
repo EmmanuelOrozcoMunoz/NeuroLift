@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 
 import { BoxLogo } from "@/components/BoxLogo";
@@ -18,7 +18,7 @@ import {
   IconUsers,
   Logo,
 } from "@/components/icons";
-import { cx } from "@/components/ui";
+import { Spinner, cx } from "@/components/ui";
 import { useCurrentUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 
@@ -288,7 +288,16 @@ export function AppShell() {
             "lg:max-w-2xl lg:px-8 lg:pb-12",
           )}
         >
-          <Outlet />
+          {/* Las pantallas se cargan bajo demanda: el menú se queda y solo el contenido espera */}
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-16">
+                <Spinner className="h-7 w-7 text-brand" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
