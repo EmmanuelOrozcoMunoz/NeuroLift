@@ -120,7 +120,7 @@ def entrenos_del_coach(db: Session, coach: models.User, desde: date, hasta: date
     )
 
 
-def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
+def resultados_del_entreno(db: Session, coach: models.User, session_id, como_atleta: bool = False) -> dict:
     """Cómo quedó un entreno entre sus miembros: quién lo terminó, cuándo y, si tiene un WOD con formato, el
     ranking por su resultado (mejor primero). `session_id` es la sesión de referencia que trae cada entreno de
     `entrenos_del_coach`: si es de un grupo, se juntan las de todos sus miembros ese día; si es de un atleta
@@ -128,7 +128,11 @@ def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
 
     El orden de las filas: los que tienen resultado de WOD (por posición), después los que lo terminaron sin
     resultado numérico (por hora), y al final los pendientes. Sin WOD no hay posiciones: nadie "gana" una
-    sesión de fuerza por terminarla antes."""
+    sesión de fuerza por terminarla antes.
+
+    `como_atleta`: lo pide un atleta para el entreno de SU grupo. Solo ve a quienes ya lo terminaron (no quién
+    falta) y solo a quienes aceptan aparecer en el leaderboard (User.show_in_ranking, el interruptor del perfil);
+    él mismo aparece siempre. Un entreno que no es suyo, o que no es de un grupo, es un 404."""
     referencia = (
         db.query(models.Session)
         .options(joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user))
@@ -145,7 +149,11 @@ def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
         or meso.class_id is not None
     ):
         raise NoEncontrado("Entreno no encontrado")
-    ensure_owner_or_coach(db, meso.user_id, coach)
+    if como_atleta:
+        if meso.user_id != coach.id or meso.group_id is None:
+            raise NoEncontrado("Entreno no encontrado")
+    else:
+        ensure_owner_or_coach(db, meso.user_id, coach)
 
     opciones = (
         joinedload(models.Session.mesocycle).joinedload(models.Mesocycle.user),
@@ -171,8 +179,10 @@ def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
         sesiones = db.query(models.Session).options(*opciones).filter(models.Session.id == referencia.id).all()
         tipo, titulo = "athlete", meso.user.full_name
 
+    if como_atleta:
+        sesiones = [s for s in sesiones if s.mesocycle.user_id == coach.id or s.mesocycle.user.show_in_ranking]
     completadas = [s for s in sesiones if s.status == "completed"]
-    pendientes = sorted((s for s in sesiones if s.status != "completed"), key=lambda s: s.mesocycle.user.full_name.lower())
+    pendientes = [] if como_atleta else sorted((s for s in sesiones if s.status != "completed"), key=lambda s: s.mesocycle.user.full_name.lower())
     con_wod = bool(referencia.wod_format)
 
     ordenadas = rank_wod_sessions(completadas) if con_wod else []
@@ -209,7 +219,7 @@ def resultados_del_entreno(db: Session, coach: models.User, session_id) -> dict:
         "wod_format": referencia.wod_format,
         "wod_name": nombre_del_wod if con_wod else None,
         "time_cap_seconds": referencia.wod_time_cap_seconds if con_wod else None,
-        "total": len(sesiones),
+        "total": len(completadas) if como_atleta else len(sesiones),
         "completed": len(completadas),
         "rows": filas,
     }

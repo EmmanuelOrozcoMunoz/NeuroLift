@@ -17,6 +17,7 @@ from backend.core.security import (
 )
 from backend.database import get_db
 from backend.services.block_notes import aplicar_block_notes
+from backend.services.entrenos import resultados_del_entreno
 from backend.services.exercises import clean_ai_block, get_or_create_exercise
 from backend.services.prs import actualizar_cargas_por_porcentaje, get_athlete_prs, normalize_exercise_name
 
@@ -40,6 +41,15 @@ def create_session(
     db.commit()
     db.refresh(new_session)
     return new_session
+
+
+@router.get("/{session_id}/leaderboard", response_model=schemas.TrainingResults)
+def leaderboard_del_entreno(
+    session_id: UUID, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    """El leaderboard de un entreno de MI grupo: cómo les fue a mis compañeros ese día. Solo aparecen quienes ya lo
+    terminaron y aceptan estar en el leaderboard (interruptor del perfil). Un entreno ajeno o no grupal es 404."""
+    return resultados_del_entreno(db, current_user, session_id, como_atleta=True)
 
 
 @router.put("/{session_id}/wod-format", response_model=schemas.MessageResponse)
