@@ -29,6 +29,8 @@ export interface MesocycleSummary {
 export interface MesocycleFull {
   id: string;
   user_id: string | null;
+  /** El grupo del que es este programa (null si es individual) */
+  group_id: string | null;
   name: string | null;
   discipline: string;
   start_date: string;

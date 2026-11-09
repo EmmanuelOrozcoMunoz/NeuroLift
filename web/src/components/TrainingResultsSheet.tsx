@@ -1,6 +1,7 @@
 import { IconUser } from "@/components/icons";
 import { Badge, Button, ErrorState, LoadingList, Sheet } from "@/components/ui";
 import { useTrainingResults } from "@/lib/coachQueries";
+import { useTrainingLeaderboard } from "@/lib/queries";
 import { formatSeconds, longDate } from "@/lib/dates";
 import { useAvatarUrl } from "@/lib/useAvatarUrl";
 import { WOD_FORMAT_LABELS } from "@/lib/wod";
@@ -12,7 +13,7 @@ function capitalizar(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-function FilaDeResultado({ fila }: { fila: TrainingResultRow }) {
+function FilaDeResultado({ fila, comoAtleta }: { fila: TrainingResultRow; comoAtleta: boolean }) {
   const avatarUrl = useAvatarUrl(fila.user_id, fila.has_avatar);
   const iniciales = fila.full_name
     .split(" ")
@@ -37,7 +38,7 @@ function FilaDeResultado({ fila }: { fila: TrainingResultRow }) {
       <div className="min-w-0 grow">
         <p className="truncate font-bold">{fila.full_name}</p>
         {fila.score_label && <p className="truncate text-xs font-semibold text-brand">{fila.score_label}</p>}
-        {fila.sets_total > 0 && fila.completed && (
+        {!comoAtleta && fila.sets_total > 0 && fila.completed && (
           <p className="truncate text-xs text-muted">
             {fila.sets_logged} de {fila.sets_total} series anotadas
           </p>
@@ -50,19 +51,27 @@ function FilaDeResultado({ fila }: { fila: TrainingResultRow }) {
   );
 }
 
-/** Cómo quedó un entreno entre sus miembros. Con un WOD que tiene formato (tiempo, rondas, carga...) es el
+/** Cómo quedó un entreno entre sus miembros. Lo abre el coach (con quién falta y «Editar este día») o, con
+ *  `comoAtleta`, un atleta del grupo: solo ve a quienes ya lo terminaron y aceptan aparecer (el interruptor de su
+ *  perfil), sin botón de editar.
+ *
+ *  Cómo quedó un entreno entre sus miembros. Con un WOD que tiene formato (tiempo, rondas, carga...) es el
  *  RANKING por su resultado, mejor primero; sin WOD, quién lo terminó y quién falta (en una sesión de fuerza nadie
  *  "gana" por terminarla antes, así que no hay posiciones). Es lo que antes vivía en la pantalla Actividad. */
 export function TrainingResultsSheet({
   sessionId,
   onClose,
   onEdit,
+  comoAtleta = false,
 }: {
   sessionId: string | null;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
+  comoAtleta?: boolean;
 }) {
-  const resultados = useTrainingResults(sessionId);
+  const delCoach = useTrainingResults(comoAtleta ? null : sessionId);
+  const delAtleta = useTrainingLeaderboard(comoAtleta ? sessionId : null);
+  const resultados = comoAtleta ? delAtleta : delCoach;
   const datos = resultados.data;
   const conRanking = Boolean(datos?.wod_format);
 
@@ -80,7 +89,9 @@ export function TrainingResultsSheet({
           <>
             <p className="text-sm font-semibold">{capitalizar(longDate(datos.date))}</p>
             <p className="text-sm text-muted">
-              {datos.kind === "group"
+              {comoAtleta
+                ? `${datos.completed} ${datos.completed === 1 ? "lo terminó" : "lo terminaron"}`
+                : datos.kind === "group"
                 ? `${datos.completed} de ${datos.total} ${datos.total === 1 ? "miembro lo terminó" : "miembros lo terminaron"}`
                 : datos.completed > 0
                   ? "Lo terminó"
@@ -97,15 +108,22 @@ export function TrainingResultsSheet({
 
             <div className="space-y-2">
               {datos.rows.map((fila) => (
-                <FilaDeResultado key={fila.user_id} fila={fila} />
+                <FilaDeResultado key={fila.user_id} fila={fila} comoAtleta={comoAtleta} />
               ))}
             </div>
           </>
         )}
 
-        <Button full variant="secondary" onClick={onEdit}>
-          Editar este día
-        </Button>
+        {!comoAtleta && onEdit && (
+          <Button full variant="secondary" onClick={onEdit}>
+            Editar este día
+          </Button>
+        )}
+        {comoAtleta && (
+          <p className="text-center text-xs text-muted">
+            Solo aparecen quienes ya lo terminaron y aceptan estar en el leaderboard.
+          </p>
+        )}
       </div>
     </Sheet>
   );
