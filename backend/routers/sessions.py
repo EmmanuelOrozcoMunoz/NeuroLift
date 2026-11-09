@@ -16,7 +16,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
-from backend.services.block_notes import aplicar_block_notes
+from backend.services.block_notes import aplicar_block_notes, limpiar_orden_de_bloques
 from backend.services.entrenos import resultados_del_entreno
 from backend.services.exercises import clean_ai_block, get_or_create_exercise
 from backend.services.prs import actualizar_cargas_por_porcentaje, get_athlete_prs, normalize_exercise_name
@@ -101,7 +101,7 @@ def update_session_meta(
     ensure_owner_or_coach_editable(db, sesion.mesocycle, current_user)
 
     if req.block_order is not None:
-        sesion.block_order = req.block_order or None
+        sesion.block_order = limpiar_orden_de_bloques(req.block_order)
     if req.warmup_notes is not None:
         sesion.warmup_notes = req.warmup_notes or None
     if req.wod_notes is not None:

@@ -7,7 +7,13 @@ import { CoverUploader } from "@/components/CoverImage";
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
-import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import {
+  AddTextBlockButtons,
+  BlockNotesCard,
+  BlockOrderEditor,
+  CHIP_ANADIR,
+  WarmupNotesCard,
+} from "@/components/SessionMetaCards";
 import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { IntervalosCampo } from "@/components/IntervalosCampo";
 import { Button, Card, EmptyState, ErrorState, Field, LoadingList, Sheet, Stepper, Toast, cx } from "@/components/ui";
@@ -21,6 +27,7 @@ import {
   useUpdatePlanSessionMeta,
 } from "@/lib/coachQueries";
 import { camposComunes, draftDeEjercicio, firmaDeEjercicio, nuevoDraft, seriesParaEnviar } from "@/lib/exerciseDraft";
+import { guardarPreferencia, leerPreferencia } from "@/lib/preferencias";
 import { usePlanDetail } from "@/lib/queries";
 import { groupByBlock } from "@/lib/sessions";
 import type { ExerciseGroup } from "@/lib/sessions";
@@ -367,6 +374,8 @@ function PlanExerciseEditor({
   );
 }
 
+const CLAVE_FORM_EJERCICIO_PLAN = "neurolift.plan.formulario-de-ejercicio";
+
 function DayEditor({
   planId,
   session,
@@ -389,6 +398,13 @@ function DayEditor({
   const [bloquesDeTexto, setBloquesDeTexto] = useState<string[]>(Object.keys(session.block_notes ?? {}));
   // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
   const [editando, setEditando] = useState<string | null>(null);
+  // El formulario para agregar un ejercicio: cerrado de entrada (estorba), y se recuerda lo que se eligió
+  const [formAbierto, setFormAbierto] = useState(() => leerPreferencia(CLAVE_FORM_EJERCICIO_PLAN) === "abierto");
+  function alternarFormulario() {
+    const siguiente = !formAbierto;
+    setFormAbierto(siguiente);
+    guardarPreferencia(CLAVE_FORM_EJERCICIO_PLAN, siguiente ? "abierto" : "cerrado");
+  }
   // Los bloques con texto libre (WOD y calentamiento) se muestran aunque aún no tengan ejercicios.
   // Se respeta el orden de bloques guardado en este día (al adquirir el plan se copia tal cual).
   const forzados = [
@@ -407,29 +423,30 @@ function DayEditor({
     guardando: updateMeta.isPending,
   };
 
-  // Botones para agregar un bloque de texto libre que todavía no está en el día
+  // Una sola fila de botones "+" para añadir al día (igual que en el editor de sesiones y de grupos)
   const botonesDeTexto = (
-    <div className="space-y-2">
-      {!tieneCalentamiento && (
-        <button
-          type="button"
-          onClick={() => setForzarCalentamiento(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-        >
-          🔥 Añadir calentamiento
-        </button>
-      )}
-      {!tieneMetcon && (
-        <button
-          type="button"
-          onClick={() => setForzarMetcon(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-        >
-          🔥 Añadir WOD
-        </button>
-      )}
-      <AddTextBlockButtons presentes={bloquesDeTexto} onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])} />
-    </div>
+    <AddTextBlockButtons
+      titulo="Añadir a este día"
+      presentes={bloquesDeTexto}
+      onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])}
+      extra={
+        <>
+          {!tieneCalentamiento && (
+            <button type="button" onClick={() => setForzarCalentamiento(true)} className={CHIP_ANADIR}>
+              + Calentamiento
+            </button>
+          )}
+          {!tieneMetcon && (
+            <button type="button" onClick={() => setForzarMetcon(true)} className={CHIP_ANADIR}>
+              + WOD
+            </button>
+          )}
+          <button type="button" onClick={alternarFormulario} className={CHIP_ANADIR}>
+            {formAbierto ? "− Ocultar ejercicio" : "+ Ejercicio"}
+          </button>
+        </>
+      }
+    />
   );
 
   const [draft, cambiar] = useExerciseDraft(() => nuevoDraft({ reps: 5, tipo: "porcentaje" }));
@@ -541,15 +558,17 @@ function DayEditor({
       )}
       {vacio && <div className="mb-3">{botonesDeTexto}</div>}
 
-      <div className="space-y-3 border-t border-line pt-3">
-        <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>
-        <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} modo="porSerie" />
+      {formAbierto && (
+        <div className="space-y-3 border-t border-line pt-3">
+          <p className="text-sm font-semibold text-muted">➕ Agregar ejercicio</p>
+          <ExerciseFormFields draft={draft} onChange={cambiar} tipos={["porcentaje", "kg", "libre"]} modo="porSerie" />
 
-        {error && <p className="text-sm font-medium text-danger">{error}</p>}
-        <Button full loading={addSet.isPending} onClick={handleAdd}>
-          Agregar al plan
-        </Button>
-      </div>
+          {error && <p className="text-sm font-medium text-danger">{error}</p>}
+          <Button full loading={addSet.isPending} onClick={handleAdd}>
+            Agregar al plan
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
