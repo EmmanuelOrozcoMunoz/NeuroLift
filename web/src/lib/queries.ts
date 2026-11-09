@@ -12,6 +12,7 @@ import type {
   PlanSummary,
   RecentSessionSummary,
   SessionCompletePayload,
+  TrainingResults,
   TrainingSession,
   User,
   WodFormatPayload,
@@ -74,6 +75,16 @@ export function useMesocyclesWithSessions(userId: string): {
 
 /** El coach prescribe (o quita) el formato de WOD de una sesión — el atleta ve ese formato al
  *  completarla y reporta el resultado que le corresponda (tiempo, rondas+reps, o si cumplió). */
+/** El leaderboard de un entreno de MI grupo (GET /sessions/{id}/leaderboard): quiénes lo terminaron y aceptan aparecer. */
+export function useTrainingLeaderboard(sessionId: string | null): UseQueryResult<TrainingResults> {
+  return useQuery({
+    queryKey: ["training-leaderboard", sessionId],
+    queryFn: () => apiFetch<TrainingResults>(`/sessions/${sessionId}/leaderboard`),
+    enabled: sessionId !== null,
+    refetchOnMount: "always",
+  });
+}
+
 export function useSetWodFormat(mesocycleId: string) {
   const queryClient = useQueryClient();
   return useMutation({

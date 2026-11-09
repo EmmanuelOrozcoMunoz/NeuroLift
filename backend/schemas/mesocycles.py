@@ -58,6 +58,7 @@ class MesocycleSummaryResponse(BaseModel):
 class MesocycleFullResponse(BaseModel):
     id: UUID
     user_id: Optional[UUID] = None  # None en las plantillas de planes (no tienen dueño)
+    group_id: Optional[UUID] = None  # el grupo del que es este programa (el atleta ve el leaderboard de su grupo)
     name: str | None = None
     discipline: str
     start_date: date

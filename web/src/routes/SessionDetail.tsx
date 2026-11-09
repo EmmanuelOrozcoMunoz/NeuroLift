@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/AppShell";
 import { ExerciseNoteRow } from "@/components/ExerciseNoteRow";
 import { IconCheck, IconClock, IconSpark, IconTrash } from "@/components/icons";
 import { TiemposDeIntervalos } from "@/components/TiemposDeIntervalos";
+import { TrainingResultsSheet } from "@/components/TrainingResultsSheet";
 import { WodTimer } from "@/components/WodTimer";
 import {
   Badge,
@@ -53,6 +54,7 @@ export default function SessionDetail() {
   const [wodDistancia, setWodDistancia] = useState(0);
   const [wodVatios, setWodVatios] = useState(0);
   const [wodIntervalos, setWodIntervalos] = useState<number[]>([]);
+  const [leaderboardAbierto, setLeaderboardAbierto] = useState(false);
 
   const adaptar = useAdaptSession();
   const completar = useCompleteSession();
@@ -362,6 +364,17 @@ export default function SessionDetail() {
       {completada && (
         <p className="mt-2 text-center text-xs text-muted">¿Te equivocaste? Toca el botón para deshacerlo.</p>
       )}
+      {/* El leaderboard del día de mi grupo, solo cuando ya hice el mío (para no ver los resultados de los demás antes) */}
+      {completada && data?.group_id && (
+        <Button full variant="secondary" className="mt-3" onClick={() => setLeaderboardAbierto(true)}>
+          🏆 Ver leaderboard del grupo
+        </Button>
+      )}
+      <TrainingResultsSheet
+        sessionId={leaderboardAbierto ? original.id : null}
+        comoAtleta
+        onClose={() => setLeaderboardAbierto(false)}
+      />
 
       {/* Registro ANTIGUO de una clase del box (ya no se pueden crear): se puede quitar */}
       {original.class_session_id && (
