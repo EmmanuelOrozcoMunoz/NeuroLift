@@ -97,7 +97,7 @@ export function groupByBlock(
     ...BLOCK_KEYS.filter((key) => buckets.has(key) && !orderSource.includes(key)),
   ];
   const custom = [...buckets.keys()].filter(
-    (key): key is string => key !== null && !(BLOCK_KEYS as readonly string[]).includes(key),
+    (key): key is string => key !== null && !(BLOCK_KEYS as readonly string[]).includes(key) && !known.includes(key),
   );
   const orderedKeys: (string | null)[] = [...known, ...custom, ...(buckets.has(null) ? [null] : [])];
 
@@ -149,7 +149,9 @@ export function bloquesConTexto(session: TrainingSession): string[] {
   if (session.wod_notes || session.wod_format != null) claves.add("metcon");
   const personalizado = (session.block_order ?? "").split(",").filter(Boolean);
   const orden = [...personalizado, ...BLOCK_KEYS.filter((k) => !personalizado.includes(k))];
-  return orden.filter((k) => claves.has(k)).map((k) => blockLabel(k));
+  // Los bloques con nombre propio que no están en el orden guardado van al final
+  const sueltos = [...claves].filter((k) => !orden.includes(k));
+  return [...orden, ...sueltos].filter((k) => claves.has(k)).map((k) => blockLabel(k));
 }
 
 /** ¿Tiene algo que hacer? Ejercicios, o algún bloque escrito como texto. Una sesión solo con texto

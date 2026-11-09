@@ -3,13 +3,20 @@ import { useState } from "react";
 import { ExerciseFormFields, useExerciseDraft } from "@/components/ExerciseFormFields";
 import { ExerciseSummaryRow } from "@/components/ExerciseSummaryRow";
 import { IconTrash } from "@/components/icons";
-import { AddTextBlockButtons, BlockNotesCard, BlockOrderEditor, WarmupNotesCard } from "@/components/SessionMetaCards";
+import {
+  AddTextBlockButtons,
+  BlockNotesCard,
+  BlockOrderEditor,
+  CHIP_ANADIR,
+  WarmupNotesCard,
+} from "@/components/SessionMetaCards";
 import type { MetaGuardado } from "@/components/SessionMetaCards";
 import { IntervalosCampo } from "@/components/IntervalosCampo";
 import { Button, Card, Stepper, cx } from "@/components/ui";
 import { useAddSet, useDeleteSet, useUpdateSessionMeta, useUpdateSet } from "@/lib/coachQueries";
 import { camposDeFila, draftDeEjercicio, firmaDeEjercicio, nuevoDraft } from "@/lib/exerciseDraft";
 import { useSetWodFormat } from "@/lib/queries";
+import { guardarPreferencia, leerPreferencia } from "@/lib/preferencias";
 import { groupByBlock } from "@/lib/sessions";
 import { WOD_OTHER_SCORE_TYPES, WOD_TIMER_TEMPLATES, wodFormatUsesTimeCap } from "@/lib/wod";
 import type { ExerciseGroup } from "@/lib/sessions";
@@ -302,6 +309,8 @@ function WodBlockCard({
   );
 }
 
+const CLAVE_FORM_EJERCICIO = "neurolift.sesion.formulario-de-ejercicio";
+
 /** Editor completo (ver + editar + añadir ejercicios) de UNA sesión. Se usa tanto en la
  *  pantalla dedicada del coach como embebido dentro de la pestaña individual de un atleta
  *  dentro de un programa de grupo, y en el entreno propio del atleta.
@@ -327,6 +336,13 @@ export function SessionSetsEditor({
   const [bloquesDeTexto, setBloquesDeTexto] = useState<string[]>(Object.keys(session.block_notes ?? {}));
   // El ejercicio cuyo formulario está abierto (por su firma: al guardar cambia y se cierra solo)
   const [editando, setEditando] = useState<string | null>(null);
+  // El formulario para añadir un ejercicio: cerrado de entrada (estorba), y se recuerda lo que se eligió
+  const [formAbierto, setFormAbierto] = useState(() => leerPreferencia(CLAVE_FORM_EJERCICIO) === "abierto");
+  function alternarFormulario() {
+    const siguiente = !formAbierto;
+    setFormAbierto(siguiente);
+    guardarPreferencia(CLAVE_FORM_EJERCICIO, siguiente ? "abierto" : "cerrado");
+  }
   // Los bloques con texto libre (WOD y calentamiento) se muestran aunque aún no tengan ejercicios
   const forzados = [
     ...(forzarMetcon ? ["metcon"] : []),
@@ -344,29 +360,31 @@ export function SessionSetsEditor({
     guardando: updateMeta.isPending,
   };
 
-  // Botones para agregar un bloque de texto libre que todavía no está en el día
+  // Una sola fila de botones "+" para añadir al día (igual que en el editor de grupos): bloques de texto, un bloque
+  // con el nombre que se quiera, el calentamiento, el WOD y el ejercicio.
   const botonesDeTexto = (
-    <div className="space-y-2">
-      {!tieneCalentamiento && (
-        <button
-          type="button"
-          onClick={() => setForzarCalentamiento(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-        >
-          🔥 Añadir calentamiento
-        </button>
-      )}
-      {!tieneMetcon && (
-        <button
-          type="button"
-          onClick={() => setForzarMetcon(true)}
-          className="w-full rounded-2xl border border-dashed border-line bg-surface p-3 text-left text-sm font-bold active:bg-surface-2"
-        >
-          🔥 Añadir WOD
-        </button>
-      )}
-      <AddTextBlockButtons presentes={bloquesDeTexto} onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])} />
-    </div>
+    <AddTextBlockButtons
+      titulo="Añadir a este día"
+      presentes={bloquesDeTexto}
+      onAdd={(key) => setBloquesDeTexto((previos) => [...previos, key])}
+      extra={
+        <>
+          {!tieneCalentamiento && (
+            <button type="button" onClick={() => setForzarCalentamiento(true)} className={CHIP_ANADIR}>
+              + Calentamiento
+            </button>
+          )}
+          {!tieneMetcon && (
+            <button type="button" onClick={() => setForzarMetcon(true)} className={CHIP_ANADIR}>
+              + WOD
+            </button>
+          )}
+          <button type="button" onClick={alternarFormulario} className={CHIP_ANADIR}>
+            {formAbierto ? "− Ocultar ejercicio" : "+ Ejercicio"}
+          </button>
+        </>
+      }
+    />
   );
 
   return (
@@ -446,11 +464,13 @@ export function SessionSetsEditor({
         )}
         {vacia && <div className="mb-3">{botonesDeTexto}</div>}
 
-        <AddExerciseForm
-          mesocycleId={mesocycleId}
-          sessionId={session.id}
-          onAdded={() => onFeedback("¡Ejercicio añadido!")}
-        />
+        {formAbierto && (
+          <AddExerciseForm
+            mesocycleId={mesocycleId}
+            sessionId={session.id}
+            onAdded={() => onFeedback("¡Ejercicio añadido!")}
+          />
+        )}
       </Card>
     </div>
   );
