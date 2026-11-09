@@ -23,6 +23,7 @@ import {
   useRemoveAthleteFromProgram,
 } from "@/lib/coachQueries";
 import { TEXT_BLOCK_KEYS } from "@/lib/blocks";
+import { guardarPreferencia, leerPreferencia } from "@/lib/preferencias";
 import { shortDate } from "@/lib/dates";
 import {
   camposComunes,
@@ -375,21 +376,6 @@ function DateAccordion({
 
 const CLAVE_FORM_EJERCICIO = "neurolift.grupo.formulario-de-ejercicio";
 
-function leerPreferencia(clave: string): string | null {
-  try {
-    return window.localStorage.getItem(clave);
-  } catch {
-    return null;
-  }
-}
-
-function guardarPreferencia(clave: string, valor: string): void {
-  try {
-    window.localStorage.setItem(clave, valor);
-  } catch {
-    // sin almacenamiento (modo privado, etc.): la pantalla funciona igual, solo no recuerda la elección
-  }
-}
 
 /** Una fecha del programa, para TODO el grupo -- lleva su propio estado de si el bloque
  *  Metabólico/WOD está "activado" para poder mostrarlo aunque todavía no tenga ejercicios

@@ -217,7 +217,7 @@ class GroupSessionBlockNotesUpdate(SanitizedModel):
     program_name: str = Field(..., min_length=1, max_length=100)
     program_start_date: date
     scheduled_date: date
-    block: str = Field(..., min_length=1, max_length=20)
+    block: str = Field(..., min_length=1, max_length=40)   # un bloque de siempre, o "x:Nombre" (ver block_notes.py)
     block_text: str = Field("", max_length=2000)
 
 

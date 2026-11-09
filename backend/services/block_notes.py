@@ -13,6 +13,25 @@ BLOQUES_CON_TEXTO = ("strength", "weightlifting", "skills", "accessory", "main")
 
 MAX_TEXTO_POR_BLOQUE = 2000
 
+# Bloques con nombre propio ("Activación", "Finisher"...): el coach (o el atleta) los crea y les pone el nombre. Su
+# clave es "x:" + el nombre, así nunca choca con un bloque de siempre, y siempre llevan texto libre (block_notes).
+PREFIJO_PERSONALIZADO = "x:"
+MAX_NOMBRE_DE_BLOQUE = 30
+
+
+def es_bloque_personalizado(clave: object) -> bool:
+    """¿Es la clave de un bloque con nombre propio? "x:" + un nombre de 1 a 30 caracteres, sin espacios a los
+    lados, sin comas (el orden de los bloques se guarda separado por comas) ni caracteres que no se imprimen."""
+    if not isinstance(clave, str) or not clave.startswith(PREFIJO_PERSONALIZADO):
+        return False
+    nombre = clave[len(PREFIJO_PERSONALIZADO):]
+    return (
+        1 <= len(nombre) <= MAX_NOMBRE_DE_BLOQUE
+        and nombre == nombre.strip()
+        and nombre.isprintable()
+        and not any(c in nombre for c in ",<>")
+    )
+
 
 def limpiar_block_notes(notas: dict | None, *, actuales: dict | None = None) -> dict | None:
     """Las notas listas para guardar, o None si no queda ninguna.
@@ -23,7 +42,7 @@ def limpiar_block_notes(notas: dict | None, *, actuales: dict | None = None) -> 
     por eso se sanean aquí uno por uno. Un bloque que no admite texto es un error del cliente."""
     resultado = dict(actuales or {})
     for bloque, texto in (notas or {}).items():
-        if bloque not in BLOQUES_CON_TEXTO:
+        if bloque not in BLOQUES_CON_TEXTO and not es_bloque_personalizado(bloque):
             raise SolicitudInvalida(
                 f"El bloque '{bloque}' no admite texto aquí (el calentamiento y el WOD tienen su propio campo)."
             )
@@ -70,7 +89,7 @@ def limpiar_orden_de_bloques(texto: str | None) -> str | None:
     existe es un error del cliente, no algo que se descarta en silencio."""
     piezas = [p.strip() for p in (texto or "").split(",") if p.strip()]
     for pieza in piezas:
-        if pieza not in TODOS_LOS_BLOQUES:
+        if pieza not in TODOS_LOS_BLOQUES and not es_bloque_personalizado(pieza):
             raise SolicitudInvalida(f"El bloque '{pieza}' no existe.")
     unicos = list(dict.fromkeys(piezas))
     return ",".join(unicos) or None

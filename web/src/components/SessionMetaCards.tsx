@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { IconChevronRight, IconTrash } from "@/components/icons";
-import { Card } from "@/components/ui";
-import { TEXT_BLOCK_KEYS, blockLabel } from "@/lib/blocks";
+import { Button, Card } from "@/components/ui";
+import { BLOCK_LABELS, MAX_NOMBRE_DE_BLOQUE, TEXT_BLOCK_KEYS, blockLabel, clavePersonalizada } from "@/lib/blocks";
 import type { TrainingSession } from "@/lib/types";
 
 /**
@@ -196,13 +196,15 @@ export function BlockNotesCard({
   );
 }
 
-/** Botones para añadir el texto de un bloque que todavía no está en el día. */
+/** Botones para añadir el texto de un bloque que todavía no está en el día, más «+ Otro bloque», que deja
+ *  ponerle el nombre que se quiera ("Activación", "Finisher"...): el bloque sale con ese nombre. */
 export function AddTextBlockButtons({
   presentes,
   onAdd,
   bloques = TEXT_BLOCK_KEYS,
   titulo = "Añadir un bloque de texto",
   extra,
+  permitirPersonalizado = true,
 }: {
   presentes: readonly string[];
   onAdd: (blockKey: string) => void;
@@ -212,9 +214,38 @@ export function AddTextBlockButtons({
   extra?: ReactNode;
   /** Los bloques que se pueden añadir (por defecto, los que usan block_notes). */
   bloques?: readonly string[];
+  /** Si se ofrece «+ Otro bloque» (un bloque con el nombre que se elija). */
+  permitirPersonalizado?: boolean;
 }) {
+  const [nombrando, setNombrando] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [errorDeNombre, setErrorDeNombre] = useState<string | null>(null);
+
   const faltantes = bloques.filter((key) => !presentes.includes(key));
-  if (faltantes.length === 0 && !extra) return null;
+  if (faltantes.length === 0 && !extra && !permitirPersonalizado) return null;
+
+  function crearPersonalizado(event: React.FormEvent) {
+    event.preventDefault();
+    const clave = clavePersonalizada(nombre);
+    if (!clave) {
+      setErrorDeNombre(`Escribe un nombre (hasta ${MAX_NOMBRE_DE_BLOQUE} letras).`);
+      return;
+    }
+    const buscado = blockLabel(clave).toLowerCase();
+    if (Object.values(BLOCK_LABELS).some((etiqueta) => etiqueta.toLowerCase() === buscado)) {
+      setErrorDeNombre("Ese bloque ya existe: usa su propio botón.");
+      return;
+    }
+    if (presentes.some((p) => p.toLowerCase() === clave.toLowerCase())) {
+      setErrorDeNombre("Ya tienes un bloque con ese nombre.");
+      return;
+    }
+    onAdd(clave);
+    setNombre("");
+    setErrorDeNombre(null);
+    setNombrando(false);
+  }
+
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{titulo}</p>
@@ -230,7 +261,48 @@ export function AddTextBlockButtons({
           </button>
         ))}
         {extra}
+        {permitirPersonalizado && !nombrando && (
+          <button type="button" onClick={() => setNombrando(true)} className={CHIP_ANADIR}>
+            + Otro bloque
+          </button>
+        )}
       </div>
+      {nombrando && (
+        <form onSubmit={crearPersonalizado} className="mt-2 rounded-xl border border-line bg-surface p-3">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-muted">Nombre del bloque</span>
+            <input
+              type="text"
+              autoFocus
+              maxLength={MAX_NOMBRE_DE_BLOQUE}
+              value={nombre}
+              onChange={(e) => {
+                setNombre(e.target.value);
+                setErrorDeNombre(null);
+              }}
+              placeholder="Ej. Activación, Finisher, Core"
+              className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+            />
+          </label>
+          {errorDeNombre && <p className="mt-1.5 text-sm font-medium text-danger">{errorDeNombre}</p>}
+          <div className="mt-3 flex gap-2">
+            <Button type="submit" className="grow">
+              Añadir bloque
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setNombrando(false);
+                setNombre("");
+                setErrorDeNombre(null);
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
