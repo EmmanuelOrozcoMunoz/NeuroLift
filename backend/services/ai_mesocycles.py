@@ -290,24 +290,26 @@ def construir_mesociclo_inteligente(
     if not fechas:
         raise RuntimeError("Selecciona al menos un día de entrenamiento.")
 
-    # Individual: queda en borrador para que el coach lo revise antes de que el atleta lo vea. La
-    # generación grupal sigue publicándose directo (pasará a plantilla + asignar, que ya es revisable).
-    meso = models.Mesocycle(
-        user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date,
-        is_draft=group_id is None,
-    )
-    db.add(meso)
-    db.flush()
-
     contexto = contexto_del_atleta(db, atleta, context)
     # Para resolver los porcentajes que devuelva la IA a kg reales con las marcas de hoy.
     prs = get_athlete_prs(db, atleta.id)
+    # Se suelta la conexión a la base mientras la IA piensa (con varias semanas son minutos) y el mesociclo se
+    # crea DESPUÉS: así no se retiene una conexión, ni una fila a medias, durante toda la generación.
+    db.commit()
 
     try:
         rutinas = pedir_rutinas(
             atleta.full_name, discipline, contexto, fechas, weeks_count, len(training_days),
             session_duration_minutes, day_focus,
         )
+        # Individual: queda en borrador para que el coach lo revise antes de que el atleta lo vea. La
+        # generación grupal sigue publicándose directo (pasará a plantilla + asignar, que ya es revisable).
+        meso = models.Mesocycle(
+            user_id=atleta.id, group_id=group_id, name=name, discipline=discipline, start_date=start_date,
+            is_draft=group_id is None,
+        )
+        db.add(meso)
+        db.flush()
         avisos = guardar_rutinas(db, meso, rutinas, start_date, session_duration_minutes, prs)
         meso.end_date = datetime.strptime(fechas[-1], "%Y-%m-%d").date()
         db.commit()
@@ -384,27 +386,30 @@ def construir_plantilla_con_ia(
     if not fechas:
         raise RuntimeError("Selecciona al menos un día de entrenamiento.")
 
-    plan = models.Mesocycle(
-        user_id=None,
-        is_template=True,
-        is_published=False,
-        created_by_coach_id=coach.id,
-        box_id=coach.box_id,
-        plan_visibility="box",
-        name=name,
-        description=description,
-        discipline=discipline,
-        level=level,
-        start_date=PLAN_EPOCH,
-    )
-    db.add(plan)
-    db.flush()
+    # Se suelta la conexión a la base mientras la IA piensa (son minutos) y el plan se crea DESPUÉS: así no se
+    # retiene una conexión, ni una fila a medias, durante toda la generación.
+    db.commit()
 
     try:
         rutinas = pedir_rutinas(
             "el grupo", discipline, _CONTEXTO_PLANTILLA + context, fechas, weeks_count, len(training_days),
             session_duration_minutes, day_focus,
         )
+        plan = models.Mesocycle(
+            user_id=None,
+            is_template=True,
+            is_published=False,
+            created_by_coach_id=coach.id,
+            box_id=coach.box_id,
+            plan_visibility="box",
+            name=name,
+            description=description,
+            discipline=discipline,
+            level=level,
+            start_date=PLAN_EPOCH,
+        )
+        db.add(plan)
+        db.flush()
         # prs=None: una plantilla no tiene atleta, así que no hay marcas con qué respaldar un kg fijo
         avisos = guardar_rutinas(db, plan, rutinas, PLAN_EPOCH, session_duration_minutes, None)
         db.flush()
