@@ -12,6 +12,7 @@ from backend.core.security import (
     limiter,
     require_coach,
 )
+from backend.core.ia_limite import plaza_de_ia
 from backend.database import get_db
 from backend.services.group_access import get_owned_group
 from backend.services.ai_mesocycles import (
@@ -28,7 +29,8 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 @limiter.limit("20/hour", key_func=_ip_and_user_key)
 def generate_and_save_session(
     request: Request,
-    req: schemas.AIGenerateRequest, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+    req: schemas.AIGenerateRequest, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     meso = db.query(models.Mesocycle).filter(models.Mesocycle.id == req.mesocycle_id).first()
     if not meso:
@@ -36,12 +38,12 @@ def generate_and_save_session(
     ensure_can_manage_mesocycle(db, meso, current_user)
 
     from backend.ai_agent import generate_workout_session
-    rutina_ai = generate_workout_session(
-        # La programación de una clase no tiene atleta: la IA la arma para el grupo de la clase
-        athlete_name=meso.user.full_name if meso.user else f"la clase {meso.box_class.name}",
-        discipline=meso.discipline,
-        experience_notes=req.context,
-    )
+    # La programación de una clase no tiene atleta: la IA la arma para el grupo de la clase
+    nombre = meso.user.full_name if meso.user else f"la clase {meso.box_class.name}"
+    disciplina = meso.discipline
+    # Se suelta la conexión a la base mientras la IA piensa (tarda segundos): no hay nada que guardar todavía
+    db.commit()
+    rutina_ai = generate_workout_session(athlete_name=nombre, discipline=disciplina, experience_notes=req.context)
 
     if "error" in rutina_ai:
         raise HTTPException(status_code=500, detail=rutina_ai["error"])
@@ -57,7 +59,8 @@ def generate_and_save_session(
 @limiter.limit("10/hour", key_func=_ip_and_user_key)
 def generate_plan_template(
     request: Request,
-    req: schemas.AIGeneratePlanTemplate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+    req: schemas.AIGeneratePlanTemplate, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     """Genera con IA una plantilla (plan en borrador) con las cargas en % de 1RM. Es UNA sola
     generación, sin atleta: después se asigna a uno o varios grupos y ahí se calculan los kg de
@@ -86,7 +89,8 @@ MAX_ATLETAS_EN_PARALELO = 5
 @limiter.limit("10/hour", key_func=_ip_and_user_key)
 def generate_and_save_smart_mesocycle(
     request: Request,
-    req: schemas.AIGenerateSmart, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+    req: schemas.AIGenerateSmart, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     atleta = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not atleta:
@@ -114,7 +118,8 @@ def generate_and_save_smart_mesocycle(
 @limiter.limit("3/hour", key_func=_ip_and_user_key)
 def generate_and_save_smart_mesocycle_for_group(
     request: Request,
-    req: schemas.AIGenerateSmartGroup, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach)
+    req: schemas.AIGenerateSmartGroup, db: Session = Depends(get_db), current_user: models.User = Depends(require_coach),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     """Genera con IA el mismo mesociclo (contexto compartido + marcas propias de cada atleta) para todo el grupo.
     Los atletas se generan en paralelo (ver MAX_ATLETAS_EN_PARALELO), cada uno con su propia

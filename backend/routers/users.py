@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import case, func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 from typing import List
 
 from backend import avatars, models, schemas, storage
@@ -80,23 +80,23 @@ def get_athlete_leaderboard(db: Session = Depends(get_db), current_user: models.
     )
     stats_por_atleta = {f.user_id: f for f in filas}
 
-    # Último WOD con resultado registrado, uno por atleta (el más reciente primero en la
-    # consulta, así que el primero que aparece por atleta ya es el que queremos).
+    # Último WOD con resultado registrado, uno por atleta. DISTINCT ON deja que la base devuelva SOLO ese (antes se
+    # traía todo el historial de WODs de todos los atletas, con sus series, para quedarse con uno cada uno: cada vez
+    # que el coach abría Atletas costaba más). Las series de esos pocos se piden aparte.
     sesiones_wod = (
         db.query(models.Session)
         .join(models.Mesocycle, models.Session.mesocycle_id == models.Mesocycle.id)
-        .options(joinedload(models.Session.mesocycle), joinedload(models.Session.sets))
+        .options(contains_eager(models.Session.mesocycle), selectinload(models.Session.sets))
         .filter(
             models.Mesocycle.user_id.in_(ids),
             models.Session.status == "completed",
             models.Session.wod_format.isnot(None),
         )
-        .order_by(models.Session.completed_date.desc())
+        .distinct(models.Mesocycle.user_id)
+        .order_by(models.Mesocycle.user_id, models.Session.completed_date.desc().nullslast())
         .all()
     )
-    ultimo_wod_por_atleta: dict = {}
-    for s in sesiones_wod:
-        ultimo_wod_por_atleta.setdefault(s.mesocycle.user_id, s)
+    ultimo_wod_por_atleta = {s.mesocycle.user_id: s for s in sesiones_wod}
 
     resultados = [
         schemas.AthleteActivityResponse(

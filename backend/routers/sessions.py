@@ -16,6 +16,7 @@ from backend.core.security import (
     require_coach,
 )
 from backend.database import get_db
+from backend.core.ia_limite import plaza_de_ia
 from backend.services.block_notes import aplicar_block_notes, limpiar_orden_de_bloques
 from backend.services.entrenos import resultados_del_entreno
 from backend.services.exercises import clean_ai_block, get_or_create_exercise
@@ -278,6 +279,7 @@ def adapt_session_to_available_time(
     req: schemas.SessionAdaptRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     """El ATLETA (dueño) o su coach piden una versión adaptada de una sesión ya prescrita para
     caber en `available_minutes` (p. ej. "hoy solo tengo 60 min"). La sesión ORIGINAL nunca se
@@ -325,9 +327,13 @@ def adapt_session_to_available_time(
         for s in original.sets
     ]
 
+    nombre_atleta = atleta.full_name
+    disciplina = original.mesocycle.discipline
+    # Se suelta la conexión a la base mientras la IA piensa (tarda segundos): lo que sigue vuelve a pedirla
+    db.commit()
     rutina_ai = ai_agent.adapt_session_to_time(
-        athlete_name=atleta.full_name,
-        discipline=original.mesocycle.discipline,
+        athlete_name=nombre_atleta,
+        discipline=disciplina,
         experience_notes=contexto,
         original_exercises=ejercicios_originales,
         available_minutes=req.available_minutes,

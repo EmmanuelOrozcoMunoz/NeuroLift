@@ -15,10 +15,13 @@ on:
   push:
     branches: [Dev, qa]
 
+# El sistema está fijado (ubuntu-24.04) y no es "ubuntu-latest": cuando GitHub pasó "latest" a Ubuntu 26.04, la versión de
+# Python de .python-version (3.11.8) dejó de existir precompilada para ese sistema y todos los PR fallaban sin
+# que el código tuviera nada que ver. Al subir de sistema o de Python, se cambia aquí a propósito.
 jobs:
   backend:
     name: Backend (import check)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Las pruebas (backend/tests) necesitan un Postgres real: se usa uno descartable del propio
     # job (nunca la base de datos de ningún ambiente). knowledge_base no es un modelo de
     # SQLAlchemy (vive fuera de Base.metadata, SQL crudo), así que no hace falta pgvector.
@@ -72,7 +75,7 @@ jobs:
 
   frontend:
     name: Frontend (typecheck + build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web

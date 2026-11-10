@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend import models, schemas
 from backend.core.security import _ip_and_user_key, limiter, require_coach
+from backend.core.ia_limite import plaza_de_ia
 from backend.database import get_db
 from backend.services import importar_plan
 from backend.services.importar_plan import DocumentoInvalido
@@ -31,6 +32,7 @@ def vista_previa_de_importacion(
     request: Request,
     file: UploadFile = File(...),
     current_user: models.User = Depends(require_coach),
+    _plaza: None = Depends(plaza_de_ia),
 ):
     """Lee el documento y devuelve cómo quedaría el plan, SIN guardar nada. Usa la IA (gasta tokens),
     por eso tiene su propio límite por hora. Es una función normal (no async): leer el archivo y esperar
