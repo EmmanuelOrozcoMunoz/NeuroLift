@@ -183,6 +183,8 @@ Requisitos: Python 3.11 y Node 20+.
 | `FRONTEND_URL` | URL pública del front, para los enlaces de los correos (por defecto, el primer `CORS_ORIGINS`) |
 | `EMAIL_API_KEY`, `EMAIL_FROM` | Envío de correos (recuperar contraseña) con [Resend](https://resend.com). Sin la clave no se envía nada; en desarrollo el enlace sale en el log |
 | `SENTRY_DSN` | (opcional) Errores 500 del backend a Sentry. El front usa `VITE_SENTRY_DSN` |
+| `PROXY_HOPS` | (opcional, 0) Cuántos proxies de confianza hay delante de la API (en Render, normalmente 1). Con 0 la IP del cliente es la de la conexión, y detrás de un proxy **todos los usuarios compartirían los límites por IP**. Con N se toma la N-ésima desde la derecha de `X-Forwarded-For`. Se comprueba en el log: "Login exitoso … desde X" debe dar una IP distinta por dispositivo |
+| `MAX_IA_SIMULTANEAS`, `MAX_IA_EN_ESPERA`, `IA_ESPERA_MAXIMA_SEGUNDOS` | (opcionales, 3 · 5 · 20) Tope de peticiones de IA a la vez **por proceso**: hasta 3 se procesan, 5 más esperan (hasta 20 s) y el resto recibe un 503 que pide reintentar. Ver `core/ia_limite.py` |
 | `MAX_CONCURRENT_REQUESTS` | (opcional, 20) Peticiones que procesa a la vez **cada proceso** de la API; las demás esperan en cola. 0 lo desactiva. Se recorta a las conexiones del pool (30) |
 | `HTTP_QUEUE_TIMEOUT_SECONDS` | (opcional, 15) Cuánto espera una petición en cola antes de recibir un 503 |
 | `DB_POOL_TIMEOUT` | (opcional, 10) Segundos que una petición espera una conexión libre a la base antes de fallar |

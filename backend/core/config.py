@@ -44,6 +44,22 @@ RESET_TOKEN_MINUTES = 60
 # Monitoreo de errores (Sentry). Sin SENTRY_DSN no se envía nada.
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
+# Cuántos proxies de confianza hay delante de la API (Render, un CDN...). Detrás de un proxy, la IP que ve el
+# servidor es la del proxy, así que TODOS los usuarios compartirían los límites por IP (intentos de login,
+# registros...). Con PROXY_HOPS=N se toma como IP del cliente la N-ésima desde la derecha de X-Forwarded-For
+# (la que añadió tu proxy, que no se puede falsear desde fuera). 0 = sin proxy: se usa la IP de la conexión.
+# Cómo saber el valor: en el log "Login exitoso ... desde X", X debe ser distinta para cada dispositivo.
+PROXY_HOPS = int(os.getenv("PROXY_HOPS", "0"))
+
+# La IA es lo más lento y caro: cuántas peticiones de IA procesa a la vez CADA proceso (las demás esperan hasta
+# IA_ESPERA_MAXIMA_SEGUNDOS y, si no hay lugar, reciben un 503 que pide reintentar). Así unas pocas generaciones
+# largas no dejan al resto de los usuarios sin servidor. Ver core/ia_limite.py.
+MAX_IA_SIMULTANEAS = int(os.getenv("MAX_IA_SIMULTANEAS", "3"))
+IA_ESPERA_MAXIMA_SEGUNDOS = float(os.getenv("IA_ESPERA_MAXIMA_SEGUNDOS", "20"))
+# Quien espera un lugar de IA también ocupa una plaza del servidor: solo se deja esperar a este número; el resto
+# recibe el 503 de inmediato (así la cola de IA nunca se queda con todas las plazas).
+MAX_IA_EN_ESPERA = int(os.getenv("MAX_IA_EN_ESPERA", "5"))
+
 # Cuántas peticiones HTTP procesa a la vez CADA proceso de la API; las demás esperan en cola (y
 # si esperan más de HTTP_QUEUE_TIMEOUT_SECONDS reciben 503). Se recorta al tamaño del pool de
 # conexiones. 0 lo desactiva. Ver core/concurrency.py.

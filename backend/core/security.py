@@ -6,11 +6,10 @@ from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session, joinedload
 
 from backend import models
-from backend.core.config import ALGORITHM, SECRET_KEY
+from backend.core.config import ALGORITHM, PROXY_HOPS, SECRET_KEY
 from backend.core.errors import NoAutenticado, NoEncontrado, Prohibido, SolicitudInvalida
 from backend.database import get_db
 
@@ -20,7 +19,21 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Vive aquí (no en main.py) para que los routers puedan usar @limiter.limit(...) en sus propios
 # módulos sin crear un import circular con main.py (que es quien lo registra en app.state).
-limiter = Limiter(key_func=get_remote_address)
+def ip_del_cliente(request: Request) -> str:
+    """La IP real del cliente. Sin proxy es la de la conexión. Detrás de PROXY_HOPS proxies de confianza es la
+    N-ésima desde la derecha de X-Forwarded-For: cada proxy añade al final la dirección de quien se le conectó, así
+    que lo que puso el cliente (a la izquierda) no cuenta y no se puede falsear. Si el encabezado no trae
+    suficientes direcciones (p. ej. una llamada directa, sin proxy), se usa la IP de la conexión."""
+    conexion = request.client.host if request.client else "?"
+    if PROXY_HOPS <= 0:
+        return conexion
+    cadena = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if len(cadena) >= PROXY_HOPS:
+        return cadena[-PROXY_HOPS][:45]
+    return conexion
+
+
+limiter = Limiter(key_func=ip_del_cliente)
 
 
 def verify_password(plain_password, hashed_password):
@@ -250,7 +263,7 @@ def ensure_owner_or_coach_editable(db: Session, mesocycle: models.Mesocycle, cur
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "?"
+    return ip_del_cliente(request)
 
 
 def _ip_and_user_key(request: Request) -> str:
@@ -258,7 +271,7 @@ def _ip_and_user_key(request: Request) -> str:
     header Authorization en un intento best-effort — si no hay token válido, usa solo la IP.
     Así un solo usuario no puede evadir el límite cambiando de red, ni una IP compartida
     (oficina, NAT) hace que un usuario agote la cuota de otro."""
-    ip = get_remote_address(request)
+    ip = ip_del_cliente(request)
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
         try:
