@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ------------------------------------------------------------------- utilidades
 
@@ -362,7 +363,11 @@ export function Sheet({
 
   if (!open) return null;
 
-  return (
+  // Se dibuja en <body>, no donde se escribió: un `position: fixed` queda atrapado por cualquier ancestro con
+  // backdrop-filter, filter o transform, y lo mide contra ESE ancestro, no contra la pantalla. El encabezado de
+  // página (PageHeader) lleva backdrop-blur, así que la hoja del chip de grupo salía pequeña, pegada arriba y
+  // pisando la barra de estado del teléfono. Con el portal es siempre de pantalla completa, venga de donde venga.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <button
         type="button"
@@ -385,6 +390,7 @@ export function Sheet({
         </div>
         <div className="max-h-[70dvh] overflow-y-auto pb-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
