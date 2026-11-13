@@ -193,17 +193,20 @@ export function IconShare({ className = base }: IconProps) {
 
 /** Logo de NeuroLift (la mancuerna del ícono de la app). Toma el color de acento del box vía
  *  text-brand; el ícono PNG de la pantalla de inicio sí es fijo. */
+/** El isotipo de NeuroLift: una N hecha con una mancuerna, en blanco y negro (no lleva el acento del box: es la
+ *  marca de la plataforma). Misma geometría que public/icon.svg, public/favicon.svg y los archivos de branding/:
+ *  se dibuja recta (alto 100, centrada en el origen) y la cursiva es un solo skewX(-15). */
 export function Logo({ className = "h-8 w-8" }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 32 32" aria-hidden>
       <rect width="32" height="32" rx="8" className="fill-surface" />
-      <path
-        d="M8 12v8M11 9v14M21 9v14M24 12v8M11 16h10"
-        className="stroke-brand"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        fill="none"
-      />
+      <g className="fill-fg" transform="translate(16 16) scale(0.1154) skewX(-15)">
+        <path d="M-64.59 -50H-35.77A4.27 4.27 0 0 1 -31.49 -45.73V-31.41L31.49 2.94V-45.73A4.27 4.27 0 0 1 35.77 -50H64.59A4.27 4.27 0 0 1 68.86 -45.73V45.73A4.27 4.27 0 0 1 64.59 50H35.77A4.27 4.27 0 0 1 31.49 45.73V31.41L-31.49 -2.94V45.73A4.27 4.27 0 0 1 -35.77 50H-64.59A4.27 4.27 0 0 1 -68.86 45.73V-45.73A4.27 4.27 0 0 1 -64.59 -50Z" />
+        <path d="M-85.68 -37.5H-75.62A3.2 3.2 0 0 1 -72.42 -34.3V34.3A3.2 3.2 0 0 1 -75.62 37.5H-85.68A3.2 3.2 0 0 1 -88.88 34.3V-34.3A3.2 3.2 0 0 1 -85.68 -37.5Z" />
+        <path d="M-102.22 -22.5H-95.11A2.67 2.67 0 0 1 -92.44 -19.83V19.83A2.67 2.67 0 0 1 -95.11 22.5H-102.22A2.67 2.67 0 0 1 -104.89 19.83V-19.83A2.67 2.67 0 0 1 -102.22 -22.5Z" />
+        <path d="M75.62 -37.5H85.68A3.2 3.2 0 0 1 88.88 -34.3V34.3A3.2 3.2 0 0 1 85.68 37.5H75.62A3.2 3.2 0 0 1 72.42 34.3V-34.3A3.2 3.2 0 0 1 75.62 -37.5Z" />
+        <path d="M95.11 -22.5H102.22A2.67 2.67 0 0 1 104.89 -19.83V19.83A2.67 2.67 0 0 1 102.22 22.5H95.11A2.67 2.67 0 0 1 92.44 19.83V-19.83A2.67 2.67 0 0 1 95.11 -22.5Z" />
+      </g>
     </svg>
   );
 }

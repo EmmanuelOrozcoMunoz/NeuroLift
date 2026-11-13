@@ -73,7 +73,7 @@ export function WarmupNotesCard({
         onChange={(e) => setTexto(e.target.value)}
         onBlur={guardar}
         placeholder="Ej. 5 min de movilidad de cadera, 3 series de aproximación subiendo desde 40% hasta el primer set de trabajo..."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
     </Card>
   );
@@ -115,7 +115,7 @@ export function BlockOrderEditor({
                 aria-label={`Subir ${blockLabel(key)}`}
                 disabled={index === 0 || meta.guardando}
                 onClick={() => move(index, -1)}
-                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
+                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-surface-3"
               >
                 <IconChevronRight className="h-4 w-4 -rotate-90" />
               </button>
@@ -124,7 +124,7 @@ export function BlockOrderEditor({
                 aria-label={`Bajar ${blockLabel(key)}`}
                 disabled={index === blockKeys.length - 1 || meta.guardando}
                 onClick={() => move(index, 1)}
-                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-line"
+                className="rounded-lg p-1.5 text-muted disabled:opacity-30 active:bg-surface-3"
               >
                 <IconChevronRight className="h-4 w-4 rotate-90" />
               </button>
@@ -190,7 +190,7 @@ export function BlockNotesCard({
         onChange={(e) => setTexto(e.target.value)}
         onBlur={alPerderElFoco}
         placeholder="Escríbelo como te resulte cómodo. Ej. Back Squat 5x5 @80%, Press de banca 4x6..."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
     </Card>
   );
@@ -281,7 +281,7 @@ export function AddTextBlockButtons({
                 setErrorDeNombre(null);
               }}
               placeholder="Ej. Activación, Finisher, Core"
-              className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+              className="min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
             />
           </label>
           {errorDeNombre && <p className="mt-1.5 text-sm font-medium text-danger">{errorDeNombre}</p>}

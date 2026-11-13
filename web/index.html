@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es" class="dark">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -17,6 +17,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Tus entrenamientos, tus marcas y tu progreso." />
     <title>NeuroLift</title>
+    <!-- Tema guardado (lib/theme.ts), aplicado ANTES de pintar para que no parpadee el oscuro al abrir en claro -->
+    <script>
+      try {
+        var tema = localStorage.getItem("neurolift_tema");
+        if (tema === "claro" || (tema === "sistema" && matchMedia("(prefers-color-scheme: light)").matches)) {
+          document.documentElement.dataset.theme = "light";
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

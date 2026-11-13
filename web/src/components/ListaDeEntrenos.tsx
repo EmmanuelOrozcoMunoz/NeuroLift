@@ -227,7 +227,7 @@ export function ListaDeEntrenos({
                   <button
                     type="button"
                     onClick={() => setConTodos((m) => ({ ...m, [s.id]: true }))}
-                    className="w-full rounded-xl py-2 text-sm font-semibold text-brand active:bg-surface-2"
+                    className="min-h-11 w-full rounded-xl text-sm font-semibold text-brand active:bg-surface-2"
                   >
                     Ver {ocultos} más
                   </button>
@@ -239,7 +239,7 @@ export function ListaDeEntrenos({
                       type="button"
                       aria-expanded={conAnteriores[s.id] ?? false}
                       onClick={() => setConAnteriores((m) => ({ ...m, [s.id]: !(m[s.id] ?? false) }))}
-                      className="flex w-full items-center justify-between rounded-xl px-1 py-2 text-sm font-semibold text-muted active:bg-surface-2"
+                      className="flex min-h-11 w-full items-center justify-between rounded-xl px-1 text-sm font-semibold text-muted active:bg-surface-2"
                     >
                       <span>
                         Anteriores ({s.anteriores.length})

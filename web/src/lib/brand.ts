@@ -13,10 +13,15 @@
  *     localStorage para pintarlo desde el primer frame en el siguiente arranque, antes de que
  *     responda la API — ver setBoxAccent, llamado desde AuthProvider.
  *  3. `VITE_BRAND_ACCENT` al compilar.
- *  4. El naranja por defecto de index.css.
+ *  4. El azul por defecto de index.css.
+ *
+ * Modo claro (lib/theme.ts): un acento pensado para fondo oscuro —amarillo, celeste— no se lee como texto
+ * sobre blanco. En claro se usa la MISMA tonalidad y saturación con menos luminosidad, lo justo para llegar a
+ * 4.5:1 sobre los grises claros y sobre su propio fondo suave. El color guardado de la cuenta no cambia: al
+ * volver a oscuro se aplica tal cual (ver reaplicarAcento).
  */
 
-export const DEFAULT_ACCENT = "#ff4700";
+export const DEFAULT_ACCENT = "#5b9cff";
 const INK = "#121212"; // --color-ink: fondo de la app
 const DEMO_KEY = "neurolift_demo_accent";
 const BOX_KEY = "neurolift_box_accent";
@@ -40,6 +45,74 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+// --- modo claro -----------------------------------------------------------------------------------------
+const CLARO_FONDO = "#ebebeb"; // --color-ink en claro: el gris más oscuro sobre el que va texto
+const CLARO_SUAVE = 0.12; // --color-brand-soft en claro: 12 % del acento sobre el fondo
+const MINIMO_TEXTO = 4.6; // 4.5:1 de AA, con un margen por la mezcla en oklab de index.css
+
+function temaClaro(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.theme === "light";
+}
+
+function hexARgb(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+}
+
+function rgbAHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((c) => Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** El mismo color con `menos` puntos menos de luminosidad (HSL): conserva tono y saturación. */
+function oscurecer(hex: string, menos: number): string {
+  const [r, g, b] = hexARgb(hex);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  h = (h * 60 + 360) % 360;
+  l = Math.max(0, l - menos);
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return rgbAHex(r1 + m, g1 + m, b1 + m);
+}
+
+function mezclar(a: string, b: string, t: number): string {
+  const [ra, ga, ba] = hexARgb(a), [rb, gb, bb] = hexARgb(b);
+  return rgbAHex(ra * t + rb * (1 - t), ga * t + gb * (1 - t), ba * t + bb * (1 - t));
+}
+
+/** El acento listo para el modo claro: lo justo más oscuro para leerse como texto sobre los grises claros y
+ *  sobre su propio fondo suave (chips, etiquetas). Exportado para las pruebas. */
+export function acentoParaClaro(hex: string): string {
+  for (let menos = 0; menos <= 1; menos += 0.01) {
+    const candidato = oscurecer(hex, menos);
+    if (
+      contrast(candidato, CLARO_FONDO) >= MINIMO_TEXTO &&
+      contrast(candidato, mezclar(candidato, CLARO_FONDO, CLARO_SUAVE)) >= MINIMO_TEXTO
+    ) {
+      return candidato;
+    }
+  }
+  return "#000000";
+}
+
+/** El acento como se debe ver en el tema actual, o null si en oscuro no contrasta con el fondo. */
+function acentoParaElTema(accent: string): string | null {
+  if (temaClaro()) return acentoParaClaro(accent);
+  return contrast(accent, INK) >= 3 ? accent : null;
+}
+
+/** El acento que pidió la cuenta (o la demo, o el .env), SIN ajustar al tema: se reaplica al cambiar de tema. */
+let acentoPedido: string | null = null;
+
 /**
  * Texto blanco mientras se lea (3:1, el mínimo de WCAG para texto en negrita y componentes de
  * UI — los botones van en semibold); con acentos más claros, texto oscuro.
@@ -52,8 +125,9 @@ function textOn(accent: string): string {
  *  aplicarlo a toda la app. null si el color no sirve (formato o contraste, igual que applyAccent). */
 export function accentPreviewVars(value: string): Record<string, string> | null {
   const accent = normalizeHex(value);
-  if (!accent || contrast(accent, INK) < 3) return null;
-  return { "--color-brand": accent, "--color-on-brand": textOn(accent) };
+  const visible = accent ? acentoParaElTema(accent) : null;
+  if (!visible) return null;
+  return { "--color-brand": visible, "--color-on-brand": textOn(visible) };
 }
 
 /**
@@ -64,21 +138,30 @@ export function accentPreviewVars(value: string): Record<string, string> | null 
 export function applyAccent(value: string): boolean {
   const accent = normalizeHex(value);
   if (!accent) return false;
-  if (contrast(accent, INK) < 3) {
+  const visible = acentoParaElTema(accent);
+  if (!visible) {
     console.warn(`[brand] El acento ${accent} casi no contrasta con el fondo; se mantiene el actual.`);
     return false;
   }
   const root = document.documentElement.style;
-  root.setProperty("--color-brand", accent);
-  root.setProperty("--color-on-brand", textOn(accent));
+  root.setProperty("--color-brand", visible);
+  root.setProperty("--color-on-brand", textOn(visible));
+  acentoPedido = accent;
   return true;
 }
 
-/** Vuelve al acento por defecto (el de VITE_BRAND_ACCENT o el naranja de index.css). */
+/** Vuelve a aplicar el acento de la cuenta con el ajuste del tema actual (lo llama lib/theme.ts al cambiar de tema). */
+export function reaplicarAcento() {
+  const pedido = acentoPedido;
+  if (!pedido || !applyAccent(pedido)) resetAccent();
+}
+
+/** Vuelve al acento por defecto (el de VITE_BRAND_ACCENT o el azul de index.css). */
 function resetAccent() {
   const root = document.documentElement.style;
   root.removeProperty("--color-brand");
   root.removeProperty("--color-on-brand");
+  acentoPedido = null;
   const envAccent = normalizeHex(import.meta.env.VITE_BRAND_ACCENT as string | undefined);
   if (envAccent && envAccent !== DEFAULT_ACCENT) applyAccent(envAccent);
 }

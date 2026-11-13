@@ -127,7 +127,7 @@ function BulkWodBlockCard({
         onChange={(e) => setTexto(e.target.value)}
         onBlur={guardarTexto}
         placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
 
       <div className="mt-3 border-t border-line pt-3">
@@ -711,7 +711,7 @@ export default function GroupProgramDetail() {
             aria-label="Eliminar programa"
             onClick={handleDeleteProgram}
             disabled={deleteProgram.isPending}
-            className="rounded-lg p-2 text-danger active:bg-danger/10 disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-danger active:bg-danger/10 disabled:opacity-40"
           >
             <IconTrash className="h-5 w-5" />
           </button>

@@ -145,7 +145,7 @@ export function ImportPlanSheet({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="w-full rounded-xl border border-dashed border-line bg-surface-2 px-4 py-6 text-center active:bg-line"
+            className="w-full rounded-xl border border-dashed border-line bg-surface-2 px-4 py-6 text-center active:bg-surface-3"
           >
             {archivo ? (
               <>
