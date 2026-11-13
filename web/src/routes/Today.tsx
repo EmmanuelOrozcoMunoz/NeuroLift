@@ -288,7 +288,7 @@ function TodayHero({ item }: { item: SessionRef }) {
 
       {empezada && (
         <div className="mt-4 flex items-center gap-3">
-          <div className="h-1.5 grow overflow-hidden rounded-full bg-surface-2" aria-hidden>
+          <div className="sin-contorno h-1.5 grow overflow-hidden rounded-full bg-surface-2" aria-hidden>
             <div className="h-full rounded-full bg-brand" style={{ width: `${(logged / total) * 100}%` }} />
           </div>
           <span className="num text-sm font-semibold text-muted">

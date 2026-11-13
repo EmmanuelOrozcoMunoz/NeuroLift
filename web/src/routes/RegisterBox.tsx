@@ -122,7 +122,7 @@ export default function RegisterBox() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line bg-surface-2 text-muted active:bg-line"
+            className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line bg-surface-2 text-muted active:bg-surface-3"
             aria-label="Elegir foto del box"
           >
             {preview ? (

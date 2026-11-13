@@ -22,7 +22,7 @@ const ACENTOS = ["#5b9cff", "#ff4700", "#ef4444", "#f59e0b", "#facc15", "#84cc16
 describe("acento en modo claro", () => {
   it.each(ACENTOS)("%s se lee como texto (AA) sobre los grises claros y lleva texto blanco legible encima", (acento) => {
     const claro = acentoParaClaro(acento);
-    expect(contraste(claro, "#f0f0f0")).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(claro, "#ebebeb")).toBeGreaterThanOrEqual(4.5);
     expect(contraste(claro, "#ffffff")).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -37,9 +37,31 @@ describe("acento en modo claro", () => {
   });
 
   it("el azul por defecto del modo claro en index.css es el mismo que calcula el código", () => {
-    const css = readFileSync(new URL("../index.css", import.meta.url), "utf-8");
-    const bloqueClaro = css.slice(css.indexOf(':root[data-theme="light"]'));
-    const valor = bloqueClaro.match(/--color-brand:\s*(#[0-9a-f]{6})/i)?.[1];
-    expect(valor?.toLowerCase()).toBe(acentoParaClaro(DEFAULT_ACCENT));
+    expect(tokenClaro("brand")).toBe(acentoParaClaro(DEFAULT_ACCENT));
+  });
+});
+
+/** Un token del bloque de modo claro de index.css (solo los que son un hex fijo). */
+function tokenClaro(nombre: string): string {
+  const css = readFileSync(new URL("../index.css", import.meta.url), "utf-8");
+  const bloque = css.slice(css.indexOf(':root[data-theme="light"]'));
+  const valor = bloque.match(new RegExp(`--color-${nombre}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
+  if (!valor) throw new Error(`--color-${nombre} no es un hex en el modo claro`);
+  return valor.toLowerCase();
+}
+
+describe("modo claro para baja visión", () => {
+  const fondos = ["ink", "surface", "surface-2"] as const;
+
+  it.each(fondos)("los bordes se distinguen (3:1, WCAG 1.4.11) sobre %s", (fondo) => {
+    expect(contraste(tokenClaro("line"), tokenClaro(fondo))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(fondos)("el texto secundario va holgado (7:1) sobre %s", (fondo) => {
+    expect(contraste(tokenClaro("muted"), tokenClaro(fondo))).toBeGreaterThanOrEqual(7);
+  });
+
+  it.each(["done", "warn", "danger"])("%s se lee como texto (AA) sobre el fondo de página", (estado) => {
+    expect(contraste(tokenClaro(estado), tokenClaro("ink"))).toBeGreaterThanOrEqual(4.5);
   });
 });

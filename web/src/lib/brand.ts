@@ -46,8 +46,7 @@ function contrast(a: string, b: string): number {
 }
 
 // --- modo claro -----------------------------------------------------------------------------------------
-const CLARO_CONTROL = "#f0f0f0"; // --color-surface-2 en claro: el gris más oscuro sobre el que va texto
-const CLARO_FONDO = "#f5f5f5"; // --color-ink en claro
+const CLARO_FONDO = "#ebebeb"; // --color-ink en claro: el gris más oscuro sobre el que va texto
 const CLARO_SUAVE = 0.12; // --color-brand-soft en claro: 12 % del acento sobre el fondo
 const MINIMO_TEXTO = 4.6; // 4.5:1 de AA, con un margen por la mezcla en oklab de index.css
 
@@ -96,7 +95,7 @@ export function acentoParaClaro(hex: string): string {
   for (let menos = 0; menos <= 1; menos += 0.01) {
     const candidato = oscurecer(hex, menos);
     if (
-      contrast(candidato, CLARO_CONTROL) >= MINIMO_TEXTO &&
+      contrast(candidato, CLARO_FONDO) >= MINIMO_TEXTO &&
       contrast(candidato, mezclar(candidato, CLARO_FONDO, CLARO_SUAVE)) >= MINIMO_TEXTO
     ) {
       return candidato;

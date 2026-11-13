@@ -121,7 +121,7 @@ export function TrainingCalendar({
               <span
                 className={cx(
                   "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition-colors",
-                  !inMonth && "text-muted/30",
+                  !inMonth && "text-muted/60",
                   inMonth && !isToday && "text-fg",
                   isToday && "bg-brand text-on-brand",
                 )}

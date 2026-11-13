@@ -127,7 +127,7 @@ function BulkWodBlockCard({
         onChange={(e) => setTexto(e.target.value)}
         onBlur={guardarTexto}
         placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
 
       <div className="mt-3 border-t border-line pt-3">

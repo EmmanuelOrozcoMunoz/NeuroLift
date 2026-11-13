@@ -14,7 +14,7 @@ import { reaplicarAcento } from "@/lib/brand";
 export type Tema = "oscuro" | "claro" | "sistema";
 
 const CLAVE = "neurolift_tema";
-const COLOR_BARRA = { oscuro: "#121212", claro: "#f5f5f5" } as const; // <meta name="theme-color">
+const COLOR_BARRA = { oscuro: "#121212", claro: "#ebebeb" } as const; // <meta name="theme-color">
 
 const oyentes = new Set<() => void>();
 let consultaSistema: MediaQueryList | null = null;

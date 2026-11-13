@@ -96,7 +96,7 @@ function EditPlanSheet({
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={2000}
-            className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+            className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
           />
         </label>
 
@@ -223,7 +223,7 @@ function PlanWodBlockCard({
         onChange={(e) => setTexto(e.target.value)}
         onBlur={guardarTexto}
         placeholder="Ej. 21-15-9 thrusters (42/30kg), pull-ups."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
 
       <div className="mt-3 border-t border-line pt-3">
@@ -596,7 +596,7 @@ export default function PlanEditor() {
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="min-h-11 rounded-xl bg-surface-2 px-3 text-sm font-semibold text-fg active:bg-line"
+              className="min-h-11 rounded-xl bg-surface-2 px-3 text-sm font-semibold text-fg active:bg-surface-3"
             >
               ✏️ Editar
             </button>

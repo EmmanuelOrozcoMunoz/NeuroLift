@@ -66,7 +66,7 @@ export default function Landing() {
               className={cx(
                 "flex min-h-12 w-full items-center justify-center rounded-xl px-4 font-semibold transition-colors",
                 installable
-                  ? "border border-line bg-surface-2 text-fg active:bg-line"
+                  ? "border border-line bg-surface-2 text-fg active:bg-surface-3"
                   : cx("bg-brand text-on-brand active:bg-brand/85", BRILLO_AL_PASAR),
               )}
             >
@@ -164,7 +164,7 @@ export default function Landing() {
               </Link>
               <Link
                 to="/registrar-box"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-line"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-surface-3"
               >
                 Tengo un box
               </Link>

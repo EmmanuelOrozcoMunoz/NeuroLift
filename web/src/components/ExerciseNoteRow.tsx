@@ -83,7 +83,7 @@ export function ExerciseNoteRow({
           <span
             className={cx(
               "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors",
-              hecho ? "border-done bg-done text-ink" : estado === "parcial" ? "border-warn text-warn" : "border-muted/60 text-transparent",
+              hecho ? "border-done bg-done text-ink" : estado === "parcial" ? "border-warn text-warn" : "border-muted/80 text-transparent",
             )}
           >
           {logSets.isPending ? (

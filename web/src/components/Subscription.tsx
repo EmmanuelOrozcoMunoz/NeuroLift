@@ -108,7 +108,7 @@ export function SubscriptionCard({ account }: { account: BoxDetail }) {
           </span>
         </div>
         {limit !== null && (
-          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2">
+          <div className="sin-contorno mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2">
             <div
               className={cx("h-full rounded-full", full ? "bg-warn" : "bg-brand")}
               style={{ width: `${Math.min(100, (used / limit) * 100)}%` }}

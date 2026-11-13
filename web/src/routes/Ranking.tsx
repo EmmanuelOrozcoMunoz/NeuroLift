@@ -109,7 +109,8 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
           aria-label="Filtros del leaderboard"
           className={cx(
             "flex min-h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold active:opacity-80",
-            filtrosActivos ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted",
+            // Activo con anillo del acento: en modo claro los inactivos llevan contorno gris y el activo no debe verse "menos"
+            filtrosActivos ? "bg-brand-soft text-brand ring-2 ring-inset ring-brand" : "bg-surface-2 text-muted",
           )}
         >
           <IconFilter className="h-4 w-4" />
@@ -235,7 +236,7 @@ function FiltrosDelRanking({
                   onClick={() => onGrupo(g.id)}
                   className={cx(
                     "flex min-h-touch w-full items-center justify-between gap-3 rounded-xl px-4 py-2 text-left font-semibold",
-                    g.id === grupoId ? "bg-brand-soft text-brand" : "bg-surface-2",
+                    g.id === grupoId ? "bg-brand-soft text-brand ring-2 ring-inset ring-brand" : "bg-surface-2",
                   )}
                 >
                   <span className="truncate">{g.name}</span>

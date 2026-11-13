@@ -19,7 +19,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-brand text-on-brand active:bg-brand/85 disabled:bg-brand/40",
-  secondary: "bg-surface-2 text-fg border border-line active:bg-line",
+  secondary: "bg-surface-2 text-fg border border-line active:bg-surface-3",
   ghost: "bg-transparent text-muted active:bg-surface-2",
   danger: "bg-transparent text-danger border border-danger/40 active:bg-danger/10",
   done: "bg-done text-ink active:bg-done/85",
@@ -102,7 +102,7 @@ export function Field({ label, hint, className, ...rest }: FieldProps) {
       <input
         className={cx(
           "min-h-12 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-fg",
-          "placeholder:text-muted/50 focus:border-brand focus:outline-none",
+          "placeholder:text-muted/80 focus:border-brand focus:outline-none",
           className,
         )}
         {...rest}
@@ -157,7 +157,7 @@ export function Stepper({
       <button
         type="button"
         aria-label="Restar"
-        className={cx("shrink-0 text-xl font-bold text-muted active:bg-line", compact ? "w-9" : "w-10")}
+        className={cx("shrink-0 text-xl font-bold text-muted active:bg-surface-3", compact ? "w-9" : "w-10")}
         onClick={() => onChange(clamp(value - step))}
       >
         −
@@ -196,7 +196,7 @@ export function Stepper({
       <button
         type="button"
         aria-label="Sumar"
-        className={cx("shrink-0 text-xl font-bold text-muted active:bg-line", compact ? "w-9" : "w-10")}
+        className={cx("shrink-0 text-xl font-bold text-muted active:bg-surface-3", compact ? "w-9" : "w-10")}
         onClick={() => onChange(clamp(value + step))}
       >
         +
@@ -228,7 +228,7 @@ export function Segmented<T extends string>({
           className={cx(
             "min-h-11 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold transition-colors",
             hayLargas ? "py-1.5 leading-tight text-balance" : "whitespace-nowrap",
-            option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
+            option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-surface-3",
           )}
         >
           {option.label}
@@ -253,7 +253,7 @@ export function Skeleton({ className }: { className?: string }) {
   // Si quien lo usa pasa su propio radio (ej. rounded-full para un anillo), ese manda: dos
   // clases de radio a la vez no garantizan cuál gana, depende del orden en el CSS generado.
   const ownRadius = (className ?? "").includes("rounded");
-  return <div aria-hidden className={cx("animate-skeleton bg-surface-2", !ownRadius && "rounded-xl", className)} />;
+  return <div aria-hidden className={cx("sin-contorno animate-skeleton bg-surface-2", !ownRadius && "rounded-xl", className)} />;
 }
 
 export function LoadingList({ rows = 3 }: { rows?: number }) {
