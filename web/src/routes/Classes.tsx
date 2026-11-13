@@ -293,7 +293,7 @@ function ClassSheet({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ej. Fuerza + metcon, todos los niveles"
-            className="w-full rounded-xl bg-surface-2 px-3.5 py-3 text-fg placeholder:text-muted/60"
+            className="w-full rounded-xl bg-surface-2 px-3.5 py-3 text-fg placeholder:text-muted/80"
           />
         </label>
         {error && <p className="text-sm font-medium text-danger">{error}</p>}

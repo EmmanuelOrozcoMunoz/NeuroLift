@@ -247,7 +247,7 @@ export default function AthleteDetail() {
             Este atleta pertenece al grupo <strong>{myGroup.name}</strong>. Programa y edita su
             mesociclo desde ahí para que los cambios se puedan aplicar a todo el equipo.
           </p>
-          <Link to={`/coach/grupos/${myGroup.id}`} className="mt-3 inline-block text-sm font-semibold text-brand">
+          <Link to={`/coach/grupos/${myGroup.id}`} className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-brand">
             Ir al grupo →
           </Link>
         </Card>

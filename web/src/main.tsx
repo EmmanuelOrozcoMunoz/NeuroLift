@@ -11,6 +11,7 @@ import { ApiError } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
 import { initAccent } from "@/lib/brand";
 import { initMonitoring } from "@/lib/monitoring";
+import { initTema } from "@/lib/theme";
 // Efecto secundario: registra el listener de beforeinstallprompt lo antes posible
 import "@/lib/pwa";
 import "@/index.css";
@@ -31,6 +32,7 @@ const queryClient = new QueryClient({
 });
 
 // Antes de montar: el acento del box se aplica sin mostrar un instante el color por defecto
+initTema(); // antes del acento: en claro, el acento de la cuenta se ajusta para leerse sobre blanco
 initAccent();
 initMonitoring();
 

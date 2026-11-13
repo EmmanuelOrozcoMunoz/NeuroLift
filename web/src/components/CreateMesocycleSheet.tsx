@@ -178,7 +178,7 @@ export function CreateMesocycleSheet({
                 rows={3}
                 maxLength={2000}
                 placeholder="Ej. Priorizar sentadilla, dolor leve en hombro derecho..."
-                className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+                className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
               />
             </label>
 
@@ -204,7 +204,7 @@ export function CreateMesocycleSheet({
                         rows={2}
                         maxLength={300}
                         placeholder="Ej. Sentadilla y accesorios de pierna"
-                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
                       />
                     </label>
                   ))}

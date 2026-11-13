@@ -11,8 +11,12 @@
    - Oscuro único: se usa en el gimnasio, con poca luz y el celular en la mano.
    - "Raw": la jerarquía la dan las SUPERFICIES y el espacio, no los bordes ni las sombras.
      Por eso `line` es un filo casi invisible y las sombras son mínimas.
-   - El acento (naranja por defecto, personalizable por cuenta) se reserva para CTAs
-     principales, estado activo y progreso. Nunca decorativo.
+   - Paleta: negro, grises y blanco, NEUTROS (sin tinte). El color solo marca lo que importa:
+     el acento (azul por defecto, personalizable por cuenta) se reserva para CTAs principales,
+     estado activo y progreso. Nunca decorativo. Los semánticos (hecho, aviso, error) van
+     siempre con ícono o texto.
+   - Contraste AA (4.5:1) para todo texto: el azul por defecto lleva texto OSCURO encima
+     (lib/brand.ts elige blanco u oscuro según el acento de cada cuenta).
    - Las cifras (kg, reps, tiempos) son protagonistas: `text-metric*` + `num`.
    - Todo lo tocable mide al menos `touch` (48px).
 
@@ -27,17 +31,17 @@
   --color-surface-3: #323232; /* estado presionado de controles sobre surface-2 */
   /* Filo, no borde: separa solo cuando dos superficies iguales se tocan. */
   --color-line: color-mix(in oklab, var(--color-fg) 7%, transparent);
-  --color-fg: #f3f4f6; /* texto principal — blanco humo (17:1 sobre ink) */
-  --color-muted: #9ca3af; /* texto secundario — gris pizarra (7.3:1 sobre ink, 6.6:1 sobre surface) */
+  --color-fg: #f5f5f5; /* texto principal — blanco neutro (17:1 sobre ink) */
+  --color-muted: #a3a3a3; /* texto secundario — gris neutro (7.4:1 sobre ink, 6.6:1 sobre surface) */
 
   /* Acento dinámico: lib/brand.ts sobreescribe --color-brand y --color-on-brand en <html>
      con el color de cada cuenta; los derivados se recalculan solos. */
-  --color-brand: #ff4700; /* naranja eléctrico (por defecto) */
+  --color-brand: #5b9cff; /* azul (por defecto): 6.8:1 sobre ink, 6.1:1 sobre surface, 5.4:1 sobre surface-2 */
   --color-brand-soft: color-mix(in oklab, var(--color-brand) 16%, var(--color-ink));
-  --color-on-brand: #ffffff;
+  --color-on-brand: #121212; /* texto sobre el azul: oscuro (6.8:1); el blanco solo daría 2.75:1 */
 
   /* Semánticos: siempre acompañados de ícono o texto, nunca el color solo */
-  --color-done: #a3e635; /* completado — lima */
+  --color-done: #4ade80; /* completado — verde (10.8:1 sobre ink) */
   --color-done-soft: color-mix(in oklab, var(--color-done) 14%, var(--color-ink));
   --color-warn: #fbbf24;
   --color-warn-soft: color-mix(in oklab, var(--color-warn) 14%, var(--color-ink));
@@ -118,6 +122,53 @@
       opacity: 1;
     }
   }
+}
+
+/* ==========================================================================
+   Modo claro (opcional: cada quien lo elige en su perfil; ver lib/theme.ts). Mismos tokens, otros
+   valores, así ningún componente cambia. Pensado también para baja visión:
+    - Todo texto cumple AA (4.5:1) sobre blanco y sobre los grises claros; el secundario va holgado (7:1+).
+    - Los BORDES (tarjetas, inputs, selectores, divisores) llegan a 3:1 sobre todos los fondos — el mínimo
+      de WCAG 1.4.11 para distinguir un componente. En claro un gris pálido sobre blanco no se ve: el
+      borde es lo que dibuja la tarjeta.
+    - El fondo de página es un gris claro y las tarjetas blancas: se separan también por el relleno.
+   El acento de cada cuenta se oscurece lo justo para leerse (lib/brand.ts: acentoParaClaro); el azul por
+   defecto es el mismo #5b9cff del oscuro, ya ajustado. brand.test.ts verifica estos números.
+   ========================================================================== */
+:root[data-theme="light"] {
+  --color-ink: #ebebeb; /* fondo base — gris claro (las tarjetas blancas resaltan sobre él) */
+  --color-surface: #ffffff; /* tarjetas y módulos */
+  --color-surface-2: #f2f2f2; /* inputs, filas y controles dentro de una tarjeta */
+  --color-surface-3: #dcdcdc; /* presionado */
+  --color-line: #767676; /* bordes — 4.5:1 sobre blanco, 3.8:1 sobre ink: se ven */
+  --color-fg: #111111; /* texto principal — 15.8:1 sobre ink */
+  --color-muted: #474747; /* texto secundario — 7.8:1 sobre ink, 9.3:1 sobre blanco */
+  --color-brand: #0053d0; /* azul por defecto (= acentoParaClaro("#5b9cff")) */
+  --color-brand-soft: color-mix(in oklab, var(--color-brand) 12%, var(--color-ink));
+  --color-on-brand: #ffffff; /* 6:1 sobre el azul */
+  /* Semánticos más oscuros: sobre fondo claro (y sobre su propio fondo suave) también pasan AA */
+  --color-done: #166534;
+  --color-warn: #92400e;
+  --color-danger: #b91c1c;
+  color-scheme: light;
+}
+
+/* Modo claro, baja visión: en oscuro las tarjetas y controles se separan por el relleno (gris sobre negro),
+   pero en claro un blanco sobre gris claro da ~1.2:1 y no se ve dónde acaba un botón o una tarjeta. Aquí
+   TODA superficie lleva contorno de 2 px (1 px se pierde en pantallas de densidad 1 y 1.25) en --color-line (3:1+), sin tocar cada componente:
+    - Las que ya tienen `border` solo lo engrosan. Las de `border-t/b/y` (paneles dentro de una tarjeta,
+      la hoja inferior) ya marcan su borde y quedarían con doble línea: se dejan igual.
+    - Las que no, reciben un `outline` hacia dentro: no mueve el layout, sigue el redondeado y no lo
+      recorta un `overflow-hidden` del padre. Cede ante el anillo de foco (:focus-visible).
+    - Lo que NO es un componente lleva `sin-contorno`: esqueletos de carga y pistas de barras de
+      progreso (un contorno de 2 px en una barra de 6 px se come el relleno). Ojo: aria-hidden no sirve
+      de criterio, hay indicadores visuales que lo llevan (el círculo de pendiente) y sí necesitan borde. */
+:root[data-theme="light"] .border {
+  border-width: 2px;
+}
+:root[data-theme="light"] :is(.bg-surface, .bg-surface-2):not(.border, .border-2, .border-t, .border-b, .border-y, .sin-contorno, :focus-visible) {
+  outline: 2px solid var(--color-line);
+  outline-offset: -2px;
 }
 
 @layer base {

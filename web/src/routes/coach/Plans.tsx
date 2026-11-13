@@ -128,7 +128,7 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
             rows={3}
             maxLength={2000}
             placeholder="Para quién es, qué resultados busca, qué equipo necesita..."
-            className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+            className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
           />
         </label>
 
@@ -180,7 +180,7 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
               rows={3}
               maxLength={2000}
               placeholder="Ej. CrossFit intermedio, 5 días, énfasis en levantamientos olímpicos y un WOD corto cada día"
-              className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+              className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
             />
           </label>
         )}
@@ -217,7 +217,7 @@ function CreatePlanSheet({ open, onClose, onCreated }: { open: boolean; onClose:
                         rows={2}
                         maxLength={300}
                         placeholder="Ej. Sentadilla y accesorios de pierna"
-                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+                        className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
                       />
                     </label>
                   ))}
@@ -327,14 +327,14 @@ export default function Plans() {
             <button
               type="button"
               onClick={() => setImportOpen(true)}
-              className="min-h-10 rounded-xl border border-line bg-surface-2 px-3 text-sm font-semibold active:bg-line"
+              className="min-h-11 rounded-xl border border-line bg-surface-2 px-3 text-sm font-semibold active:bg-surface-3"
             >
               Importar
             </button>
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
+              className="min-h-11 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
             >
               + Nuevo
             </button>

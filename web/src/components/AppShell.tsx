@@ -154,7 +154,16 @@ export function PageHeader({
           </button>
         )}
         <div className="min-w-0 grow">
-          <h1 className="truncate text-2xl leading-tight font-extrabold tracking-tight">{title}</h1>
+          {/* Un título largo (las fechas: "Domingo 8 de noviembre") se cortaba en un teléfono junto a la acción
+              de la derecha: ahora baja a una segunda línea, con un tamaño un punto menor */}
+          <h1
+            className={cx(
+              "line-clamp-2 leading-tight font-extrabold tracking-tight text-balance break-words",
+              title.length > 18 ? "text-xl" : "text-2xl",
+            )}
+          >
+            {title}
+          </h1>
           {subtitle && <p className="truncate text-sm text-muted">{subtitle}</p>}
         </div>
         {/* El grupo del atleta, siempre arriba a la derecha (no en las pantallas de detalle, que ya llevan "volver") */}

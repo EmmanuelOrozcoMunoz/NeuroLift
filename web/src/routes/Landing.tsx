@@ -18,6 +18,11 @@ import { cx } from "@/components/ui";
 import { PLATE_COLORS } from "@/lib/plates";
 import { useInstallPrompt } from "@/lib/pwa";
 
+// Sin degradados ni desvanecidos en la página: el único efecto es un brillo del acento al pasar el ratón por los
+// botones principales. `hover:` en Tailwind 4 solo aplica con un puntero que hace hover (PC), nunca al tocar en el
+// celular, y se apaga si el usuario pidió reducir el movimiento.
+const BRILLO_AL_PASAR = "transition-shadow motion-reduce:transition-none hover:shadow-[0_0_28px_-6px_var(--color-brand)]";
+
 /**
  * Página pública: lo primero que ve alguien que abre el link sin sesión, antes de instalar la
  * app o crear cuenta. Si la app ya corre instalada (abierta desde el ícono) no se muestra: el
@@ -43,14 +48,8 @@ export default function Landing() {
       </header>
 
       {/* ---------------------------------------------------------------------- hero */}
-      <section className="relative mx-auto grid max-w-5xl items-center gap-12 px-5 pt-8 pb-16 md:grid-cols-2 md:pt-16">
-        {/* Halo del color de acento detrás del teléfono: da profundidad sin imágenes externas */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl md:top-24 md:left-3/4"
-        />
-
-        <div className="relative">
+      <section className="mx-auto grid max-w-5xl items-center gap-12 px-5 pt-8 pb-16 md:grid-cols-2 md:pt-16">
+        <div>
           <p className="text-sm font-semibold tracking-[0.2em] text-brand uppercase">Entrena con método</p>
           <h1 className="mt-3 text-4xl leading-[1.1] font-bold tracking-tight md:text-5xl">
             Tu entrenamiento, listo cuando llegas.
@@ -61,14 +60,14 @@ export default function Landing() {
           </p>
 
           <div className="mt-8 space-y-3 sm:max-w-sm">
-            <InstallButton />
+            <InstallButton className={BRILLO_AL_PASAR} />
             <Link
               to="/registro"
               className={cx(
                 "flex min-h-12 w-full items-center justify-center rounded-xl px-4 font-semibold transition-colors",
                 installable
-                  ? "border border-line bg-surface-2 text-fg active:bg-line"
-                  : "bg-brand text-on-brand active:bg-brand/85",
+                  ? "border border-line bg-surface-2 text-fg active:bg-surface-3"
+                  : cx("bg-brand text-on-brand active:bg-brand/85", BRILLO_AL_PASAR),
               )}
             >
               Crear cuenta
@@ -138,7 +137,7 @@ export default function Landing() {
             </ul>
           </div>
           <div className="mt-8 sm:max-w-sm">
-            <InstallButton />
+            <InstallButton className={BRILLO_AL_PASAR} />
           </div>
         </div>
       </section>
@@ -156,13 +155,16 @@ export default function Landing() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 to="/registro-coach"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-brand px-5 font-semibold text-on-brand active:bg-brand/85"
+                className={cx(
+                  "inline-flex min-h-12 items-center justify-center rounded-xl bg-brand px-5 font-semibold text-on-brand active:bg-brand/85",
+                  BRILLO_AL_PASAR,
+                )}
               >
                 Soy coach
               </Link>
               <Link
                 to="/registrar-box"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-line"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-line bg-surface-2 px-5 font-semibold active:bg-surface-3"
               >
                 Tengo un box
               </Link>
@@ -197,7 +199,7 @@ export default function Landing() {
       <footer className="pb-safe mx-auto flex max-w-5xl flex-col items-center gap-2 px-5 pt-6 pb-10 text-center text-sm text-muted">
         <div className="flex items-center gap-2">
           <IconOffline className="h-4 w-4" />
-          <span>Hecha para el gimnasio: tema oscuro, botones grandes y poca señal.</span>
+          <span>Hecha para el gimnasio: botones grandes, tema oscuro (o claro, si lo prefieres) y poca señal.</span>
         </div>
         <p>© {new Date().getFullYear()} NeuroLift</p>
       </footer>
@@ -230,7 +232,7 @@ function PhonePreview() {
 
   return (
     <div className="relative mx-auto w-full max-w-[18rem]" aria-hidden>
-      <div className="rounded-[2.5rem] border border-line bg-ink p-2.5 shadow-2xl shadow-brand/20">
+      <div className="rounded-[2.5rem] border border-line bg-ink p-2.5">
         <div className="overflow-hidden rounded-[2rem] border border-line/60 bg-ink">
           {/* notch */}
           <div className="flex justify-center pt-2.5">

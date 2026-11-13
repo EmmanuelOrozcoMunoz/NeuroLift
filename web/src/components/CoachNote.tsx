@@ -21,7 +21,7 @@ export function CoachNoteField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Ej. Codos arriba en la recepción. Si molesta el hombro, baja el peso."
-        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+        className="w-full rounded-xl border border-line bg-surface-2 p-3 text-sm text-fg placeholder:text-muted/80 focus:border-brand focus:outline-none"
       />
     </label>
   );

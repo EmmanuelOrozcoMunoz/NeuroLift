@@ -43,10 +43,10 @@ export function UpdatePrompt() {
           <span className="block font-semibold">Hay una versión nueva</span>
           <span className="text-muted">Actualiza cuando termines lo que estás haciendo.</span>
         </p>
-        <Button variant="ghost" className="min-h-10 px-3 text-sm" onClick={() => setNeedRefresh(false)}>
+        <Button variant="ghost" className="min-h-11 px-3 text-sm" onClick={() => setNeedRefresh(false)}>
           Luego
         </Button>
-        <Button className="min-h-10 px-3 text-sm" onClick={() => void updateServiceWorker(true)}>
+        <Button className="min-h-11 px-3 text-sm" onClick={() => void updateServiceWorker(true)}>
           Actualizar
         </Button>
       </div>

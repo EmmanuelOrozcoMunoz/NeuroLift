@@ -4,7 +4,7 @@
 export function FitLevelCriteria() {
   return (
     <details className="mb-4 rounded-2xl border border-line bg-surface p-4 text-sm">
-      <summary className="cursor-pointer font-semibold text-fg">¿Cómo se calcula el Fit Level?</summary>
+      <summary className="-my-3 flex min-h-11 cursor-pointer items-center py-3 font-semibold text-fg">¿Cómo se calcula el Fit Level?</summary>
       <div className="mt-3 space-y-3 text-muted">
         <p>
           Cada marca se puntúa en una escala de <strong className="text-fg">1 a 4</strong>:{" "}

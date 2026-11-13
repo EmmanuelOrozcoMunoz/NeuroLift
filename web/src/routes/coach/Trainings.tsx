@@ -202,7 +202,7 @@ export default function Trainings() {
             <button
               type="button"
               onClick={() => setMasAtras((m) => m + DIAS_POR_TANDA_ANTERIORES)}
-              className="rounded-xl px-3 py-2 text-sm font-semibold text-brand active:bg-surface-2"
+              className="min-h-11 rounded-xl px-3 text-sm font-semibold text-brand active:bg-surface-2"
             >
               Cargar entrenos más antiguos
             </button>

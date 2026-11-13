@@ -36,7 +36,7 @@ export function ExerciseSummaryRow({
             type="button"
             aria-label={`Editar ${group.name}`}
             onClick={onEdit}
-            className="rounded-lg p-1.5 text-sm active:bg-line"
+            className="rounded-lg p-1.5 text-sm active:bg-surface-3"
           >
             ✏️
           </button>

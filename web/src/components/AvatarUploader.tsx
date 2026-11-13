@@ -130,7 +130,7 @@ export function AvatarUploader() {
           type="button"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className="mt-1 text-xs font-semibold text-brand active:opacity-70 disabled:opacity-50"
+          className="mt-1 -ml-2 inline-flex min-h-11 items-center px-2 text-xs font-semibold text-brand active:opacity-70 disabled:opacity-50"
         >
           {user.has_avatar ? "Cambiar foto" : "Elegir foto"}
         </button>
@@ -138,7 +138,7 @@ export function AvatarUploader() {
           <button
             type="button"
             onClick={() => void handleRemove()}
-            className="mt-1 ml-3 inline-flex items-center gap-1 text-xs font-semibold text-danger active:opacity-70"
+            className="mt-1 ml-1 inline-flex min-h-11 items-center gap-1 px-2 text-xs font-semibold text-danger active:opacity-70"
           >
             <IconTrash className="h-3.5 w-3.5" />
             Quitar

@@ -110,7 +110,7 @@ export default function Groups() {
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
+              className="min-h-11 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand active:bg-brand/85"
             >
               + Nuevo
             </button>

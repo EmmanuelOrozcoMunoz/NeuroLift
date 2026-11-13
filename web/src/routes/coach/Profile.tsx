@@ -4,6 +4,7 @@ import { IconLogout } from "@/components/icons";
 import { InstallAppCard } from "@/components/InstallApp";
 import { MyBoxCard } from "@/components/MyBoxCard";
 import { Button, Card } from "@/components/ui";
+import { TemaToggle } from "@/components/TemaToggle";
 import { WeightUnitToggle } from "@/components/WeightUnitToggle";
 import { useAuth } from "@/lib/auth";
 
@@ -20,7 +21,8 @@ export default function CoachProfile() {
 
       <MyBoxCard className="mb-4" />
 
-      <Card className="mb-4">
+      <Card className="mb-4 space-y-4">
+        <TemaToggle />
         <WeightUnitToggle />
       </Card>
 

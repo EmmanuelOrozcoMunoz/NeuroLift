@@ -14,7 +14,7 @@ const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 /**
  * Vista de calendario mensual de las sesiones de entrenamiento, como alternativa a la lista
  * agrupada por semana de `MesocycleDetail.tsx`. Un punto bajo el día indica que hay sesión
- * programada; lima si ya se completó (mismo color que el resto de la app usa para "Hecho"),
+ * programada; verde si ya se completó (mismo color que el resto de la app usa para "Hecho"),
  * violeta si todavía está pendiente. El círculo violeta marca el día de hoy.
  */
 export function TrainingCalendar({
@@ -76,7 +76,7 @@ export function TrainingCalendar({
           type="button"
           onClick={() => goToMonth(-1)}
           aria-label="Mes anterior"
-          className="rounded-full p-2 text-muted active:bg-surface-2"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-surface-2"
         >
           <IconBack className="h-5 w-5" />
         </button>
@@ -85,7 +85,7 @@ export function TrainingCalendar({
           type="button"
           onClick={() => goToMonth(1)}
           aria-label="Mes siguiente"
-          className="rounded-full p-2 text-muted active:bg-surface-2"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-surface-2"
         >
           <IconChevronRight className="h-5 w-5" />
         </button>
@@ -121,7 +121,7 @@ export function TrainingCalendar({
               <span
                 className={cx(
                   "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition-colors",
-                  !inMonth && "text-muted/30",
+                  !inMonth && "text-muted/60",
                   inMonth && !isToday && "text-fg",
                   isToday && "bg-brand text-on-brand",
                 )}
