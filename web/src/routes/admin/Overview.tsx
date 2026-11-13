@@ -30,7 +30,7 @@ export default function AdminOverview() {
           <button
             type="button"
             onClick={() => void logout()}
-            className="flex min-h-10 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-semibold text-danger active:bg-danger/10"
+            className="flex min-h-11 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-semibold text-danger active:bg-danger/10"
           >
             <IconLogout className="h-4 w-4" />
             Salir

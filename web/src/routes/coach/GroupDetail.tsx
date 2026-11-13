@@ -220,7 +220,7 @@ export default function GroupDetail() {
                 aria-label="Quitar del grupo"
                 onClick={() => setARetirar({ id: member.id, nombre: member.full_name })}
                 disabled={removeMember.isPending}
-                className="rounded-lg p-1.5 text-danger active:bg-danger/10 disabled:opacity-40"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-danger active:bg-danger/10 disabled:opacity-40"
               >
                 <IconTrash className="h-4 w-4" />
               </button>

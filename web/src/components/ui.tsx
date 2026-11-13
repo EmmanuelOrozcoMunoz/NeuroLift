@@ -226,7 +226,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cx(
-            "min-h-10 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold transition-colors",
+            "min-h-11 min-w-0 flex-1 basis-0 rounded-lg px-1.5 text-sm font-semibold transition-colors",
             hayLargas ? "py-1.5 leading-tight text-balance" : "whitespace-nowrap",
             option.value === value ? "bg-brand text-on-brand" : "text-muted active:bg-line",
           )}
@@ -325,7 +325,7 @@ export function Toast({
       <div
         className={cx(
           "max-w-sm rounded-xl px-4 py-3 text-sm font-semibold shadow-lg",
-          tone === "done" ? "bg-done text-ink" : "bg-danger text-white",
+          tone === "done" ? "bg-done text-ink" : "bg-danger text-ink",
         )}
       >
         {message}
@@ -374,8 +374,13 @@ export function Sheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold">{title}</h3>
-          <button type="button" onClick={onClose} className="p-2 text-2xl leading-none text-muted">
-            ×
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-muted active:bg-surface-2"
+          >
+            <span aria-hidden>×</span>
           </button>
         </div>
         <div className="max-h-[70dvh] overflow-y-auto pb-4">{children}</div>

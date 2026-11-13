@@ -64,7 +64,7 @@ export function ExerciseNoteRow({
 
   return (
     <li className="grid grid-cols-[3rem_1fr] items-start">
-      <div className="flex justify-center pt-2.5">
+      <div className="flex justify-center pt-1.5">
         <button
           type="button"
           onClick={alTocarCheck}
@@ -77,11 +77,15 @@ export function ExerciseNoteRow({
                 ? `Deshacer ${grupo.name}`
                 : `Marcar ${grupo.name} como programado`
           }
-          className={cx(
-            "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors disabled:opacity-60",
-            hecho ? "border-done bg-done text-ink" : estado === "parcial" ? "border-warn text-warn" : "border-muted/60 text-transparent",
-          )}
+          // El círculo se ve de 36 px, pero se toca en 44 px: es lo que más se pulsa entrenando, con las manos sudadas
+          className="group flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-60"
         >
+          <span
+            className={cx(
+              "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors",
+              hecho ? "border-done bg-done text-ink" : estado === "parcial" ? "border-warn text-warn" : "border-muted/60 text-transparent",
+            )}
+          >
           {logSets.isPending ? (
             <Spinner className="h-4 w-4" />
           ) : estado === "parcial" ? (
@@ -91,6 +95,7 @@ export function ExerciseNoteRow({
           ) : (
             <IconCheck className="h-5 w-5" />
           )}
+          </span>
         </button>
       </div>
 
@@ -116,7 +121,7 @@ export function ExerciseNoteRow({
           type="button"
           onClick={() => setAvanzado((v) => !v)}
           aria-expanded={avanzado}
-          className="mt-1.5 min-h-8 text-xs font-semibold text-brand"
+          className="mt-1 -ml-2 inline-flex min-h-11 items-center px-2 text-xs font-semibold text-brand"
         >
           {avanzado ? "Cerrar registro avanzado" : "Registro avanzado"}
         </button>

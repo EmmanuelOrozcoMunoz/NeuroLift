@@ -41,7 +41,7 @@ export function GrupoChip() {
         type="button"
         onClick={() => setAbierto(true)}
         aria-label={lista.length === 1 ? `Tu grupo: ${primero.name}` : `Tus grupos: ${lista.map((g) => g.name).join(", ")}`}
-        className="flex max-w-36 min-h-10 items-center gap-2 rounded-full bg-surface-2 py-1 pr-3 pl-1 active:opacity-80"
+        className="flex max-w-36 min-h-11 items-center gap-2 rounded-full bg-surface-2 py-1 pr-3 pl-1 active:opacity-80"
       >
         <InsigniaDeGrupo grupo={primero} className="h-8 w-8" />
         <span className="min-w-0 truncate text-sm font-semibold">{primero.name}</span>

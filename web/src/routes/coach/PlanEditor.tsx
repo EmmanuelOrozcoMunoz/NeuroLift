@@ -596,7 +596,7 @@ export default function PlanEditor() {
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="min-h-10 rounded-xl bg-surface-2 px-3 text-sm font-semibold text-fg active:bg-line"
+              className="min-h-11 rounded-xl bg-surface-2 px-3 text-sm font-semibold text-fg active:bg-line"
             >
               ✏️ Editar
             </button>

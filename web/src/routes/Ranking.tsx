@@ -108,7 +108,7 @@ export function RankingDelBox({ esAtleta }: { esAtleta: boolean }) {
           onClick={() => setFiltrosAbiertos(true)}
           aria-label="Filtros del leaderboard"
           className={cx(
-            "flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold active:opacity-80",
+            "flex min-h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold active:opacity-80",
             filtrosActivos ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted",
           )}
         >

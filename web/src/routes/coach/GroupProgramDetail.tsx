@@ -711,7 +711,7 @@ export default function GroupProgramDetail() {
             aria-label="Eliminar programa"
             onClick={handleDeleteProgram}
             disabled={deleteProgram.isPending}
-            className="rounded-lg p-2 text-danger active:bg-danger/10 disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-danger active:bg-danger/10 disabled:opacity-40"
           >
             <IconTrash className="h-5 w-5" />
           </button>

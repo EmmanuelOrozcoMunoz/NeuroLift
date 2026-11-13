@@ -11,8 +11,12 @@
    - Oscuro único: se usa en el gimnasio, con poca luz y el celular en la mano.
    - "Raw": la jerarquía la dan las SUPERFICIES y el espacio, no los bordes ni las sombras.
      Por eso `line` es un filo casi invisible y las sombras son mínimas.
-   - El acento (naranja por defecto, personalizable por cuenta) se reserva para CTAs
-     principales, estado activo y progreso. Nunca decorativo.
+   - Paleta: negro, grises y blanco, NEUTROS (sin tinte). El color solo marca lo que importa:
+     el acento (azul por defecto, personalizable por cuenta) se reserva para CTAs principales,
+     estado activo y progreso. Nunca decorativo. Los semánticos (hecho, aviso, error) van
+     siempre con ícono o texto.
+   - Contraste AA (4.5:1) para todo texto: el azul por defecto lleva texto OSCURO encima
+     (lib/brand.ts elige blanco u oscuro según el acento de cada cuenta).
    - Las cifras (kg, reps, tiempos) son protagonistas: `text-metric*` + `num`.
    - Todo lo tocable mide al menos `touch` (48px).
 
@@ -27,17 +31,17 @@
   --color-surface-3: #323232; /* estado presionado de controles sobre surface-2 */
   /* Filo, no borde: separa solo cuando dos superficies iguales se tocan. */
   --color-line: color-mix(in oklab, var(--color-fg) 7%, transparent);
-  --color-fg: #f3f4f6; /* texto principal — blanco humo (17:1 sobre ink) */
-  --color-muted: #9ca3af; /* texto secundario — gris pizarra (7.3:1 sobre ink, 6.6:1 sobre surface) */
+  --color-fg: #f5f5f5; /* texto principal — blanco neutro (17:1 sobre ink) */
+  --color-muted: #a3a3a3; /* texto secundario — gris neutro (7.4:1 sobre ink, 6.6:1 sobre surface) */
 
   /* Acento dinámico: lib/brand.ts sobreescribe --color-brand y --color-on-brand en <html>
      con el color de cada cuenta; los derivados se recalculan solos. */
-  --color-brand: #ff4700; /* naranja eléctrico (por defecto) */
+  --color-brand: #5b9cff; /* azul (por defecto): 6.8:1 sobre ink, 6.1:1 sobre surface, 5.4:1 sobre surface-2 */
   --color-brand-soft: color-mix(in oklab, var(--color-brand) 16%, var(--color-ink));
-  --color-on-brand: #ffffff;
+  --color-on-brand: #121212; /* texto sobre el azul: oscuro (6.8:1); el blanco solo daría 2.75:1 */
 
   /* Semánticos: siempre acompañados de ícono o texto, nunca el color solo */
-  --color-done: #a3e635; /* completado — lima */
+  --color-done: #4ade80; /* completado — verde (10.8:1 sobre ink) */
   --color-done-soft: color-mix(in oklab, var(--color-done) 14%, var(--color-ink));
   --color-warn: #fbbf24;
   --color-warn-soft: color-mix(in oklab, var(--color-warn) 14%, var(--color-ink));

@@ -49,7 +49,7 @@ def correo_de_recuperacion(nombre: str, enlace: str, minutos: int) -> tuple[str,
         "<p>Recibimos una solicitud para restablecer tu contraseña. Toca el botón para elegir una nueva "
         f"(sirve una sola vez y vence en {minutos} minutos).</p>"
         f'<p><a href="{_esc(enlace)}" style="display:inline-block;padding:12px 20px;border-radius:10px;'
-        'background:#e5484d;color:#fff;text-decoration:none;font-weight:600">Elegir contraseña nueva</a></p>'
+        'background:#2563eb;color:#fff;text-decoration:none;font-weight:600">Elegir contraseña nueva</a></p>'
         f'<p style="color:#666;font-size:13px">Si el botón no funciona, copia este enlace:<br>{_esc(enlace)}</p>'
         '<p style="color:#666;font-size:13px">Si no fuiste tú, ignora este correo: tu contraseña no cambia.</p>'
     )

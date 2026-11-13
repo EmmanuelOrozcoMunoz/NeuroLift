@@ -13,10 +13,10 @@
  *     localStorage para pintarlo desde el primer frame en el siguiente arranque, antes de que
  *     responda la API — ver setBoxAccent, llamado desde AuthProvider.
  *  3. `VITE_BRAND_ACCENT` al compilar.
- *  4. El naranja por defecto de index.css.
+ *  4. El azul por defecto de index.css.
  */
 
-export const DEFAULT_ACCENT = "#ff4700";
+export const DEFAULT_ACCENT = "#5b9cff";
 const INK = "#121212"; // --color-ink: fondo de la app
 const DEMO_KEY = "neurolift_demo_accent";
 const BOX_KEY = "neurolift_box_accent";
@@ -74,7 +74,7 @@ export function applyAccent(value: string): boolean {
   return true;
 }
 
-/** Vuelve al acento por defecto (el de VITE_BRAND_ACCENT o el naranja de index.css). */
+/** Vuelve al acento por defecto (el de VITE_BRAND_ACCENT o el azul de index.css). */
 function resetAccent() {
   const root = document.documentElement.style;
   root.removeProperty("--color-brand");

@@ -16,8 +16,9 @@ import type { BoxDetail, BoxStatus } from "@/lib/types";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-// Todos con contraste suficiente sobre el fondo carbón (ver applyAccent)
-const ACCENT_PRESETS = ["#ff4700", "#ef4444", "#f59e0b", "#facc15", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#e879f9"];
+// Todos con contraste suficiente sobre el fondo carbón (ver applyAccent). El primero es el azul por defecto; el
+// naranja era el de antes y sigue disponible para quien lo quiera.
+const ACCENT_PRESETS = ["#5b9cff", "#ff4700", "#ef4444", "#f59e0b", "#facc15", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#e879f9"];
 
 const STATUS_COPY: Record<Exclude<BoxStatus, "active">, { title: string; body: string }> = {
   pending: {
@@ -174,15 +175,15 @@ function LogoCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
           <p className="text-sm text-muted">
             {box.kind === "coach" ? "La ven tus atletas en la app." : "La ven tus coaches y atletas en la app."}
           </p>
-          <div className="mt-1 flex gap-3 text-xs font-semibold">
-            <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="text-brand disabled:opacity-50">
+          <div className="mt-1 -ml-2 flex gap-1 text-xs font-semibold">
+            <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex min-h-11 items-center px-2 text-brand disabled:opacity-50">
               {box.has_logo ? "Cambiar foto" : "Subir foto"}
             </button>
             {box.has_logo && (
               <button
                 type="button"
                 disabled={busy}
-                className="text-danger disabled:opacity-50"
+                className="inline-flex min-h-11 items-center px-2 text-danger disabled:opacity-50"
                 onClick={() =>
                   remove.mutate(undefined, {
                     onSuccess: () => {
@@ -252,7 +253,7 @@ function InviteCard({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
       <button
         type="button"
         disabled={rotate.isPending}
-        className="mt-3 w-full text-center text-xs font-semibold text-muted active:text-fg disabled:opacity-50"
+        className="mt-2 min-h-11 w-full text-center text-xs font-semibold text-muted active:text-fg disabled:opacity-50"
         onClick={() => {
           if (!window.confirm("El link y el código actuales dejarán de funcionar. ¿Generar uno nuevo?")) return;
           rotate.mutate(undefined, { onSuccess: () => onToast("Nuevo código generado.") });
@@ -369,7 +370,7 @@ function AccentPicker({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
               aria-label={`Color ${color}`}
               onClick={() => setDraft(color)}
               className={cx(
-                "flex h-10 w-10 items-center justify-center rounded-full ring-offset-2 ring-offset-surface",
+                "flex h-11 w-11 items-center justify-center rounded-full ring-offset-2 ring-offset-surface",
                 draft.toLowerCase() === color && "ring-2 ring-fg",
               )}
               style={{ backgroundColor: color }}
@@ -377,7 +378,7 @@ function AccentPicker({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
               {draft.toLowerCase() === color && <IconCheck className="h-5 w-5 text-ink" />}
             </button>
           ))}
-          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-3 text-sm font-semibold">
+          <label className="flex h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-3 text-sm font-semibold">
             <input
               type="color"
               value={draft}
