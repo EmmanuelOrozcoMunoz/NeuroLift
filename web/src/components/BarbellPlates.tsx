@@ -18,9 +18,9 @@ function PlateStack({ plates }: { plates: number[] }) {
           <div
             key={i}
             title={`${kg}kg`}
-            // Borde claro fijo (no solo un borde oscuro) — el disco negro de 2.5kg, siendo
-            // real, se perdería por completo contra el fondo oscuro de la app sin esto.
-            className="shrink-0 rounded-[3px] border border-white/35"
+            // Borde del color del texto (claro en oscuro, oscuro en claro): sin él, el disco negro de 2.5kg se
+            // perdería contra el fondo oscuro y el blanco de 5kg contra el claro. Los colores de los discos no cambian.
+            className="shrink-0 rounded-[3px] border border-fg/35"
             style={{ backgroundColor: PLATE_COLORS[kg], width, height }}
           />
         );

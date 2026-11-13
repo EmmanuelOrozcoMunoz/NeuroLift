@@ -375,7 +375,8 @@ function AccentPicker({ box, onToast }: { box: BoxDetail; onToast: ToastFn }) {
               )}
               style={{ backgroundColor: color }}
             >
-              {draft.toLowerCase() === color && <IconCheck className="h-5 w-5 text-ink" />}
+              {/* Siempre oscura: las muestras son los colores tal cual (brillantes), en cualquier tema */}
+              {draft.toLowerCase() === color && <IconCheck className="h-5 w-5 text-[#121212]" />}
             </button>
           ))}
           <label className="flex h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-3 text-sm font-semibold">

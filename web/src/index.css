@@ -124,6 +124,30 @@
   }
 }
 
+/* ==========================================================================
+   Modo claro (opcional: cada quien lo elige en su perfil; ver lib/theme.ts). Mismos tokens, otros
+   valores, así ningún componente cambia. Todo texto cumple AA (4.5:1) sobre blanco y sobre los grises
+   claros. El acento de cada cuenta se oscurece lo justo para leerse (lib/brand.ts: acentoParaClaro);
+   el azul por defecto es el mismo #5b9cff del oscuro, ya ajustado.
+   ========================================================================== */
+:root[data-theme="light"] {
+  --color-ink: #f5f5f5; /* fondo base — gris muy claro */
+  --color-surface: #ffffff; /* tarjetas y módulos */
+  --color-surface-2: #f0f0f0; /* inputs, filas y controles dentro de una tarjeta */
+  --color-surface-3: #e4e4e4; /* presionado */
+  --color-line: color-mix(in oklab, var(--color-fg) 11%, transparent);
+  --color-fg: #111111; /* texto principal — 16.6:1 sobre surface-2 */
+  --color-muted: #595959; /* texto secundario — 6.2:1 sobre surface-2 */
+  --color-brand: #0057db; /* azul por defecto (= acentoParaClaro("#5b9cff")): 5.5:1 sobre surface-2 */
+  --color-brand-soft: color-mix(in oklab, var(--color-brand) 12%, var(--color-ink));
+  --color-on-brand: #ffffff; /* 6:1 sobre el azul */
+  /* Semánticos más oscuros: sobre fondo claro (y sobre su propio fondo suave) también pasan AA */
+  --color-done: #166534;
+  --color-warn: #92400e;
+  --color-danger: #b91c1c;
+  color-scheme: light;
+}
+
 @layer base {
   html {
     background-color: var(--color-ink);

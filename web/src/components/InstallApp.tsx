@@ -39,6 +39,7 @@ function IOSSteps({ className }: { className?: string }) {
  * Botón principal de instalación (landing). Según el navegador: diálogo nativo, instrucciones
  * de iOS, o nada si ya está instalada / el navegador no permite instalar (ej. Firefox escritorio).
  */
+/** `className` va al BOTÓN (no al contenedor), así un efecto como el brillo al pasar el ratón sigue sus bordes. */
 export function InstallButton({ className }: { className?: string }) {
   const { installed, canPrompt, isIOS, promptInstall } = useInstallPrompt();
   const [showIOS, setShowIOS] = useState(false);
@@ -56,8 +57,8 @@ export function InstallButton({ className }: { className?: string }) {
 
   if (isIOS) {
     return (
-      <div className={className}>
-        <Button full onClick={() => setShowIOS((v) => !v)} aria-expanded={showIOS}>
+      <div>
+        <Button full className={className} onClick={() => setShowIOS((v) => !v)} aria-expanded={showIOS}>
           <IconDownload className="h-5 w-5" />
           Instalar en iPhone
         </Button>
